@@ -20,8 +20,8 @@ def register_user(request):
     return render(request, 'judging_app/register.html', {'form': form})
 
 def is_approved_judge(user):
-    """Bouncer helper function: Checks if the user is a superuser or in the Judges group."""
-    return user.groups.filter(name='Judges').exists() or user.is_superuser
+    """Bouncer helper function: Checks for explicit system permission or superuser status."""
+    return user.has_perm('judging_app.can_judge_photos') or user.is_superuser
 
 
 # =====================================================================
@@ -108,6 +108,8 @@ def leaderboard(request):
 
 def submit_photo(request):
     """Public upload form for photographers to submit their work directly to Cloudinary."""
+    error_message = None
+
     if request.method == "POST":
         title = request.POST.get('title')
         photographer_name = request.POST.get('photographer_name')
@@ -115,15 +117,24 @@ def submit_photo(request):
         image = request.FILES.get('image')
 
         if title and photographer_name and category and image:
-            Photo.objects.create(
-                title=title,
-                photographer_name=photographer_name,
-                category=category,
-                image=image
-            )
-            return render(request, 'judging_app/submit_success.html')
+            # 5 MB limit in bytes: 5 * 1024 * 1024
+            max_size_bytes = 5 * 1024 * 1024 
+            
+            if image.size > max_size_bytes:
+                error_message = "The uploaded file is too large! Please keep your photo under 5 MB."
+            else:
+                Photo.objects.create(
+                    title=title,
+                    photographer_name=photographer_name,
+                    category=category,
+                    image=image
+                )
+                return render(request, 'judging_app/submit_success.html')
 
-    return render(request, 'judging_app/submit.html')
+    context = {
+        'error_message': error_message
+    }
+    return render(request, 'judging_app/submit.html', context)
 
 def home_hub(request):
     """The central hub landing page for everyone."""
