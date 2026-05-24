@@ -2,14 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.db.models import Avg
-from .models import Photo, RubricCriterion, Score
+from .models import Competition, Photo, RubricCriterion, Score
 
 # =====================================================================
 # 1. USER ACCOUNT REGISTRATION & PERMISSIONS
 # =====================================================================
 
 def register_user(request):
-    """Allows anyone to create an account, but they won't have judge permissions yet."""
+    """Allows users to register an account. Access is restricted until given permissions."""
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
@@ -20,36 +20,55 @@ def register_user(request):
     return render(request, 'judging_app/register.html', {'form': form})
 
 def is_approved_judge(user):
-    """Bouncer helper function: Checks for explicit system permission or superuser status."""
+    """Bouncer helper: Checks for the explicit 'can_judge_photos' permission or superuser."""
     return user.has_perm('judging_app.can_judge_photos') or user.is_superuser
 
 
 # =====================================================================
-# 2. JUDGING PANEL & ROUTER
+# 2. GLOBAL HOME HUB
+# =====================================================================
+
+def home_hub(request):
+    """The landing page. Shows all active competitions available on the system."""
+    active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
+    return render(request, 'judging_app/home.html', {'competitions': active_competitions})
+
+
+# =====================================================================
+# 3. COMPETITION JUDGING PANEL & ROUTER
 # =====================================================================
 
 @login_required(login_url='/login/')
-def judge_router(request):
-    """Finds the next unrated photo for this specific judge or sends them to the waiting room."""
+def judge_router(request, comp_id):
+    """Finds the next unrated photo within a specific competition for this judge."""
     if not is_approved_judge(request.user):
         return render(request, 'judging_app/pending.html')
 
-    next_photo = Photo.objects.exclude(score__judge=request.user).first()
+    competition = get_object_or_404(Competition, id=comp_id)
+    
+    # Find the first photo in THIS competition that this specific judge hasn't scored yet
+    next_photo = Photo.objects.filter(competition=competition).exclude(score__judge=request.user).first()
+    
     if next_photo:
-        return redirect('judge_photo', photo_id=next_photo.id)
-    return render(request, 'judging_app/done.html')
+        return redirect('judge_photo', comp_id=competition.id, photo_id=next_photo.id)
+        
+    return render(request, 'judging_app/done.html', {'competition': competition})
+
 
 @login_required(login_url='/login/')
-def judge_photo(request, photo_id):
-    """Displays a single photo and handles saving judge metrics."""
+def judge_photo(request, comp_id, photo_id):
+    """Displays a single photo and handles saving judge metrics for a specific competition."""
     if not is_approved_judge(request.user):
         return render(request, 'judging_app/pending.html')
 
-    photo = get_object_or_404(Photo, id=photo_id)
-    rubric = RubricCriterion.objects.all()
+    competition = get_object_or_404(Competition, id=comp_id)
+    photo = get_object_or_404(Photo, id=photo_id, competition=competition)
     
-    total_photos = Photo.objects.count()
-    scored_photos = Score.objects.filter(judge=request.user).count()
+    # Grab only the criteria assigned to this specific competition
+    rubric = RubricCriterion.objects.filter(competition=competition)
+    
+    total_photos = Photo.objects.filter(competition=competition).count()
+    scored_photos = Score.objects.filter(photo__competition=competition, judge=request.user).count()
     
     if request.method == "POST":
         criteria_scores = {}
@@ -76,9 +95,10 @@ def judge_photo(request, photo_id):
                 'comment': comment
             }
         )
-        return redirect('judge_router')
+        return redirect('judge_router', comp_id=competition.id)
 
     context = {
+        'competition': competition,
         'photo': photo,
         'rubric': rubric,
         'progress': f"{scored_photos + 1} / {total_photos}"
@@ -87,27 +107,33 @@ def judge_photo(request, photo_id):
 
 
 # =====================================================================
-# 3. LIVE LEADERBOARD
+# 4. LIVE LEADERBOARD
 # =====================================================================
 
 @login_required(login_url='/login/')
-def leaderboard(request):
-    """Calculates the average score for each photo and ranks them."""
-    ranked_photos = Photo.objects.annotate(
+def leaderboard(request, comp_id):
+    """Calculates average scores and ranks photos for a single specific competition."""
+    competition = get_object_or_404(Competition, id=comp_id)
+    
+    ranked_photos = Photo.objects.filter(competition=competition).annotate(
         average_score=Avg('score__total_score')
     ).filter(
         average_score__isnull=False
     ).order_by('-average_score')
 
-    return render(request, 'judging_app/leaderboard.html', {'photos': ranked_photos})
+    return render(request, 'judging_app/leaderboard.html', {
+        'competition': competition, 
+        'photos': ranked_photos
+    })
 
 
 # =====================================================================
-# 4. PUBLIC PHOTO SUBMISSION PORTAL
+# 5. PUBLIC PHOTO SUBMISSION PORTAL
 # =====================================================================
 
-def submit_photo(request):
-    """Public upload form for photographers to submit their work directly to Cloudinary."""
+def submit_photo(request, comp_id):
+    """Public upload form for photographers to enter a specific competition."""
+    competition = get_object_or_404(Competition, id=comp_id)
     error_message = None
 
     if request.method == "POST":
@@ -117,25 +143,21 @@ def submit_photo(request):
         image = request.FILES.get('image')
 
         if title and photographer_name and category and image:
-            # 5 MB limit in bytes: 5 * 1024 * 1024
-            max_size_bytes = 5 * 1024 * 1024 
+            max_size_bytes = 5 * 1024 * 1024 # 5 MB Limit
             
             if image.size > max_size_bytes:
                 error_message = "The uploaded file is too large! Please keep your photo under 5 MB."
             else:
                 Photo.objects.create(
+                    competition=competition, # Attached securely to this event context
                     title=title,
                     photographer_name=photographer_name,
                     category=category,
                     image=image
                 )
-                return render(request, 'judging_app/submit_success.html')
+                return render(request, 'judging_app/submit_success.html', {'competition': competition})
 
-    context = {
+    return render(request, 'judging_app/submit.html', {
+        'competition': competition, 
         'error_message': error_message
-    }
-    return render(request, 'judging_app/submit.html', context)
-
-def home_hub(request):
-    """The central hub landing page for everyone."""
-    return render(request, 'judging_app/home.html')
+    })

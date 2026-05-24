@@ -1,14 +1,29 @@
-"""Models for the judging app."""
-
 from django.db import models
 from django.contrib.auth.models import User
 
+# =====================================================================
+# 1. THE PARENT COMPETITION CONTAINER
+# =====================================================================
+class Competition(models.Model):
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+# =====================================================================
+# 2. COMPETITION-LINKED MODELS
+# =====================================================================
 class Photo(models.Model):
+    # This tethers every single photo upload to a specific competition
+    competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='photos')
     title = models.CharField(max_length=200)
     photographer_name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
-    # Change upload_url='photos/' to upload_to='photos/' below:
-    image = models.ImageField(upload_to='photos/') 
+    image = models.ImageField(upload_to='photos/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -17,29 +32,34 @@ class Photo(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.title} by {self.photographer_name}"
+        return f"{self.title} (Comp: {self.competition.name})"
+
 
 class RubricCriterion(models.Model):
-    """Represents a scoring criterion in the competition rubric."""
+    # This allows different competitions to have totally unique scoring metrics
+    competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='criteria')
     name = models.CharField(max_length=100)
-    max_points = models.FloatField(default=10.0)
+    max_points = models.IntegerField()
     weight = models.FloatField(default=1.0)
 
-    def __str__(self) -> str:
-        return str(self.name)
+    def __str__(self):
+        return f"{self.name} - Max: {self.max_points} (Comp: {self.competition.name})"
 
+
+# =====================================================================
+# 3. TRANSITIONAL SCORE TRACKING
+# =====================================================================
 class Score(models.Model):
-    """Represents a judge's score for a submitted photograph."""
-    photo = models.ForeignKey(Photo, on_delete=models.CASCADE)
+    # This naturally inherits the competition through the linked photo
+    photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name='score')
     judge = models.ForeignKey(User, on_delete=models.CASCADE)
-    criteria_scores = models.JSONField(default=dict)
-    total_score = models.FloatField(default=0.0)
+    criteria_scores = models.JSONField(default=dict)  # Stores individual sub-scores
+    total_score = models.FloatField()
     comment = models.TextField(blank=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # pylint: disable=missing-class-docstring, too-few-public-methods
         unique_together = ('photo', 'judge')
 
     def __str__(self):
-        return f"Score by {self.judge.username} for {self.photo.title}"
+        return f"{self.judge.username} rated {self.photo.title} -> {self.total_score}"
