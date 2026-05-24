@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # In production, we pull these from the server's environment variables
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vpsob8!!#9=bt3dt3o%es@q+7^(y6s257!szokecb#q15iwiu1')
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = ['*'] # Allows Render to host it
 
 
