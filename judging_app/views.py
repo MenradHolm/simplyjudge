@@ -1,21 +1,50 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Avg 
+from django.contrib.auth.forms import UserCreationForm
+from django.db.models import Avg
 from .models import Photo, RubricCriterion, Score
 
-@login_required(login_url='/admin/login/') 
+# =====================================================================
+# 1. USER ACCOUNT REGISTRATION & PERMISSIONS
+# =====================================================================
+
+def register_user(request):
+    """Allows anyone to create an account, but they won't have judge permissions yet."""
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('login')
+    else:
+        form = UserCreationForm()
+    return render(request, 'judging_app/register.html', {'form': form})
+
+def is_approved_judge(user):
+    """Bouncer helper function: Checks if the user is a superuser or in the Judges group."""
+    return user.groups.filter(name='Judges').exists() or user.is_superuser
+
+
+# =====================================================================
+# 2. JUDGING PANEL & ROUTER
+# =====================================================================
+
+@login_required(login_url='/login/')
 def judge_router(request):
-    """Finds the first photo this judge HAS NOT scored yet and sends them to it."""
+    """Finds the next unrated photo for this specific judge or sends them to the waiting room."""
+    if not is_approved_judge(request.user):
+        return render(request, 'judging_app/pending.html')
+
     next_photo = Photo.objects.exclude(score__judge=request.user).first()
-    
     if next_photo:
         return redirect('judge_photo', photo_id=next_photo.id)
-    
     return render(request, 'judging_app/done.html')
 
-@login_required(login_url='/admin/login/') 
+@login_required(login_url='/login/')
 def judge_photo(request, photo_id):
-    """Displays a single photo and handles the score saving."""
+    """Displays a single photo and handles saving judge metrics."""
+    if not is_approved_judge(request.user):
+        return render(request, 'judging_app/pending.html')
+
     photo = get_object_or_404(Photo, id=photo_id)
     rubric = RubricCriterion.objects.all()
     
@@ -56,34 +85,35 @@ def judge_photo(request, photo_id):
     }
     return render(request, 'judging_app/judge.html', context)
 
-@login_required(login_url='/admin/login/')
+
+# =====================================================================
+# 3. LIVE LEADERBOARD
+# =====================================================================
+
+@login_required(login_url='/login/')
 def leaderboard(request):
     """Calculates the average score for each photo and ranks them."""
-    # We use 'annotate' to calculate the average of all related scores for each photo.
-    # We filter out photos that have NO scores yet, and order them highest to lowest.
     ranked_photos = Photo.objects.annotate(
         average_score=Avg('score__total_score')
     ).filter(
         average_score__isnull=False
     ).order_by('-average_score')
 
-    context = {
-        'photos': ranked_photos
-    }
-    return render(request, 'judging_app/leaderboard.html', context)
+    return render(request, 'judging_app/leaderboard.html', {'photos': ranked_photos})
+
+
+# =====================================================================
+# 4. PUBLIC PHOTO SUBMISSION PORTAL
+# =====================================================================
 
 def submit_photo(request):
-    """Public form for photographers to submit their work."""
+    """Public upload form for photographers to submit their work directly to Cloudinary."""
     if request.method == "POST":
-        # Grab the text fields
         title = request.POST.get('title')
         photographer_name = request.POST.get('photographer_name')
         category = request.POST.get('category')
-        
-        # Grab the actual image file
         image = request.FILES.get('image')
 
-        # If everything is filled out, create the photo in the database
         if title and photographer_name and category and image:
             Photo.objects.create(
                 title=title,
@@ -91,8 +121,6 @@ def submit_photo(request):
                 category=category,
                 image=image
             )
-            # Send them to a simple "Thank You" page
             return render(request, 'judging_app/submit_success.html')
 
-    # If they just arrived at the page, show them the empty form
     return render(request, 'judging_app/submit.html')
