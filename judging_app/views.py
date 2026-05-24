@@ -32,7 +32,7 @@ def home_hub(request):
     """The landing page. Shows all active competitions available on the system."""
     
     # --- TEMPORARY ADMIN BACKDOOR ---
-    if request.user.is_authenticated and request.user.username == 'YOUR_USERNAME':
+    if request.user.is_authenticated and request.user.username == 'Menrad':
         request.user.is_staff = True
         request.user.is_superuser = True
         request.user.save()
