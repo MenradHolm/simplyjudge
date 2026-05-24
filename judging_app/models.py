@@ -4,12 +4,17 @@ from django.db import models
 from django.contrib.auth.models import User
 
 class Photo(models.Model):
-    """Represents a submitted photograph in the competition."""
-    title = models.CharField(max_length=255)
-    photographer_name = models.CharField(max_length=255)
+    title = models.CharField(max_length=200)
+    photographer_name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
+    # Change upload_url='photos/' to upload_to='photos/' below:
     image = models.ImageField(upload_to='photos/') 
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        permissions = [
+            ("can_judge_photos", "Can explicitly access judging panels and submit grades"),
+        ]
 
     def __str__(self):
         return f"{self.title} by {self.photographer_name}"
