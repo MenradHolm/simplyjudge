@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # In production, we pull these from the server's environment variables
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vpsob8!!#9=bt3dt3o%es@q+7^(y6s257!szokecb#q15iwiu1')
-DEBUG = True #'RENDER' not in os.environ
+DEBUG = False
 ALLOWED_HOSTS = ['*'] # Allows Render to host it
 
 
@@ -126,3 +126,5 @@ else:
     # Keep using local folders when testing on your laptop
     MEDIA_URL = '/media/'
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+LOGIN_REDIRECT_URL = '/panel/'

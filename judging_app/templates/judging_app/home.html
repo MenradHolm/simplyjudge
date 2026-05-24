@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simply Judge - Portal Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans">
+
+    <header class="max-w-4xl w-full mx-auto text-center pt-16 pb-8 px-6">
+        <h1 class="text-5xl font-extrabold tracking-tight text-white mb-3">Simply Judge</h1>
+        <p class="text-xl text-gray-400">Streamlined photography submissions and distraction-free judging panels.</p>
+    </header>
+
+    <main class="flex-1 max-w-4xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl flex flex-col justify-between h-64 hover:border-indigo-500 transition-colors">
+            <div>
+                <div class="text-3xl mb-3">📸</div>
+                <h2 class="text-xl font-bold text-white mb-2">Submit a Photo</h2>
+                <p class="text-gray-400 text-sm">For photographers entering the competition. Upload images directly to the queue.</p>
+            </div>
+            <a href="/submit/" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2.5 rounded-lg font-semibold transition-colors mt-4 block">
+                Open Portal
+            </a>
+        </div>
+
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl flex flex-col justify-between h-64 hover:border-indigo-500 transition-colors">
+            <div>
+                <div class="text-3xl mb-3">⚖️</div>
+                <h2 class="text-xl font-bold text-white mb-2">Judging Panel</h2>
+                <p class="text-gray-400 text-sm">For official judges. Secure login to access the auto-advancing grading deck.</p>
+            </div>
+            <a href="/login/" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-center py-2.5 rounded-lg font-semibold transition-colors mt-4 block">
+                Judge Sign In
+            </a>
+        </div>
+
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl flex flex-col justify-between h-64 hover:border-indigo-500 transition-colors">
+            <div>
+                <div class="text-3xl mb-3">🏆</div>
+                <h2 class="text-xl font-bold text-white mb-2">View Leaderboard</h2>
+                <p class="text-gray-400 text-sm">For public or live display. Track calculated real-time average scoring and rankings.</p>
+            </div>
+            <a href="/leaderboard/" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-center py-2.5 rounded-lg font-semibold transition-colors mt-4 block">
+                See Live Standings
+            </a>
+        </div>
+
+    </main>
+
+    <footer class="text-center py-8 text-xs text-gray-500 border-t border-gray-800">
+        &copy; 2026 Simply Judge. Powered by Django & Cloudinary.
+    </footer>
+
+</body>
+</html>

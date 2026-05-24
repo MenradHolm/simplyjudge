@@ -124,3 +124,7 @@ def submit_photo(request):
             return render(request, 'judging_app/submit_success.html')
 
     return render(request, 'judging_app/submit.html')
+
+def home_hub(request):
+    """The central hub landing page for everyone."""
+    return render(request, 'judging_app/home.html')
