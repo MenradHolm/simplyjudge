@@ -1,8 +1,9 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required  # <-- Add this!
+from django.contrib.auth.decorators import login_required
+from django.db.models import Avg 
 from .models import Photo, RubricCriterion, Score
 
-@login_required(login_url='/admin/login/') # <-- Add this!
+@login_required(login_url='/admin/login/') 
 def judge_router(request):
     """Finds the first photo this judge HAS NOT scored yet and sends them to it."""
     next_photo = Photo.objects.exclude(score__judge=request.user).first()
@@ -12,7 +13,7 @@ def judge_router(request):
     
     return render(request, 'judging_app/done.html')
 
-@login_required(login_url='/admin/login/') # <-- Add this!
+@login_required(login_url='/admin/login/') 
 def judge_photo(request, photo_id):
     """Displays a single photo and handles the score saving."""
     photo = get_object_or_404(Photo, id=photo_id)
@@ -54,3 +55,19 @@ def judge_photo(request, photo_id):
         'progress': f"{scored_photos + 1} / {total_photos}"
     }
     return render(request, 'judging_app/judge.html', context)
+
+@login_required(login_url='/admin/login/')
+def leaderboard(request):
+    """Calculates the average score for each photo and ranks them."""
+    # We use 'annotate' to calculate the average of all related scores for each photo.
+    # We filter out photos that have NO scores yet, and order them highest to lowest.
+    ranked_photos = Photo.objects.annotate(
+        average_score=Avg('score__total_score')
+    ).filter(
+        average_score__isnull=False
+    ).order_by('-average_score')
+
+    context = {
+        'photos': ranked_photos
+    }
+    return render(request, 'judging_app/leaderboard.html', context)

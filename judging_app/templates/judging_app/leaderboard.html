@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simply Judge - Leaderboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <header class="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 shadow-sm sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <h1 class="text-xl font-bold tracking-tight text-white">Simply Judge</h1>
+            <span class="px-2 py-1 text-xs font-semibold bg-indigo-900 text-indigo-300 rounded-md">Live Leaderboard</span>
+        </div>
+        <div class="flex space-x-4">
+            <a href="/" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700 transition-colors">Judging Panel</a>
+            <a href="/admin" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700 transition-colors">Admin</a>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-8">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden">
+            
+            <div class="p-6 border-b border-gray-700 bg-gray-850 flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-white">Current Rankings</h2>
+                <p class="text-sm text-gray-400">Photos automatically rank as scores come in.</p>
+            </div>
+
+            <div class="divide-y divide-gray-700">
+                {% if photos %}
+                    {% for photo in photos %}
+                        <div class="flex items-center p-6 hover:bg-gray-750 transition-colors {% if forloop.counter <= 3 %}bg-gray-800/50{% endif %}">
+                            
+                            <div class="w-12 flex-shrink-0 text-center">
+                                {% if forloop.counter == 1 %}
+                                    <span class="text-3xl">🥇</span>
+                                {% elif forloop.counter == 2 %}
+                                    <span class="text-3xl">🥈</span>
+                                {% elif forloop.counter == 3 %}
+                                    <span class="text-3xl">🥉</span>
+                                {% else %}
+                                    <span class="text-xl font-bold text-gray-500">#{{ forloop.counter }}</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="w-24 h-24 flex-shrink-0 ml-4">
+                                <img src="{{ photo.image.url }}" alt="{{ photo.title }}" class="w-full h-full object-cover rounded border border-gray-600 shadow-sm">
+                            </div>
+
+                            <div class="ml-6 flex-1">
+                                <h3 class="text-lg font-semibold text-white">{{ photo.title }}</h3>
+                                <p class="text-sm text-gray-400">By {{ photo.photographer_name }}</p>
+                                <span class="inline-block mt-2 px-2.5 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded">{{ photo.category }}</span>
+                            </div>
+
+                            <div class="ml-6 flex flex-col items-end text-right">
+                                <span class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Avg Score</span>
+                                <span class="text-3xl font-bold {% if forloop.counter <= 3 %}text-indigo-400{% else %}text-white{% endif %}">
+                                    {{ photo.average_score|floatformat:1 }}
+                                </span>
+                            </div>
+
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-12 text-center text-gray-500">
+                        <p class="text-lg">No scores have been submitted yet.</p>
+                        <p class="text-sm mt-2">The leaderboard will populate as soon as the first judge saves a score.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+        </div>
+    </main>
+</body>
+</html>
