@@ -71,3 +71,28 @@ def leaderboard(request):
         'photos': ranked_photos
     }
     return render(request, 'judging_app/leaderboard.html', context)
+
+def submit_photo(request):
+    """Public form for photographers to submit their work."""
+    if request.method == "POST":
+        # Grab the text fields
+        title = request.POST.get('title')
+        photographer_name = request.POST.get('photographer_name')
+        category = request.POST.get('category')
+        
+        # Grab the actual image file
+        image = request.FILES.get('image')
+
+        # If everything is filled out, create the photo in the database
+        if title and photographer_name and category and image:
+            Photo.objects.create(
+                title=title,
+                photographer_name=photographer_name,
+                category=category,
+                image=image
+            )
+            # Send them to a simple "Thank You" page
+            return render(request, 'judging_app/submit_success.html')
+
+    # If they just arrived at the page, show them the empty form
+    return render(request, 'judging_app/submit.html')
