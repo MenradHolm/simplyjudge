@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sign Up - Simply Judge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Quick style to make Django's default form look okay on a dark background */
+        input { background: #374151; color: white; border: 1px solid #4B5563; padding: 8px; border-radius: 4px; width: 100%; margin-top: 4px; margin-bottom: 16px; }
+        ul.errorlist { color: #F87171; list-style: none; padding: 0; font-size: 14px; margin-bottom: 12px; }
+        label { color: #D1D5DB; font-size: 14px; font-weight: 500; }
+        .helptext { color: #9CA3AF; font-size: 12px; display: block; margin-bottom: 12px; }
+    </style>
+</head>
+<body class="bg-gray-900 flex items-center justify-center min-h-screen font-sans p-6">
+    <div class="bg-gray-800 p-8 rounded-xl shadow-2xl max-w-md w-full border border-gray-700">
+        <h2 class="text-2xl font-bold text-white mb-2">Create Judge Account</h2>
+        <p class="text-gray-400 mb-6 text-sm">Register to access the judging panel.</p>
+        
+        <form method="POST">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded mt-4">Sign Up</button>
+        </form>
+        <p class="text-center text-gray-400 mt-4 text-sm">Already have an account? <a href="/login/" class="text-indigo-400">Log in</a></p>
+    </div>
+</body>
+</html>
