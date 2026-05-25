@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simply Judge - Feedback Report</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <style>
         @media print {
             body { background-color: white !important; color: black !important; }
@@ -14,15 +13,13 @@
                 background-color: white !important; 
                 border: 1px solid #ccc !important; 
                 box-shadow: none !important;
-                page-break-inside: avoid !important; /* Prevents a photo cutting in half across pages */
+                page-break-inside: avoid !important;
                 margin-bottom: 20px !important;
                 color: black !important;
             }
             .print-text { color: black !important; }
             .print-border { border-color: #ddd !important; }
             .print-bg-light { background-color: #f9fafb !important; }
-            
-            /* Add a custom title just for the PDF */
             body::before {
                 content: "Final Organizer Feedback Report: {{ competition.name }}";
                 display: block;
@@ -58,9 +55,7 @@
                 <span class="absolute top-4 left-4 bg-gray-900/80 print-bg-light print-text print-border text-white px-3 py-1 rounded text-sm font-bold shadow">
                     Photo #{{ photo.id }}
                 </span>
-                
                 <img src="{{ photo.image.url }}" alt="{{ photo.title }}" class="max-h-64 object-contain rounded shadow-lg mb-4 print-border">
-                
                 <div class="text-center w-full mt-auto">
                     <h3 class="text-lg font-bold text-white print-text">{{ photo.title }}</h3>
                     <p class="text-sm text-gray-400 print-text">By {{ photo.photographer_name }}</p>
@@ -68,13 +63,12 @@
             </div>
 
             <div class="w-full md:w-2/3 flex flex-col">
-                
                 <div class="flex-1 p-6 overflow-y-auto max-h-96 print-bg-light">
                     <h4 class="text-sm font-bold text-gray-500 print-text uppercase tracking-wider border-b print-border border-gray-700 pb-2 mb-4">Individual Judge Feedback</h4>
                     
                     {% if photo.judge_scores %}
                         <div class="grid grid-cols-1 gap-4">
-                            {% for score in photo.judge_scores = Photo.objects.filter(competition=competition).prefetch_related('score__judge').all %}
+                            {% for score in photo.judge_scores %}
                             <div class="bg-gray-750 print-bg-light print-border p-4 rounded border border-gray-700 flex flex-col sm:flex-row sm:items-start gap-4">
                                 <div class="flex-shrink-0 min-w-[120px]">
                                     <span class="block font-bold text-indigo-400 print-text">{{ score.judge.username }}</span>
