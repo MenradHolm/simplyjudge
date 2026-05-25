@@ -166,11 +166,17 @@ def submit_photo(request, comp_id):
                 error_message = "The uploaded file is too large! Please keep your photo under 5 MB."
             else:
                 Photo.objects.create(
-                    competition=competition, # Attached securely to this event context
+                    competition=competition,
                     title=title,
                     photographer_name=photographer_name,
                     category=category,
                     image=image
                 )
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
+
+    # THIS IS THE CRUCIAL LINE! Make sure it is backed out to this exact indentation level:
+    return render(request, 'judging_app/submit.html', {
+        'competition': competition, 
+        'error_message': error_message
+    })
 
