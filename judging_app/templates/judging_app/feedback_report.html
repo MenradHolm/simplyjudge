@@ -3,166 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simply Judge - Feedback Report</title>
+    <title>Simply Judge - List Ledger Report</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        /* =====================================================================
-           BULLETPROOF PRINT STYLES (Enforced strictly when saving to PDF)
-           ===================================================================== */
         @media print {
-            /* 1. Force crisp black text on a clean white paper profile */
             body { 
                 background-color: white !important; 
-                color: #111827 !important; 
-                font-size: 10pt !important;
+                color: #000 !important; 
+                font-size: 9pt !important;
                 padding: 0 !important;
             }
-            
-            /* 2. Strip out all interface headers and navigation buttons */
             .no-print { display: none !important; }
-            
-            /* 3. Re-structure the layout into a clean, flat data table */
-            .print-table { 
-                display: table !important; 
-                width: 100% !important;
-                border-collapse: collapse !important;
-                margin-top: 20px !important;
+            .ledger-row { 
+                page-break-inside: avoid !important; /* Prevents a single photo row splitting across pages */
+                border-bottom: 1px solid #9ca3af !important;
+                background: transparent !important;
+                color: black !important;
             }
-            
-            .print-row { 
-                display: table-row !important; 
-                page-break-inside: avoid !important; /* Prevents a photo breaking in half across pages */
-                border-bottom: 2px solid #e5e7eb !important;
-            }
-            
-            .print-cell { 
-                display: table-cell !important; 
-                padding: 12px !important;
-                vertical-align: top !important;
-                border-bottom: 1px solid #e5e7eb !important;
-            }
-
-            /* 4. Strictly constrain images so they don't hog entire pages */
-            .print-thumb {
-                width: 140px !important;
-                height: auto !important;
-                max-height: 140px !important;
-                object-contain: true !important;
-                display: block !important;
-                margin-top: 8px !important;
-            }
-
-            /* 5. Clean text styles for judge data rows */
-            .print-judge-row {
-                border-bottom: 1px dashed #e5e7eb !important;
-                padding: 6px 0 !important;
-                margin-bottom: 6px !important;
-                page-break-inside: avoid !important;
-            }
-
-            /* 6. Enforce clear section headings on paper */
-            .pdf-header {
-                display: block !important;
-                text-align: center !important;
-                margin-bottom: 30px !important;
-            }
+            .print-text-dark { color: #000 !important; }
+            .print-bg-clear { background: transparent !important; }
+            .pdf-header { display: block !important; text-align: center !important; margin-bottom: 15px; }
+            /* Tighten image for print */
+            .print-thumb { width: 55px !important; height: 55px !important; }
         }
-
-        /* Hide the print-only header when viewing live on the screen */
         .pdf-header { display: none; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans antialiased">
 
-    <div class="pdf-header text-center">
-        <h1 class="text-2xl font-bold text-gray-900">Shutter Society Feedback Report</h1>
-        <p class="text-sm text-gray-500">Competition: {{ competition.name }}</p>
-        <div class="border-b-2 border-gray-300 my-4"></div>
+    <div class="pdf-header">
+        <h1 class="text-xl font-bold text-black">Master Feedback Ledger: {{ competition.name }}</h1>
+        <p class="text-xs text-gray-600">Total Entries: {{ photos|length }} | Generated Assessment Sheet</p>
+        <div class="border-b border-gray-400 my-2"></div>
     </div>
 
-    <header class="no-print flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+    <header class="no-print flex items-center justify-between px-6 py-3 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
         <div>
-            <h1 class="text-xl font-bold text-white">Organizer Report: {{ competition.name }}</h1>
-            <p class="text-sm text-gray-400">Detailed Feedback & Individual Judge Scores</p>
+            <h1 class="text-lg font-black text-white">Ledger Room: {{ competition.name }}</h1>
+            <p class="text-xs text-gray-400">High-Density List Layout ({{ photos|length }} Submissions)</p>
         </div>
-        <div class="flex space-x-3">
-            <button onclick="window.print()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition-all shadow-lg flex items-center gap-2">
-                📄 Download PDF Report
+        <div class="flex space-x-2">
+            <button onclick="window.print()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5">
+                📄 Print / Save Compact PDF
             </button>
-            <a href="{% url 'home_hub' %}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition-colors">Back to Hub</a>
+            <a href="{% url 'home_hub' %}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors">Back to Hub</a>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto p-4 md:p-6">
-        
-        <div class="print-table w-full space-y-8">
+    <main class="max-w-7xl mx-auto p-4">
+        <div class="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
             
             {% for photo in photos %}
-            <div class="print-row bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl flex flex-col md:flex-row mb-6">
+            <div class="ledger-row border-b border-gray-700/70 p-3 flex flex-col md:flex-row gap-4 items-start hover:bg-gray-800/30 transition-all">
                 
-                <div class="print-cell w-full md:w-1/4 bg-gray-850 p-4 border-r border-gray-700 flex flex-col items-center justify-center text-center">
-                    <div class="text-left w-full mb-2">
-                        <span class="bg-indigo-900/50 border border-indigo-700 text-indigo-300 font-bold px-2.5 py-1 rounded text-xs">
-                            Code: #{{ photo.id }}
-                        </span>
+                <div class="w-full md:w-1/4 flex items-start gap-3">
+                    <div class="flex-shrink-0">
+                        <img src="{{ photo.image.url }}" alt="Thumb" class="print-thumb w-14 h-14 object-contain rounded bg-black border border-gray-700 shadow-sm">
                     </div>
-                    
-                    <img src="{{ photo.image.url }}" alt="{{ photo.title }}" class="print-thumb max-h-48 object-contain rounded-lg shadow-md my-3 bg-black">
-                    
-                    <div class="mt-2">
-                        <h3 class="text-base font-bold text-white @media-print:text-gray-900">{{ photo.title }}</h3>
-                        <p class="text-xs text-gray-400">By {{ photo.photographer_name }}</p>
-                    </div>
-                </div>
-  
-                <div class="print-cell w-full md:w-1/2 p-6 flex flex-col justify-between border-r border-gray-700">
-                    <div>
-                        <div class="flex justify-between items-center border-b border-gray-700 pb-1.5 mb-3">
-                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Individual Judge Feedback</h4>
-                            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-gray-700 text-indigo-300 no-print">
-                                Progress: {{ photo.judge_scores|length }}/7 Judges
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[10px] font-mono font-black text-indigo-400 bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-900/50 print-text-dark print-bg-clear">
+                                #{{ photo.id }}
+                            </span>
+                            <span class="no-print text-[10px] font-semibold text-gray-400">
+                                ({{ photo.judge_scores|length }}/7)
                             </span>
                         </div>
-                        
-                        {% if photo.judge_scores %}
-                            <div class="space-y-3">
-                                {% for score in photo.judge_scores %}
-                                <div class="print-judge-row bg-gray-750/30 p-3 rounded-lg border border-gray-700/50 flex items-start gap-4">
-                                    <div class="text-center min-w-[70px] bg-gray-900/40 p-1.5 rounded border border-gray-700">
-                                        <span class="block text-xs font-semibold text-indigo-400 truncate">{{ score.judge.username }}</span>
-                                        <span class="block text-lg font-black text-white">{{ score.total_score|floatformat:1 }}</span>
-                                    </div>
-                                    <div class="flex-1 pt-0.5">
-                                        <p class="text-sm text-gray-300 italic leading-relaxed">
-                                            {% if score.comment %}
-                                                "{{ score.comment }}"
-                                            {% else %}
-                                                <span class="text-gray-650 italic text-xs">No commentary written.</span>
-                                            {% endif %}
-                                        </p>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <p class="text-gray-500 text-sm italic">This submission hasn't received evaluating scores yet.</p>
-                        {% endif %}
+                        <h3 class="text-sm font-bold text-white truncate mt-0.5 print-text-dark">{{ photo.title }}</h3>
+                        <p class="text-xs text-gray-400 truncate print-text-dark">By {{ photo.photographer_name }}</p>
+                        <span class="text-[10px] text-gray-500 uppercase tracking-wider block font-medium mt-0.5">{{ photo.category }}</span>
                     </div>
                 </div>
 
-                <div class="print-cell w-full md:w-1/4 p-6 bg-gray-850/50 flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-center border-b border-gray-700 pb-1.5 mb-3">
-                            <h4 class="text-xs font-bold text-amber-500 uppercase tracking-wider">Final Organizer Notes</h4>
-                            <a href="/admin/judging_app/photo/{{ photo.id }}/change/" target="_blank" class="no-print text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1">
-                                ✏️ Edit Notes
+                <div class="w-full md:w-1/2 flex-1">
+                    {% if photo.judge_scores %}
+                        <div class="space-y-1">
+                            {% for score in photo.judge_scores %}
+                            <div class="text-xs flex items-start gap-2 py-0.5 border-b border-gray-700/30 last:border-0">
+                                <div class="font-mono font-bold text-indigo-300 min-w-[100px] flex justify-between items-center bg-gray-900/30 px-1 py-0.5 rounded border border-gray-700/30 print-text-dark print-bg-clear">
+                                    <span class="truncate pr-1 text-[11px]">{{ score.judge.username }}</span>
+                                    <span class="text-white text-[11px] font-black print-text-dark">{{ score.total_score|floatformat:1 }}</span>
+                                </div>
+                                <div class="flex-1 text-gray-300 italic truncate print-text-dark text-[11px] pt-0.5">
+                                    {% if score.comment %}"{{ score.comment }}"{% else %}<span class="text-gray-600 print-text-dark italic opacity-40">No comment.</span>{% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-gray-600 italic text-xs py-2">No evaluative raw data registered from judges yet.</p>
+                    {% endif %}
+                </div>
+
+                <div class="w-full md:w-1/4 border-t md:border-t-0 md:border-l border-gray-700/50 pl-0 md:pl-4 pt-2 md:pt-0 flex flex-col justify-between self-stretch text-right">
+                    <div class="text-left w-full">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Organizer Notes</span>
+                            <a href="/admin/judging_app/photo/{{ photo.id }}/change/" target="_blank" class="no-print text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5">
+                                ✏️ Edit
                             </a>
                         </div>
                         {% if photo.organizer_notes %}
-                            <p class="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{{ photo.organizer_notes }}</p>
+                            <p class="text-xs text-gray-300 line-clamp-3 leading-tight print-text-dark">{{ photo.organizer_notes }}</p>
                         {% else %}
-                            <p class="text-gray-500 text-xs italic">No manual notes have been appended to this image entry yet.</p>
+                            <p class="text-gray-600 text-[11px] italic print-text-dark opacity-40">Empty record.</p>
                         {% endif %}
                     </div>
                 </div>
