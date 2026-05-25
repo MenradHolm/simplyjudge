@@ -30,7 +30,7 @@ urlpatterns = [
     path('competition/<int:comp_id>/photo/<int:photo_id>/', views.judge_photo, name='judge_photo'),
     path('competition/<int:comp_id>/leaderboard/', views.leaderboard, name='leaderboard'),
     path('competition/<int:comp_id>/report/', views.feedback_report, name='feedback_report'),
-
+    path('competition/<int:comp_id>/upload-csv/', views.upload_spreadsheet, name='upload_spreadsheet'),
 
     # Legal Pages
     path('impressum/', TemplateView.as_view(template_name='judging_app/impressum.html'), name='impressum'),

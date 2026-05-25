@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimplyJudge - Import Spreadsheet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col justify-between font-sans">
+
+    <main class="max-w-md mx-auto my-auto w-full p-6">
+        <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-2xl space-y-6">
+            
+            <div class="text-center">
+                <h1 class="text-xl font-black text-white">Import Google Sheet Data</h1>
+                <p class="text-sm text-gray-400 mt-1">Batch import metadata into {{ competition.name }}</p>
+            </div>
+
+            {% if messages %}
+                {% for message in messages %}
+                <div class="p-3 text-sm rounded-lg {% if message.tags == 'error' %}bg-red-900/50 text-red-300 border border-red-700{% else %}bg-emerald-900/50 text-emerald-300 border border-emerald-700{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            <form action="{% url 'upload_spreadsheet' competition.id %}" method="POST" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                
+                <div class="border-2 border-dashed border-gray-600 rounded-xl p-4 text-center hover:border-indigo-500 transition-colors bg-gray-850 relative">
+                    <input type="file" name="csv_file" accept=".csv" required class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <span class="text-gray-400 text-sm block">📁 Click here to select `.csv` file</span>
+                    <span class="text-xs text-gray-500 block mt-1">Make sure column headers are: Title, Photographer, Category</span>
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg text-sm">
+                    🚀 Run Import Script
+                </button>
+            </form>
+
+            <div class="border-t border-gray-700 pt-4 text-center">
+                <a href="{% url 'feedback_report' competition.id %}" class="text-sm text-gray-400 hover:text-white transition-colors">Cancel & Return to Report</a>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>

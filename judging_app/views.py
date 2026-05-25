@@ -218,3 +218,57 @@ def feedback_report(request, comp_id):
         'competition': competition,
         'photos': photos
     })
+
+
+import csv
+from django.contrib import messages
+
+@login_required(login_url='/login/')
+def upload_spreadsheet(request, comp_id):
+    """Allows the organizer to upload a CSV file from Google Sheets to batch-import photos."""
+    if not request.user.is_staff:
+        return redirect('home_hub')
+
+    competition = get_object_or_404(Competition, id=comp_id)
+
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        csv_file = request.FILES['csv_file']
+        
+        # Security check: Ensure it's a CSV
+        if not csv_file.name.endswith('.csv'):
+            messages.error(request, 'Error: This is not a CSV file!')
+            return redirect('upload_spreadsheet', comp_id=comp_id)
+
+        try:
+            # Decode the uploaded file stream
+            file_data = csv_file.read().decode('utf-8').splitlines()
+            reader = csv.DictReader(file_data) # Uses the first row as column headers
+
+            import_count = 0
+            for row in reader:
+                # Fallback to standard column names matching typical Google Sheets layouts
+                title = row.get('Title') or row.get('title') or 'Untitled'
+                photographer = row.get('Photographer') or row.get('photographer') or 'Unknown'
+                category = row.get('Category') or row.get('category') or 'General'
+                
+                # --- AUTOMATIC UNIQUE NUMBER LOGIC ---
+                # Django automatically creates a unique primary key ('id') sequentially in the database.
+                # If Kyle wants a specific randomized or formatted padding (e.g., 1001, 1002), we can handle it,
+                # but standard Auto-IDs mean every photo gets a completely unique integer automatically!
+                Photo.objects.create(
+                    competition=competition,
+                    title=title,
+                    photographer_name=photographer,
+                    category=category,
+                    image='competition_photos/placeholder.jpg' # Temporarily set a placeholder image
+                )
+                import_count += 1
+
+            messages.success(request, f'Successfully imported {import_count} entries from spreadsheet!')
+            return redirect('feedback_report', comp_id=comp_id)
+
+        except Exception as e:
+            messages.error(request, f'Error parsing spreadsheet: {str(e)}')
+            return redirect('upload_spreadsheet', comp_id=comp_id)
+
+    return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
