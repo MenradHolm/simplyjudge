@@ -272,3 +272,19 @@ def upload_spreadsheet(request, comp_id):
             return redirect('upload_spreadsheet', comp_id=comp_id)
 
     return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
+
+def public_results(request, comp_id):
+    """Public results page for all participants to see the feedback ledger."""
+    competition = get_object_or_454(Competition, id=comp_id)
+    
+    # Fetch photos and manually map the scores
+    photos = list(Photo.objects.filter(competition=competition))
+    all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
+    
+    for photo in photos:
+        photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
+
+    return render(request, 'judging_app/feedback_report.html', {
+        'competition': competition,
+        'photos': photos
+    })
