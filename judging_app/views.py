@@ -1,8 +1,11 @@
-from django.shortcuts import render, redirect, get_object_or_404
+import csv
+import os
+import zipfile
+from django.contrib import messages
+from django.core.files.base import ContentFile
+from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm
-from django.db.models import Avg
-from .models import Competition, Photo, RubricCriterion, Score
+from .models import Competition, Photo, Score
 
 # =====================================================================
 # 1. USER ACCOUNT REGISTRATION & PERMISSIONS
@@ -220,12 +223,10 @@ def feedback_report(request, comp_id):
     })
 
 
-import csv
-from django.contrib import messages
 
 @login_required(login_url='/login/')
 def upload_spreadsheet(request, comp_id):
-    """Allows the organizer to upload a CSV file from Google Sheets to batch-import photos."""
+    """Allows the organizer to upload a CSV file and forces database IDs to match Kyle's custom codes."""
     if not request.user.is_staff:
         return redirect('home_hub')
 
@@ -234,37 +235,38 @@ def upload_spreadsheet(request, comp_id):
     if request.method == 'POST' and request.FILES.get('csv_file'):
         csv_file = request.FILES['csv_file']
         
-        # Security check: Ensure it's a CSV
         if not csv_file.name.endswith('.csv'):
             messages.error(request, 'Error: This is not a CSV file!')
             return redirect('upload_spreadsheet', comp_id=comp_id)
 
         try:
-            # Decode the uploaded file stream
             file_data = csv_file.read().decode('utf-8').splitlines()
-            reader = csv.DictReader(file_data) # Uses the first row as column headers
+            reader = csv.DictReader(file_data)
 
             import_count = 0
             for row in reader:
-                # Fallback to standard column names matching typical Google Sheets layouts
                 title = row.get('Title') or row.get('title') or 'Untitled'
                 photographer = row.get('Photographer') or row.get('photographer') or 'Unknown'
                 category = row.get('Category') or row.get('category') or 'General'
                 
-                # --- AUTOMATIC UNIQUE NUMBER LOGIC ---
-                # Django automatically creates a unique primary key ('id') sequentially in the database.
-                # If Kyle wants a specific randomized or formatted padding (e.g., 1001, 1002), we can handle it,
-                # but standard Auto-IDs mean every photo gets a completely unique integer automatically!
+                # Grab Kyle's custom code column from the spreadsheet
+                custom_code = row.get('Code') or row.get('ID') or row.get('Number') or row.get('id')
+                
+                if not custom_code:
+                    continue
+
+                # Create the entry using Kyle's exact code number as the primary database key
                 Photo.objects.create(
+                    id=int(custom_code.strip()),
                     competition=competition,
                     title=title,
                     photographer_name=photographer,
                     category=category,
-                    image='competition_photos/placeholder.jpg' # Temporarily set a placeholder image
+                    image='competition_photos/placeholder.jpg'
                 )
                 import_count += 1
 
-            messages.success(request, f'Successfully imported {import_count} entries from spreadsheet!')
+            messages.success(request, f'Successfully imported {import_count} entries with their unique codes!')
             return redirect('feedback_report', comp_id=comp_id)
 
         except Exception as e:
@@ -272,6 +274,65 @@ def upload_spreadsheet(request, comp_id):
             return redirect('upload_spreadsheet', comp_id=comp_id)
 
     return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
+
+
+@login_required(login_url='/login/')
+def upload_photos_zip(request, comp_id):
+    """Unzips folder and matches files (e.g. '101.jpg') directly to the unique database ID."""
+    if not request.user.is_staff:
+        return redirect('home_hub')
+
+    competition = get_object_or_404(Competition, id=comp_id)
+
+    if request.method == 'POST' and request.FILES.get('zip_file'):
+        zip_file = request.FILES['zip_file']
+
+        if not zip_file.name.endswith('.zip'):
+            messages.error(request, 'Error: This is not a ZIP file!')
+            return redirect('upload_spreadsheet', comp_id=comp_id)
+
+        try:
+            success_count = 0
+            missing_photos = []
+
+            with zipfile.ZipFile(zip_file) as z:
+                for file_info in z.infolist():
+                    if file_info.is_dir() or '/' in file_info.filename or file_info.filename.startswith('.'):
+                        continue
+
+                    filename = file_info.filename
+                    name_without_ext, ext = os.path.splitext(filename)
+                    
+                    try:
+                        # Convert the filename (e.g. '142') to an integer ID
+                        target_id = int(name_without_ext.strip())
+                        
+                        # Find the photo record that matches this exact ID number
+                        photo = Photo.objects.filter(competition=competition, id=target_id).first()
+                        
+                        if photo:
+                            file_bytes = z.read(filename)
+                            photo.image.save(filename, ContentFile(file_bytes))
+                            success_count += 1
+                        else:
+                            missing_photos.append(filename)
+                            
+                    except ValueError:
+                        # Skips non-numeric files like 'instructions.txt' or hidden system files safely
+                        continue
+
+            if missing_photos:
+                messages.warning(request, f"Matched {success_count} photos. No spreadsheet records found for IDs: {', '.join(missing_photos[:5])}")
+            else:
+                messages.success(request, f"Successfully matched and uploaded all {success_count} photos to Cloudinary via unique code numbers!")
+
+            return redirect('feedback_report', comp_id=comp_id)
+
+        except Exception as e:
+            messages.error(request, f"Error processing ZIP file: {str(e)}")
+            return redirect('upload_spreadsheet', comp_id=comp_id)
+
+    return redirect('upload_spreadsheet', comp_id=comp_id)
 
 def public_results(request, comp_id):
     """Public results page for all participants to see the feedback ledger."""
