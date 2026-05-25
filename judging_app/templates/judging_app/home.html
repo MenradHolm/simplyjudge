@@ -3,46 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simply Judge - Portal Hub</title>
+    <title>Simply Judge - Home</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans">
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans flex flex-col">
 
-    <header class="max-w-4xl w-full mx-auto text-center pt-16 pb-8 px-6">
-        <h1 class="text-5xl font-extrabold tracking-tight text-white mb-3">Simply Judge</h1>
-        <p class="text-xl text-gray-400">Select an active competition below to get started.</p>
+    <header class="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 shadow-sm">
+        <div class="flex items-center space-x-3">
+            <h1 class="text-xl font-bold tracking-tight text-white">Simply Judge</h1>
+        </div>
+        <div class="flex space-x-4">
+            {% if user.is_authenticated %}
+                <span class="px-4 py-1.5 text-sm text-gray-400">Logged in as {{ user.username }}</span>
+                {% if user.is_staff %}
+                    <a href="{% url 'admin:index' %}" class="px-4 py-1.5 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Admin Panel</a>
+                {% endif %}
+                <form action="{% url 'logout' %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700 transition-colors">Log Out</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700 transition-colors">Log In</a>
+            {% endif %}
+        </div>
     </header>
 
-    <main class="flex-1 max-w-4xl w-full mx-auto p-6 space-y-8">
+    <main class="flex-1 max-w-5xl mx-auto p-8 w-full">
+        <h2 class="text-3xl font-bold text-white mb-8">Active Competitions</h2>
         
-        {% if competitions %}
-            {% for comp in competitions %}
-            <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl hover:border-indigo-500 transition-colors">
-                <h2 class="text-2xl font-bold text-white mb-1">{{ comp.name }}</h2>
-                <p class="text-gray-400 text-sm mb-6">{{ comp.description|default:"Active Competition" }}</p>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <a href="{% url 'submit_photo' comp.id %}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2.5 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
-                        <span>📸</span> Submit Photo
-                    </a>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% if competitions %}
+                {% for comp in competitions %}
+                <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-6 flex flex-col">
+                    <h3 class="text-xl font-bold text-white mb-2">{{ comp.name }}</h3>
+                    <p class="text-sm text-gray-400 mb-6 flex-1">{{ comp.description|default:"No description provided." }}</p>
                     
-                    <a href="{% url 'judge_router' comp.id %}" class="bg-gray-700 hover:bg-gray-600 text-white text-center py-2.5 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
-                        <span>⚖️</span> Judging Panel
-                    </a>
-                    
-                    <a href="{% url 'leaderboard' comp.id %}" class="bg-gray-700 hover:bg-gray-600 text-white text-center py-2.5 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
-                        <span>🏆</span> Leaderboard
-                    </a>
+                    <div class="flex flex-col space-y-3">
+                        <a href="{% url 'submit_photo' comp.id %}" class="text-center w-full bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded transition-colors">Submit a Photo</a>
+                        
+                        <div class="flex space-x-3">
+                            <a href="{% url 'judge_router' comp.id %}" class="text-center w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded transition-colors">Judge Panel</a>
+                            <a href="{% url 'leaderboard' comp.id %}" class="text-center w-1/2 border border-gray-600 hover:bg-gray-700 text-gray-300 font-medium py-2 px-4 rounded transition-colors">Leaderboard</a>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="text-center py-12 bg-gray-800 rounded-xl border border-gray-700">
-                <p class="text-gray-400">No active competitions available right now.</p>
-            </div>
-        {% endif %}
-
+                {% endfor %}
+            {% else %}
+                <p class="text-gray-500 col-span-2">No active competitions right now.</p>
+            {% endif %}
+        </div>
     </main>
+
+    <!-- GLOBAL LEGAL FOOTER -->
+    <footer class="bg-gray-950 border-t border-gray-800 py-6">
+        <div class="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 text-sm text-gray-500">
+            <p>&copy; 2026 Simply Judge.</p>
+            <div class="flex space-x-6">
+                <a href="{% url 'impressum' %}" class="hover:text-white transition-colors">Impressum</a>
+                <a href="{% url 'privacy' %}" class="hover:text-white transition-colors">Privacy Policy</a>
+                <a href="{% url 'terms' %}" class="hover:text-white transition-colors">Terms of Service</a>
+            </div>
+        </div>
+    </footer>
 
 </body>
 </html>
