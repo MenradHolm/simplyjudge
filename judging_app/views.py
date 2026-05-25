@@ -318,7 +318,8 @@ def upload_photos_zip(request, comp_id):
                             missing_photos.append(filename)
                             
                     except ValueError:
-                        # Skips non-numeric files like 'instructions.txt' or hidden system files safely
+                        # Force the system to confess what filename it is tripping on!
+                        messages.error(request, f"Skipped file '{filename}' - the name is not a pure number.")
                         continue
 
             if missing_photos:
