@@ -115,10 +115,15 @@
                         <p class="text-xs text-gray-400">By {{ photo.photographer_name }}</p>
                     </div>
                 </div>
-
+  
                 <div class="print-cell w-full md:w-1/2 p-6 flex flex-col justify-between border-r border-gray-700">
                     <div>
-                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-700 pb-1.5 mb-3">Individual Judge Feedback</h4>
+                        <div class="flex justify-between items-center border-b border-gray-700 pb-1.5 mb-3">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Individual Judge Feedback</h4>
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-gray-700 text-indigo-300 no-print">
+                                Progress: {{ photo.judge_scores|length }}/7 Judges
+                            </span>
+                        </div>
                         
                         {% if photo.judge_scores %}
                             <div class="space-y-3">
@@ -148,7 +153,12 @@
 
                 <div class="print-cell w-full md:w-1/4 p-6 bg-gray-850/50 flex flex-col justify-between">
                     <div>
-                        <h4 class="text-xs font-bold text-amber-500 uppercase tracking-wider border-b border-gray-700 pb-1.5 mb-3">Final Organizer Notes</h4>
+                        <div class="flex justify-between items-center border-b border-gray-700 pb-1.5 mb-3">
+                            <h4 class="text-xs font-bold text-amber-500 uppercase tracking-wider">Final Organizer Notes</h4>
+                            <a href="/admin/judging_app/photo/{{ photo.id }}/change/" target="_blank" class="no-print text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1">
+                                ✏️ Edit Notes
+                            </a>
+                        </div>
                         {% if photo.organizer_notes %}
                             <p class="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{{ photo.organizer_notes }}</p>
                         {% else %}
