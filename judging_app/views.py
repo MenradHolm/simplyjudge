@@ -206,7 +206,7 @@ def feedback_report(request, comp_id):
     competition = get_object_or_404(Competition, id=comp_id)
     
     # Fetch all photos and prefetch the individual scores attached to them
-    photos = Photo.objects.filter(competition=competition).prefetch_related('scores__judge')
+    photos = Photo.objects.filter(competition=competition).prefetch_related('score__judge')
 
     return render(request, 'judging_app/feedback_report.html', {
         'competition': competition,
