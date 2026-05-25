@@ -9,9 +9,18 @@ class Competition(models.Model):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
-    # --- Assign specific judges to this competition ---
     judges = models.ManyToManyField(User, related_name='judged_competitions', blank=True)
+    
+    # --- NEW: Set a specific criterion as the tie-breaker ---
+    # We use a string reference 'RubricCriterion' because the model is defined lower down in the file
+    tie_breaker_criterion = models.ForeignKey(
+        'RubricCriterion', 
+        on_delete=models.SET_NULL, # <-- Fixed right here!
+        null=True,                 # <-- Also ensure this says null=True (lowercase 'n'), not on_null
+        blank=True, 
+        related_name='tie_breaker_for',
+        help_text="If two photos have the same average total score, the higher average score in this specific category wins."
+    )
 
     def __str__(self):
         return self.name

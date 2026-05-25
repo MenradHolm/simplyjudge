@@ -119,22 +119,42 @@ def judge_photo(request, comp_id, photo_id):
 # 4. LIVE LEADERBOARD
 # =====================================================================
 
+from django.db.models import Avg, Q, FloatField
+from django.db.models.functions import Cast
+
 @login_required(login_url='/login/')
 def leaderboard(request, comp_id):
-    """Calculates average scores and ranks photos for a single specific competition."""
+    """Calculates average scores and ranks photos, using a chosen criterion as a tie-breaker."""
     competition = get_object_or_404(Competition, id=comp_id)
-    
-    ranked_photos = Photo.objects.filter(competition=competition).annotate(
+    tie_criterion = competition.tie_breaker_criterion
+
+    # 1. Start building the photo query for this competition
+    photos_query = Photo.objects.filter(competition=competition).annotate(
         average_score=Avg('score__total_score')
-    ).filter(
-        average_score__isnull=False
-    ).order_by('-average_score')
+    )
+
+    # 2. If a specific tie-breaker criterion is selected, calculate its specific average
+    if tie_criterion:
+        # We parse the criteria_scores JSON field to find the value matching this criterion's ID
+        # Since JSON keys are strings, we look up str(tie_criterion.id)
+        criterion_key = f"criteria_scores__{tie_criterion.id}"
+        
+        ranked_photos = photos_query.annotate(
+            tie_breaker_score=Avg(Cast(f'score__criteria_scores__{tie_criterion.id}', FloatField()))
+        ).filter(
+            average_score__isnull=False
+        ).order_by('-average_score', '-tie_breaker_score') # <-- Sorts by total avg first, tie-breaker second!
+    else:
+        # Fallback to standard sorting if no tie-breaker is chosen
+        ranked_photos = photos_query.filter(
+            average_score__isnull=False
+        ).order_by('-average_score')
 
     return render(request, 'judging_app/leaderboard.html', {
         'competition': competition, 
-        'photos': ranked_photos
+        'photos': ranked_photos,
+        'tie_criterion': tie_criterion
     })
-
 
 # =====================================================================
 # 5. PUBLIC PHOTO SUBMISSION PORTAL
