@@ -24,11 +24,7 @@
             <div class="p-4 sm:p-6 border-b border-gray-700 bg-gray-850 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                 <h2 class="text-xl sm:text-2xl font-bold text-white">{{ competition.name }} - Rankings</h2>
                 <p class="text-xs sm:text-sm text-gray-400">
-                    {% if tie_criterion %}
-                        Tie-Breaker: <span class="text-indigo-400 font-semibold">{{ tie_criterion.name }}</span>
-                    {% else %}
-                        Scores update live.
-                    {% endif %}
+                    Scores update live.
                 </p>
             </div>
 
@@ -75,15 +71,6 @@
                                         {{ photo.average_score|floatformat:1 }}
                                     </span>
                                 </div>
-
-                                {% if tie_criterion %}
-                                <div class="flex flex-col text-right sm:mt-2">
-                                    <span class="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-0.5">{{ tie_criterion.name }}</span>
-                                    <span class="text-sm sm:text-base font-semibold text-gray-300">
-                                        {{ photo.tie_breaker_score|floatformat:1 }}
-                                    </span>
-                                </div>
-                                {% endif %}
 
                             </div>
 
