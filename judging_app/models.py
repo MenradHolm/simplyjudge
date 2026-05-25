@@ -9,6 +9,9 @@ class Competition(models.Model):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # --- Assign specific judges to this competition ---
+    judges = models.ManyToManyField(User, related_name='judged_competitions', blank=True)
 
     def __str__(self):
         return self.name

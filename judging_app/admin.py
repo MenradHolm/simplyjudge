@@ -12,7 +12,9 @@ class CompetitionAdmin(admin.ModelAdmin):
     list_display = ('name', 'is_active', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('name',)
-    inlines = [RubricCriterionInline]  # <-- This attaches the grid to the competition page!
+    inlines = [RubricCriterionInline]
+    # Creates UI for assigning judges ---
+    filter_horizontal = ('judges',)
 
 # --- The rest stays exactly the same ---
 @admin.register(Photo)

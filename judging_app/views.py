@@ -19,9 +19,11 @@ def register_user(request):
         form = UserCreationForm()
     return render(request, 'judging_app/register.html', {'form': form})
 
-def is_approved_judge(user):
-    """Bouncer helper: Checks for the explicit 'can_judge_photos' permission or superuser."""
-    return user.has_perm('judging_app.can_judge_photos') or user.is_superuser
+def is_approved_judge(user, competition):
+    """Bouncer helper: Checks if user is explicitly assigned to this competition, or is a superuser."""
+    if user.is_superuser:
+        return True
+    return competition.judges.filter(id=user.id).exists()
 
 
 # =====================================================================
@@ -48,12 +50,13 @@ def home_hub(request):
 @login_required(login_url='/login/')
 def judge_router(request, comp_id):
     """Finds the next unrated photo within a specific competition for this judge."""
-    if not is_approved_judge(request.user):
-        return render(request, 'judging_app/pending.html')
-
     competition = get_object_or_404(Competition, id=comp_id)
     
-    # Find the first photo in THIS competition that this specific judge hasn't scored yet
+    # NEW SECURITY CHECK
+    if not is_approved_judge(request.user, competition):
+        return render(request, 'judging_app/pending.html')
+        
+    # Find the first photo...
     next_photo = Photo.objects.filter(competition=competition).exclude(score__judge=request.user).first()
     
     if next_photo:
@@ -65,11 +68,18 @@ def judge_router(request, comp_id):
 @login_required(login_url='/login/')
 def judge_photo(request, comp_id, photo_id):
     """Displays a single photo and handles saving judge metrics for a specific competition."""
-    if not is_approved_judge(request.user):
-        return render(request, 'judging_app/pending.html')
-
+    
+    # 1. Grab the competition FIRST
     competition = get_object_or_404(Competition, id=comp_id)
+    
+    # 2. THEN check if the user is on the VIP list for this specific event
+    if not is_approved_judge(request.user, competition):
+        return render(request, 'judging_app/pending.html')
+        
+    # 3. THEN grab the photo and continue as normal
     photo = get_object_or_404(Photo, id=photo_id, competition=competition)
+    
+    # ... (the rest of your rubric and scoring logic goes here) ...
     
     # Grab only the criteria assigned to this specific competition
     rubric = RubricCriterion.objects.filter(competition=competition)
