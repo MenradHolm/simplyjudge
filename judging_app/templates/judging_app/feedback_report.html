@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simply Judge - Feedback Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @media print {
+            body { background-color: white !important; color: black !important; }
+            .no-print { display: none !important; }
+            .print-card { 
+                background-color: white !important; 
+                border: 1px solid #ccc !important; 
+                box-shadow: none !important;
+                page-break-inside: avoid !important; /* Prevents a photo cutting in half across pages */
+                margin-bottom: 20px !important;
+                color: black !important;
+            }
+            .print-text { color: black !important; }
+            .print-border { border-color: #ddd !important; }
+            .print-bg-light { background-color: #f9fafb !important; }
+            
+            /* Add a custom title just for the PDF */
+            body::before {
+                content: "Final Organizer Feedback Report: {{ competition.name }}";
+                display: block;
+                font-size: 24px;
+                font-weight: bold;
+                text-align: center;
+                margin-bottom: 20px;
+                color: black;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <header class="no-print flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div>
+            <h1 class="text-xl font-bold text-white">Organizer Report: {{ competition.name }}</h1>
+            <p class="text-sm text-gray-400">Detailed Feedback & Individual Judge Scores</p>
+        </div>
+        <div class="flex space-x-3">
+            <button onclick="window.print()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-bold transition-colors shadow-lg flex items-center">
+                📄 Download PDF
+            </button>
+            <a href="{% url 'home_hub' %}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition-colors">Back to Hub</a>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-8">
+        {% for photo in photos %}
+        <div class="print-card bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl flex flex-col md:flex-row">
+            
+            <div class="w-full md:w-1/3 print-bg-light bg-black flex flex-col items-center justify-center p-4 border-r print-border border-gray-700 relative">
+                <span class="absolute top-4 left-4 bg-gray-900/80 print-bg-light print-text print-border text-white px-3 py-1 rounded text-sm font-bold shadow">
+                    Photo #{{ photo.id }}
+                </span>
+                
+                <img src="{{ photo.image.url }}" alt="{{ photo.title }}" class="max-h-64 object-contain rounded shadow-lg mb-4 print-border">
+                
+                <div class="text-center w-full mt-auto">
+                    <h3 class="text-lg font-bold text-white print-text">{{ photo.title }}</h3>
+                    <p class="text-sm text-gray-400 print-text">By {{ photo.photographer_name }}</p>
+                </div>
+            </div>
+
+            <div class="w-full md:w-2/3 flex flex-col">
+                
+                <div class="flex-1 p-6 overflow-y-auto max-h-96 print-bg-light">
+                    <h4 class="text-sm font-bold text-gray-500 print-text uppercase tracking-wider border-b print-border border-gray-700 pb-2 mb-4">Individual Judge Feedback</h4>
+                    
+                    {% if photo.score_set.all %}
+                        <div class="grid grid-cols-1 gap-4">
+                            {% for score in photo.score_set.all %}
+                            <div class="bg-gray-750 print-bg-light print-border p-4 rounded border border-gray-700 flex flex-col sm:flex-row sm:items-start gap-4">
+                                <div class="flex-shrink-0 min-w-[120px]">
+                                    <span class="block font-bold text-indigo-400 print-text">{{ score.judge.username }}</span>
+                                    <span class="block text-2xl font-black text-white print-text">{{ score.total_score|floatformat:1 }}</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm text-gray-300 print-text italic">
+                                        {% if score.comment %}
+                                            "{{ score.comment }}"
+                                        {% else %}
+                                            <span class="text-gray-600 print-text">No comment provided.</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-gray-500 print-text text-sm">No judges have scored this photo yet.</p>
+                    {% endif %}
+                </div>
+
+                <div class="p-6 bg-gray-850 print-bg-light border-t print-border border-gray-700">
+                    <h4 class="text-sm font-bold text-amber-500 print-text uppercase tracking-wider mb-2">Final Organizer Notes</h4>
+                    {% if photo.organizer_notes %}
+                        <p class="text-white print-text text-sm whitespace-pre-wrap">{{ photo.organizer_notes }}</p>
+                    {% else %}
+                        <p class="text-gray-500 print-text text-sm italic">No organizer notes added yet.</p>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+    </main>
+</body>
+</html>

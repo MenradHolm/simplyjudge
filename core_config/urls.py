@@ -29,6 +29,8 @@ urlpatterns = [
     path('competition/<int:comp_id>/panel/', views.judge_router, name='judge_router'),
     path('competition/<int:comp_id>/photo/<int:photo_id>/', views.judge_photo, name='judge_photo'),
     path('competition/<int:comp_id>/leaderboard/', views.leaderboard, name='leaderboard'),
+    path('competition/<int:comp_id>/report/', views.feedback_report, name='feedback_report'),
+
 
     # Legal Pages
     path('impressum/', TemplateView.as_view(template_name='judging_app/impressum.html'), name='impressum'),

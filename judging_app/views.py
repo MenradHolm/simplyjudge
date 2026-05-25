@@ -192,3 +192,23 @@ def submit_photo(request, comp_id):
         'error_message': error_message
     })
 
+# =====================================================================
+# 6. ORGANIZER FEEDBACK REPORT
+# =====================================================================
+
+@login_required(login_url='/login/')
+def feedback_report(request, comp_id):
+    """A master view for the organizer to see every individual judge's score and comment."""
+    # Bouncer: Only staff/admins should see the raw feedback data
+    if not request.user.is_staff:
+        return redirect('home_hub')
+
+    competition = get_object_or_404(Competition, id=comp_id)
+    
+    # Fetch all photos and prefetch the individual scores attached to them
+    photos = Photo.objects.filter(competition=competition).prefetch_related('score_set__judge')
+
+    return render(request, 'judging_app/feedback_report.html', {
+        'competition': competition,
+        'photos': photos
+    })
