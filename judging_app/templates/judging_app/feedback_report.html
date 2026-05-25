@@ -72,9 +72,9 @@
                 <div class="flex-1 p-6 overflow-y-auto max-h-96 print-bg-light">
                     <h4 class="text-sm font-bold text-gray-500 print-text uppercase tracking-wider border-b print-border border-gray-700 pb-2 mb-4">Individual Judge Feedback</h4>
                     
-                    {% if photo.scores.all %}
+                    {% if photo.judge_scores %}
                         <div class="grid grid-cols-1 gap-4">
-                            {% for score in photo.scores.all %}
+                            {% for score in photo.judge_scores = Photo.objects.filter(competition=competition).prefetch_related('score__judge').all %}
                             <div class="bg-gray-750 print-bg-light print-border p-4 rounded border border-gray-700 flex flex-col sm:flex-row sm:items-start gap-4">
                                 <div class="flex-shrink-0 min-w-[120px]">
                                     <span class="block font-bold text-indigo-400 print-text">{{ score.judge.username }}</span>

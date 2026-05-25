@@ -199,14 +199,20 @@ def submit_photo(request, comp_id):
 @login_required(login_url='/login/')
 def feedback_report(request, comp_id):
     """A master view for the organizer to see every individual judge's score and comment."""
-    # Bouncer: Only staff/admins should see the raw feedback data
     if not request.user.is_staff:
         return redirect('home_hub')
 
     competition = get_object_or_404(Competition, id=comp_id)
     
-    # Fetch all photos and prefetch the individual scores attached to them
-    photos = Photo.objects.filter(competition=competition).prefetch_related('score__judge')
+    # 1. Fetch the photos
+    photos = list(Photo.objects.filter(competition=competition))
+    
+    # 2. Fetch all scores for this competition explicitly
+    all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
+    
+    # 3. Manually group the scores to their exact photo (bypasses Django's strict naming rules)
+    for photo in photos:
+        photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
 
     return render(request, 'judging_app/feedback_report.html', {
         'competition': competition,
