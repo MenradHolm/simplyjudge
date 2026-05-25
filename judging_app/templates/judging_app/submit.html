@@ -19,7 +19,7 @@
             </div>
         {% endif %}
 
-        <form action="{% url 'submit_photo' %}" method="POST" enctype="multipart/form-data" class="space-y-6">
+        <form action="{% url 'submit_photo' competition.id %}" method="POST" enctype="multipart/form-data" class="space-y-6">
             {% csrf_token %}
             
             <div class="space-y-2">
