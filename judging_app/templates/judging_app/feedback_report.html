@@ -59,7 +59,7 @@
                 
                 <div class="w-full md:w-1/4 flex items-start gap-3">
                     <div class="flex-shrink-0">
-                        <img src="{{ photo.image.url }}" alt="Thumb" class="print-thumb w-14 h-14 object-contain rounded bg-black border border-gray-700 shadow-sm">
+                        <img src="{% if photo.image %}{{ photo.image.url }}{% else %}/media/competition_photos/placeholder.jpg{% endif %}" alt="Thumb" class="print-thumb w-14 h-14 object-contain rounded bg-black border border-gray-700 shadow-sm">
                     </div>
                     <div class="min-w-0">
                         <div class="flex items-center gap-1.5 flex-wrap">
@@ -71,8 +71,14 @@
                             </span>
                         </div>
                         <h3 class="text-sm font-bold text-white truncate mt-0.5 print-text-dark">{{ photo.title }}</h3>
-                        <p class="text-xs text-gray-400 truncate print-text-dark">By {{ photo.photographer_name }}</p>
                         <span class="text-[10px] text-gray-500 uppercase tracking-wider block font-medium mt-0.5">{{ photo.category }}</span>
+                        
+                        {% if photo.rule_flags %}
+                            <div class="no-print mt-2 text-[10px] text-red-400 font-bold bg-red-950/40 px-2 py-1 rounded border border-red-900/50 leading-tight">
+                                ⚠️ RULE AUDIT: {{ photo.rule_flags }}
+                            </div>
+                        {% endif %}
+                        
                     </div>
                 </div>
 

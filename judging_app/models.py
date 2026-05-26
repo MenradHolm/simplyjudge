@@ -37,7 +37,7 @@ class Photo(models.Model):
     category = models.CharField(max_length=100)
     image = models.ImageField(upload_to='photos/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    rule_flags = models.TextField(blank=True, null=True)
     organizer_notes = models.TextField(blank=True, help_text="Organizer's final feedback or notes for this photo.")
 
     def __str__(self):

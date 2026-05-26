@@ -1,11 +1,19 @@
 import csv
 import os
 import zipfile
+import io
+from PIL import Image
+from PIL.ExifTags import TAGS, GPSTAGS
+
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
-from .models import Competition, Photo, Score
+from django.contrib.auth.forms import UserCreationForm
+from django.db.models import Avg, Q, FloatField
+from django.db.models.functions import Cast
+
+from .models import Competition, Photo, Score, RubricCriterion
 
 # =====================================================================
 # 1. USER ACCOUNT REGISTRATION & PERMISSIONS
@@ -74,8 +82,6 @@ def judge_photo(request, comp_id, photo_id):
     # 3. THEN grab the photo and continue as normal
     photo = get_object_or_404(Photo, id=photo_id, competition=competition)
     
-    # ... (the rest of your rubric and scoring logic goes here) ...
-    
     # Grab only the criteria assigned to this specific competition
     rubric = RubricCriterion.objects.filter(competition=competition)
     
@@ -122,9 +128,6 @@ def judge_photo(request, comp_id, photo_id):
 # 4. LIVE LEADERBOARD
 # =====================================================================
 
-from django.db.models import Avg, Q, FloatField
-from django.db.models.functions import Cast
-
 @login_required(login_url='/login/')
 def leaderboard(request, comp_id):
     """Calculates average scores and ranks photos, using a chosen criterion as a tie-breaker."""
@@ -138,15 +141,13 @@ def leaderboard(request, comp_id):
 
     # 2. If a specific tie-breaker criterion is selected, calculate its specific average
     if tie_criterion:
-        # We parse the criteria_scores JSON field to find the value matching this criterion's ID
-        # Since JSON keys are strings, we look up str(tie_criterion.id)
         criterion_key = f"criteria_scores__{tie_criterion.id}"
         
         ranked_photos = photos_query.annotate(
             tie_breaker_score=Avg(Cast(f'score__criteria_scores__{tie_criterion.id}', FloatField()))
         ).filter(
             average_score__isnull=False
-        ).order_by('-average_score', '-tie_breaker_score') # <-- Sorts by total avg first, tie-breaker second!
+        ).order_by('-average_score', '-tie_breaker_score')
     else:
         # Fallback to standard sorting if no tie-breaker is chosen
         ranked_photos = photos_query.filter(
@@ -189,14 +190,13 @@ def submit_photo(request, comp_id):
                 )
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
 
-    # THIS IS THE CRUCIAL LINE! Make sure it is backed out to this exact indentation level:
     return render(request, 'judging_app/submit.html', {
         'competition': competition, 
         'error_message': error_message
     })
 
 # =====================================================================
-# 6. ORGANIZER FEEDBACK REPORT
+# 6. ORGANIZER FEEDBACK REPORT & METADATA UPLOADS
 # =====================================================================
 
 @login_required(login_url='/login/')
@@ -207,13 +207,9 @@ def feedback_report(request, comp_id):
 
     competition = get_object_or_404(Competition, id=comp_id)
     
-    # 1. Fetch the photos
     photos = list(Photo.objects.filter(competition=competition))
-    
-    # 2. Fetch all scores for this competition explicitly
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
     
-    # 3. Manually group the scores to their exact photo (bypasses Django's strict naming rules)
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
 
@@ -221,8 +217,6 @@ def feedback_report(request, comp_id):
         'competition': competition,
         'photos': photos
     })
-
-
 
 @login_required(login_url='/login/')
 def upload_spreadsheet(request, comp_id):
@@ -249,13 +243,11 @@ def upload_spreadsheet(request, comp_id):
                 photographer = row.get('Photographer') or row.get('photographer') or 'Unknown'
                 category = row.get('Category') or row.get('category') or 'General'
                 
-                # Grab Kyle's custom code column from the spreadsheet
                 custom_code = row.get('Code') or row.get('ID') or row.get('Number') or row.get('id')
                 
                 if not custom_code:
                     continue
 
-                # Create the entry using Kyle's exact code number as the primary database key
                 Photo.objects.create(
                     id=int(custom_code.strip()),
                     competition=competition,
@@ -275,10 +267,8 @@ def upload_spreadsheet(request, comp_id):
 
     return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
 
-
 @login_required(login_url='/login/')
 def upload_photos_zip(request, comp_id):
-    """Unzips folder and matches files (e.g. '101.jpg') directly to the unique database ID."""
     if not request.user.is_staff:
         return redirect('home_hub')
 
@@ -286,60 +276,51 @@ def upload_photos_zip(request, comp_id):
 
     if request.method == 'POST' and request.FILES.get('zip_file'):
         zip_file = request.FILES['zip_file']
+        success_count = 0
 
-        if not zip_file.name.endswith('.zip'):
-            messages.error(request, 'Error: This is not a ZIP file!')
-            return redirect('upload_spreadsheet', comp_id=comp_id)
+        with zipfile.ZipFile(zip_file) as z:
+            for file_info in z.infolist():
+                filename = os.path.basename(file_info.filename)
+                if file_info.is_dir() or not filename or filename.startswith('.'):
+                    continue
 
-        try:
-            success_count = 0
-            missing_photos = []
+                name_without_ext, ext = os.path.splitext(filename)
+                photo = None
 
-            with zipfile.ZipFile(zip_file) as z:
-                for file_info in z.infolist():
-                    if file_info.is_dir() or '/' in file_info.filename or file_info.filename.startswith('.'):
-                        continue
+                # HYBRID MATCHING ENGINE
+                try:
+                    # 1. Try Kyle's method
+                    target_id = int(name_without_ext.strip())
+                    photo = Photo.objects.filter(competition=competition, id=target_id).first()
+                except ValueError:
+                    # 2. Try POTY method
+                    photo = Photo.objects.filter(
+                        competition=competition, 
+                        title__icontains=filename.strip()
+                    ).first()
 
-                    filename = file_info.filename
-                    name_without_ext, ext = os.path.splitext(filename)
+                # If found, save the image stream straight to Cloudinary
+                if photo:
+                    file_bytes = z.read(file_info.filename)
+                    # --- NEW: RUN THE AI/METADATA AUDIT ---
+                    audit = audit_photo_metadata(file_bytes)
+                    if audit['flags']:
+                        photo.rule_flags = " | ".join(audit['flags'])
                     
-                    try:
-                        # Convert the filename (e.g. '142') to an integer ID
-                        target_id = int(name_without_ext.strip())
-                        
-                        # Find the photo record that matches this exact ID number
-                        photo = Photo.objects.filter(competition=competition, id=target_id).first()
-                        
-                        if photo:
-                            file_bytes = z.read(filename)
-                            photo.image.save(filename, ContentFile(file_bytes))
-                            success_count += 1
-                        else:
-                            missing_photos.append(filename)
-                            
-                    except ValueError:
-                        # Force the system to confess what filename it is tripping on!
-                        messages.error(request, f"Skipped file '{filename}' - the name is not a pure number.")
-                        continue
+                    # Save the image and the new flags ONCE
+                    photo.image.save(filename, ContentFile(file_bytes))
+                    photo.save() 
+                    success_count += 1
 
-            if missing_photos:
-                messages.warning(request, f"Matched {success_count} photos. No spreadsheet records found for IDs: {', '.join(missing_photos[:5])}")
-            else:
-                messages.success(request, f"Successfully matched and uploaded all {success_count} photos to Cloudinary via unique code numbers!")
-
-            return redirect('feedback_report', comp_id=comp_id)
-
-        except Exception as e:
-            messages.error(request, f"Error processing ZIP file: {str(e)}")
-            return redirect('upload_spreadsheet', comp_id=comp_id)
+        messages.success(request, f"Successfully processed and matched {success_count} photos!")
+        return redirect('feedback_report', comp_id=comp_id)
 
     return redirect('upload_spreadsheet', comp_id=comp_id)
 
 def public_results(request, comp_id):
     """Public results page for all participants to see the feedback ledger."""
-    competition = get_object_or_454(Competition, id=comp_id)
+    competition = get_object_or_404(Competition, id=comp_id)
     
-    # Fetch photos and manually map the scores
     photos = list(Photo.objects.filter(competition=competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
     
@@ -350,3 +331,42 @@ def public_results(request, comp_id):
         'competition': competition,
         'photos': photos
     })
+
+def audit_photo_metadata(file_bytes):
+    """Scans image bytes for EXIF Date and GPS data."""
+    try:
+        img = Image.open(io.BytesIO(file_bytes))
+        exif_raw = img.getexif()
+        
+        audit_results = {
+            'date_valid': False,
+            'has_gps': False,
+            'flags': []
+        }
+
+        if not exif_raw:
+            audit_results['flags'].append("No EXIF data found (Likely stripped by editing software/Wix).")
+            return audit_results
+
+        # 1. Check the Date
+        for tag_id, value in exif_raw.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == 'DateTimeOriginal':
+                year = str(value).split(':')[0]
+                if year in ['2025', '2026']:
+                    audit_results['date_valid'] = True
+                else:
+                    audit_results['flags'].append(f"Taken outside valid date range: {year}")
+                break
+
+        # 2. Check for GPS Data
+        gps_info = exif_raw.get_ifd(0x8825)
+        if gps_info:
+            audit_results['has_gps'] = True
+        else:
+            audit_results['flags'].append("No GPS location data found (Privacy filter applied).")
+
+        return audit_results
+
+    except Exception as e:
+        return {'date_valid': False, 'has_gps': False, 'flags': ["Corrupted file or unable to read metadata."]}
