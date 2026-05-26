@@ -11,6 +11,7 @@ from PIL.ExifTags import TAGS
 
 from django.contrib import messages
 from django.core.files.base import ContentFile
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
@@ -236,6 +237,67 @@ def upload_photos_zip(request, comp_slug):
     return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
 @login_required(login_url='/accounts/login/')
+def upload_zip_chunk(request, comp_slug):
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required.'}, status=405)
+
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    chunk = request.FILES.get('chunk')
+    upload_id = request.POST.get('upload_id', '')
+    filename = request.POST.get('filename', 'upload.zip')
+
+    try:
+        chunk_index = int(request.POST.get('chunk_index', '0'))
+        total_chunks = int(request.POST.get('total_chunks', '0'))
+    except ValueError:
+        return JsonResponse({'error': 'Invalid chunk metadata.'}, status=400)
+
+    if not chunk or not upload_id or total_chunks < 1 or chunk_index < 0 or chunk_index >= total_chunks:
+        return JsonResponse({'error': 'Missing or invalid chunk upload data.'}, status=400)
+    if not filename.lower().endswith('.zip'):
+        return JsonResponse({'error': 'Please upload a .zip package.'}, status=400)
+
+    chunk_dir = get_chunk_upload_dir(upload_id)
+    os.makedirs(chunk_dir, exist_ok=True)
+    chunk_path = os.path.join(chunk_dir, f'{chunk_index:06d}.part')
+    with open(chunk_path, 'wb') as target:
+        for piece in chunk.chunks():
+            target.write(piece)
+
+    received_chunks = len([name for name in os.listdir(chunk_dir) if name.endswith('.part')])
+    if received_chunks < total_chunks:
+        return JsonResponse({
+            'status': 'receiving',
+            'received_chunks': received_chunks,
+            'total_chunks': total_chunks,
+        })
+
+    job = ZipImportJob.objects.create(
+        competition=competition,
+        uploaded_by=request.user,
+        source_name=filename,
+    )
+    job.temp_path = assemble_chunked_zip(upload_id, filename, total_chunks, job.id)
+    job.save(update_fields=['temp_path', 'updated_at'])
+
+    worker = threading.Thread(
+        target=process_entry_zip_job,
+        args=(job.id,),
+        daemon=True,
+    )
+    worker.start()
+
+    return JsonResponse({
+        'status': 'started',
+        'job_id': job.id,
+        'status_url': request.build_absolute_uri(
+            redirect('zip_import_status', comp_slug=competition.slug, job_id=job.id).url
+        ),
+    })
+
+@login_required(login_url='/accounts/login/')
 def zip_import_status(request, comp_slug, job_id):
     if not request.user.is_staff:
         return redirect('home_hub')
@@ -259,6 +321,33 @@ def save_uploaded_zip_to_temp_file(uploaded_file, job_id):
     with open(target_path, 'wb') as target:
         for chunk in uploaded_file.chunks():
             target.write(chunk)
+    return target_path
+
+def get_chunk_upload_dir(upload_id):
+    safe_upload_id = re.sub(r'[^a-zA-Z0-9_-]', '', upload_id)
+    if not safe_upload_id:
+        raise ValueError('Invalid upload id.')
+    return os.path.join(tempfile.gettempdir(), 'simplyjudge_zip_chunks', safe_upload_id)
+
+def assemble_chunked_zip(upload_id, filename, total_chunks, job_id):
+    chunk_dir = get_chunk_upload_dir(upload_id)
+    safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', os.path.basename(filename))
+    temp_dir = os.path.join(tempfile.gettempdir(), 'simplyjudge_zip_imports')
+    os.makedirs(temp_dir, exist_ok=True)
+    target_path = os.path.join(temp_dir, f'{job_id}_{uuid.uuid4().hex}_{safe_name}')
+
+    with open(target_path, 'wb') as target:
+        for index in range(total_chunks):
+            chunk_path = os.path.join(chunk_dir, f'{index:06d}.part')
+            if not os.path.exists(chunk_path):
+                raise ValueError(f'Missing upload chunk {index + 1} of {total_chunks}.')
+            with open(chunk_path, 'rb') as source:
+                for piece in iter(lambda: source.read(1024 * 1024), b''):
+                    target.write(piece)
+
+    for name in os.listdir(chunk_dir):
+        os.remove(os.path.join(chunk_dir, name))
+    os.rmdir(chunk_dir)
     return target_path
 
 def clean_cell(row, *names, default=''):

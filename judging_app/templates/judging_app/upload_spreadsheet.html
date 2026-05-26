@@ -31,14 +31,18 @@
                 Upload a ZIP containing <strong>EntryForm.csv</strong> and the photo files. SimplyJudge reads the CSV, creates or updates entries, matches images by filename/code, extracts EXIF data, and saves everything in one transaction.
             </p>
 
-            <form method="POST" action="{% url 'upload_photos_zip' competition.slug %}" enctype="multipart/form-data" class="form-grid">
+            <form method="POST" action="{% url 'upload_spreadsheet' competition.slug %}" data-chunk-url="{% url 'upload_zip_chunk' competition.slug %}" enctype="multipart/form-data" class="form-grid" id="zip-upload-form">
                 {% csrf_token %}
                 <div class="field">
                     <label for="zip_file">ZIP package</label>
                     <span class="help-text">The ZIP should include EntryForm.csv plus image files named with the same entry codes or filenames referenced in the CSV.</span>
                     <input type="file" name="zip_file" id="zip_file" accept=".zip" required>
                 </div>
-                <button type="submit" class="button button-primary">Start ZIP Sync</button>
+                <div id="zip-upload-progress" class="alert" style="display: none;">Preparing upload...</div>
+                <noscript>
+                    <div class="alert alert-error">Chunked ZIP upload requires JavaScript. Enable JavaScript before uploading large photo packages.</div>
+                </noscript>
+                <button type="submit" class="button button-primary" id="zip-upload-button">Start Chunked ZIP Sync</button>
             </form>
         </article>
 
@@ -94,4 +98,73 @@
         </section>
     {% endif %}
 </main>
+<script>
+    const zipForm = document.getElementById('zip-upload-form');
+    const zipInput = document.getElementById('zip_file');
+    const progressBox = document.getElementById('zip-upload-progress');
+    const uploadButton = document.getElementById('zip-upload-button');
+
+    function getCsrfToken() {
+        return zipForm.querySelector('input[name="csrfmiddlewaretoken"]').value;
+    }
+
+    function setProgress(message) {
+        progressBox.style.display = 'block';
+        progressBox.textContent = message;
+    }
+
+    zipForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const file = zipInput.files[0];
+        if (!file) {
+            setProgress('Choose a ZIP package first.');
+            return;
+        }
+
+        const chunkSize = 4 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        const uploadId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        uploadButton.disabled = true;
+        setProgress(`Uploading ${file.name} in ${totalChunks} chunks...`);
+
+        try {
+            for (let index = 0; index < totalChunks; index += 1) {
+                const start = index * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const formData = new FormData();
+                formData.append('upload_id', uploadId);
+                formData.append('filename', file.name);
+                formData.append('chunk_index', String(index));
+                formData.append('total_chunks', String(totalChunks));
+                formData.append('chunk', file.slice(start, end), `${file.name}.part${index}`);
+
+                const response = await fetch(zipForm.dataset.chunkUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    body: formData,
+                    credentials: 'same-origin',
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Upload failed.');
+                }
+
+                const percent = Math.round(((index + 1) / totalChunks) * 100);
+                setProgress(`Uploaded ${index + 1} of ${totalChunks} chunks (${percent}%).`);
+
+                if (payload.status === 'started' && payload.status_url) {
+                    setProgress('Upload complete. Import job started.');
+                    window.location.href = payload.status_url;
+                    return;
+                }
+            }
+        } catch (error) {
+            uploadButton.disabled = false;
+            setProgress(`Upload failed: ${error.message}`);
+        }
+    });
+</script>
 {% endblock %}
