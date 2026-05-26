@@ -34,7 +34,6 @@ def home_hub(request):
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
 
-# --- FIXED: Redirects now correctly point to /accounts/login/ ---
 @login_required(login_url='/accounts/login/')
 def judge_router(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
@@ -168,4 +167,93 @@ def upload_spreadsheet(request, comp_slug):
             else:
                 import_count = 0
                 for row in reader:
-                    title = row.get('Title') or row.get('title')
+                    title = row.get('Title') or row.get('title') or 'Untitled'
+                    photographer = row.get('Photographer') or row.get('photographer') or 'Unknown'
+                    category = row.get('Category') or row.get('category') or 'General'
+                    custom_code = row.get('Code') or row.get('ID') or row.get('Number') or row.get('id')
+                    desc = row.get('Description') or row.get('description') or row.get('Story') or row.get('story') or ''
+
+                    if not custom_code:
+                        continue
+
+                    Photo.objects.create(
+                        id=int(custom_code.strip()), competition=competition, title=title,
+                        photographer_name=photographer, category=category,
+                        image='competition_photos/placeholder.jpg', description=desc
+                    )
+                    import_count += 1
+                
+                messages.success(request, f'Successfully imported {import_count} entries into the judging queue!')
+                return redirect('feedback_report', comp_slug=competition.slug)
+
+        except Exception as e:
+            messages.error(request, f'Error parsing spreadsheet data: {str(e)}')
+            return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+    return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
+
+@login_required(login_url='/accounts/login/')
+def upload_photos_zip(request, comp_slug):
+    if not request.user.is_staff:
+        return redirect('home_hub')
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if request.method == 'POST' and request.FILES.get('zip_file'):
+        zip_file = request.FILES['zip_file']
+        success_count = 0
+        with zipfile.ZipFile(zip_file) as z:
+            for file_info in z.infolist():
+                filename = os.path.basename(file_info.filename)
+                if file_info.is_dir() or not filename or filename.startswith('.'):
+                    continue
+                name_without_ext, ext = os.path.splitext(filename)
+                photo = None
+                try:
+                    target_id = int(name_without_ext.strip())
+                    photo = Photo.objects.filter(competition=competition, id=target_id).first()
+                except ValueError:
+                    photo = Photo.objects.filter(competition=competition, title__icontains=filename.strip()).first()
+                if photo:
+                    file_bytes = z.read(file_info.filename)
+                    audit = audit_photo_metadata(file_bytes)
+                    if audit['flags']:
+                        photo.rule_flags = " | ".join(audit['flags'])
+                    photo.image.save(filename, ContentFile(file_bytes))
+                    photo.save() 
+                    success_count += 1
+        messages.success(request, f"Successfully processed and matched {success_count} photos!")
+        return redirect('feedback_report', comp_slug=competition.slug)
+    return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+def public_results(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    photos = list(Photo.objects.filter(competition=competition))
+    all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
+    for photo in photos:
+        photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
+    return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
+
+def audit_photo_metadata(file_bytes):
+    try:
+        img = Image.open(io.BytesIO(file_bytes))
+        exif_raw = img.getexif()
+        audit_results = {'date_valid': False, 'has_gps': False, 'flags': []}
+        if not exif_raw:
+            audit_results['flags'].append("No EXIF data found (Likely stripped by editing software/Wix).")
+            return audit_results
+        for tag_id, value in exif_raw.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == 'DateTimeOriginal':
+                year = str(value).split(':')[0]
+                if year in ['2025', '2026']:
+                    audit_results['date_valid'] = True
+                else:
+                    audit_results['flags'].append(f"Taken outside valid date range: {year}")
+                break
+        gps_info = exif_raw.get_ifd(0x8825)
+        if gps_info:
+            audit_results['has_gps'] = True
+        else:
+            audit_results['flags'].append("No GPS location data found (Privacy filter applied).")
+        return audit_results
+    except Exception as e:
+        return {'date_valid': False, 'has_gps': False, 'flags': ["Corrupted file or unable to read metadata."]}
