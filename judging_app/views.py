@@ -24,7 +24,7 @@ from django.db.models import Avg, FloatField
 from django.db.models.functions import Cast
 from django.utils import timezone
 
-from .models import Competition, GutCheckScore, Photo, PhotoStatusVote, Score, RubricCriterion, ZipImportJob
+from .models import Competition, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
 
 def register_user(request):
     if request.method == 'POST':
@@ -152,7 +152,7 @@ def elimination_mode(request, comp_slug):
     )
 
 @login_required(login_url='/accounts/login/')
-def gut_check_mode(request, comp_slug):
+def round_1_review(request, comp_slug):
     if not request.user.is_staff:
         return redirect('home_hub')
 
@@ -173,29 +173,29 @@ def gut_check_mode(request, comp_slug):
                 competition=competition,
                 status=Photo.Status.ROUND_1,
             )
-            GutCheckScore.objects.update_or_create(
+            RoundOneScore.objects.update_or_create(
                 photo=photo,
                 judge=request.user,
                 defaults={'score': score},
             )
-        return redirect('gut_check_mode', comp_slug=competition.slug)
+        return redirect('round_1_review', comp_slug=competition.slug)
 
     current_photo = Photo.objects.filter(
         competition=competition,
         status=Photo.Status.ROUND_1,
-    ).exclude(gut_check_scores__judge=request.user).order_by('id').first()
+    ).exclude(round_1_scores__judge=request.user).order_by('id').first()
 
     counts = {
         'for_you': Photo.objects.filter(
             competition=competition,
             status=Photo.Status.ROUND_1,
-        ).exclude(gut_check_scores__judge=request.user).count(),
+        ).exclude(round_1_scores__judge=request.user).count(),
         'round_1': Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1).count(),
         'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
     }
     return render(
         request,
-        'judging_app/gut_check.html',
+        'judging_app/round_1_review.html',
         {
             'competition': competition,
             'photo': current_photo,
@@ -205,7 +205,7 @@ def gut_check_mode(request, comp_slug):
     )
 
 @login_required(login_url='/accounts/login/')
-def promote_top_gut_check(request, comp_slug):
+def finalize_shortlist(request, comp_slug):
     if not request.user.is_staff:
         return redirect('home_hub')
     if request.method != 'POST':
@@ -214,9 +214,9 @@ def promote_top_gut_check(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     scored_round_1 = list(
         Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1)
-        .annotate(gut_check_average=Avg('gut_check_scores__score'))
-        .filter(gut_check_average__isnull=False)
-        .order_by('-gut_check_average', 'id')
+        .annotate(round_1_average=Avg('round_1_scores__score'))
+        .filter(round_1_average__isnull=False)
+        .order_by('-round_1_average', 'id')
     )
     promote_count = math.ceil(len(scored_round_1) * 0.1)
     selected = scored_round_1[:promote_count]
@@ -224,9 +224,9 @@ def promote_top_gut_check(request, comp_slug):
 
     if selected_ids:
         Photo.objects.filter(id__in=selected_ids, competition=competition).update(status=Photo.Status.SHORTLISTED)
-        messages.success(request, f'Promoted {len(selected_ids)} top Round 1 photo(s) to the VIP shortlist.')
+        messages.success(request, f'Finalized {len(selected_ids)} Round 1 photo(s) for the VIP shortlist.')
     else:
-        messages.error(request, 'No scored Round 1 photos are ready for shortlist promotion yet.')
+        messages.error(request, 'No scored Round 1 photos are ready for shortlist finalization yet.')
 
     return redirect('home_hub')
 

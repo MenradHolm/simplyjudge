@@ -1,23 +1,23 @@
 {% extends "judging_app/base.html" %}
 
-{% block title %}Gut Check - {{ competition.name }}{% endblock %}
+{% block title %}Round 1 Review - {{ competition.name }}{% endblock %}
 
 {% block content %}
 <style>
-    .gut-shell {
+    .round-review-shell {
         width: min(1440px, calc(100% - 2rem));
         margin: 0 auto;
         padding: clamp(1.5rem, 4vw, 3rem) 0;
     }
 
-    .gut-layout {
+    .round-review-layout {
         display: grid;
         grid-template-columns: minmax(0, 1.1fr) minmax(22rem, 0.9fr);
         gap: 1rem;
         align-items: start;
     }
 
-    .gut-photo {
+    .round-review-photo {
         display: grid;
         place-items: center;
         min-height: min(70vh, 48rem);
@@ -27,7 +27,7 @@
         overflow: hidden;
     }
 
-    .gut-photo img {
+    .round-review-photo img {
         width: 100%;
         height: 100%;
         max-height: 76vh;
@@ -75,7 +75,7 @@
         color: var(--ink);
         font: inherit;
         font-size: 1.15rem;
-        font-weight: 900;
+        font-weight: 850;
         cursor: pointer;
     }
 
@@ -84,7 +84,7 @@
         box-shadow: 0 0 0 3px rgba(37, 87, 167, 0.12);
     }
 
-    .gut-stats {
+    .round-review-stats {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
@@ -92,20 +92,20 @@
     }
 
     @media (max-width: 900px) {
-        .gut-layout {
+        .round-review-layout {
             grid-template-columns: 1fr;
         }
 
-        .gut-photo {
+        .round-review-photo {
             min-height: 48vh;
         }
     }
 </style>
 
-<main class="gut-shell">
+<main class="round-review-shell">
     <div class="page-head">
         <div>
-            <p class="eyebrow">Staff gut check</p>
+            <p class="eyebrow">Round 1 review</p>
             <h2 class="page-title">{{ competition.name }}</h2>
             <p class="page-copy">Score Round 1 entries from 1 to 10 using the full submission context.</p>
         </div>
@@ -113,15 +113,15 @@
     </div>
 
     {% if photo %}
-        <section class="gut-layout">
-            <div class="gut-photo">
+        <section class="round-review-layout">
+            <div class="round-review-photo">
                 <img src="{{ photo.image.url }}" alt="{{ photo.title }}">
             </div>
 
             <aside class="panel panel-padded">
                 <p class="eyebrow">Submission #{{ photo.id }}</p>
                 <h2 class="page-title">{{ photo.title }}</h2>
-                <div class="gut-stats">
+                <div class="round-review-stats">
                     <span class="tag">{{ photo.category }}</span>
                     <span class="tag tag-neutral">{{ counts.for_you }} left for you</span>
                     <span class="tag tag-neutral">{{ counts.round_1 }} in Round 1</span>
@@ -141,7 +141,7 @@
                 <form method="POST" style="margin-top: 1.25rem;">
                     {% csrf_token %}
                     <input type="hidden" name="photo_id" value="{{ photo.id }}">
-                    <label class="field-label">Gut check score</label>
+                    <label class="field-label">Round 1 score</label>
                     <div class="score-grid" aria-label="Choose a score from 1 to 10">
                         {% for score in score_range %}
                             <button class="score-button" type="submit" name="score" value="{{ score }}">{{ score }}</button>
@@ -153,7 +153,7 @@
     {% else %}
         <section class="empty-state">
             <strong>No Round 1 photos left for you to score.</strong>
-            <p>Once the internal team has finished gut checks, use Promote top 10% from the home dashboard.</p>
+            <p>Once the internal team has finished Round 1 review, use Finalize shortlist from the home dashboard.</p>
         </section>
     {% endif %}
 </main>

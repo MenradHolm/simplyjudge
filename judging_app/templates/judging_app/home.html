@@ -121,17 +121,17 @@
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
                                     <a class="action-link" href="{% url 'elimination_mode' competition.slug %}">
-                                        Rapid elimination
+                                        Triage review
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
-                                    <a class="action-link" href="{% url 'gut_check_mode' competition.slug %}">
-                                        Gut check
+                                    <a class="action-link" href="{% url 'round_1_review' competition.slug %}">
+                                        Round 1 review
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
-                                    <form method="POST" action="{% url 'promote_top_gut_check' competition.slug %}">
+                                    <form method="POST" action="{% url 'finalize_shortlist' competition.slug %}">
                                         {% csrf_token %}
                                         <button class="action-link" type="submit">
-                                            Promote top 10%
+                                            Finalize shortlist
                                             <span aria-hidden="true">&gt;</span>
                                         </button>
                                     </form>

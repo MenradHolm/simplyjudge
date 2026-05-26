@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Competition, GutCheckScore, Photo, PhotoStatusVote
+from .models import Competition, Photo, PhotoStatusVote, RoundOneScore
 from .views import decode_csv_bytes
 
 
@@ -94,7 +94,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertContains(response, 'No pending photos left for you.')
 
-    def test_staff_gut_check_displays_full_context_and_records_score(self):
+    def test_staff_round_1_review_displays_full_context_and_records_score(self):
         photo = self.create_photo(
             'Context image',
             Photo.Status.ROUND_1,
@@ -104,7 +104,7 @@ class PhotoStatusWorkflowTests(TestCase):
         )
 
         self.client.force_login(self.staff)
-        response = self.client.get(reverse('gut_check_mode', args=[self.competition.slug]))
+        response = self.client.get(reverse('round_1_review', args=[self.competition.slug]))
 
         self.assertContains(response, 'Context image')
         self.assertContains(response, 'Portrait')
@@ -112,23 +112,23 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, '50mm, f/2.8, ISO 400')
 
         response = self.client.post(
-            reverse('gut_check_mode', args=[self.competition.slug]),
+            reverse('round_1_review', args=[self.competition.slug]),
             {'photo_id': photo.id, 'score': '8'},
         )
 
-        self.assertRedirects(response, reverse('gut_check_mode', args=[self.competition.slug]))
-        self.assertEqual(photo.gut_check_scores.get(judge=self.staff).score, 8)
+        self.assertRedirects(response, reverse('round_1_review', args=[self.competition.slug]))
+        self.assertEqual(photo.round_1_scores.get(judge=self.staff).score, 8)
 
-    def test_promote_top_ten_percent_of_round_1_by_average_gut_check_score(self):
+    def test_finalize_shortlist_uses_top_ten_percent_of_round_1_scores(self):
         photos = [
             self.create_photo(f'Round 1 image {index}', Photo.Status.ROUND_1)
             for index in range(10)
         ]
         for index, photo in enumerate(photos):
-            GutCheckScore.objects.create(photo=photo, judge=self.staff, score=index + 1)
+            RoundOneScore.objects.create(photo=photo, judge=self.staff, score=index + 1)
 
         self.client.force_login(self.staff)
-        response = self.client.post(reverse('promote_top_gut_check', args=[self.competition.slug]))
+        response = self.client.post(reverse('finalize_shortlist', args=[self.competition.slug]))
 
         self.assertRedirects(response, reverse('home_hub'))
         statuses = {photo.id: Photo.objects.get(id=photo.id).status for photo in photos}

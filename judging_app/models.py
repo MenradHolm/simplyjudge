@@ -69,9 +69,9 @@ class PhotoStatusVote(models.Model):
     def __str__(self):
         return f"{self.photo_id} - {self.voter} - {self.get_decision_display()}"
 
-class GutCheckScore(models.Model):
-    photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name='gut_check_scores')
-    judge = models.ForeignKey(User, on_delete=models.CASCADE, related_name='gut_check_scores')
+class RoundOneScore(models.Model):
+    photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name='round_1_scores')
+    judge = models.ForeignKey(User, on_delete=models.CASCADE, related_name='round_1_scores')
     score = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(10)])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

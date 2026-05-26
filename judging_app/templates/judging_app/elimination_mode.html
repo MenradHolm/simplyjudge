@@ -1,6 +1,6 @@
 {% extends "judging_app/base.html" %}
 
-{% block title %}Rapid Elimination - {{ competition.name }}{% endblock %}
+{% block title %}Triage Review - {{ competition.name }}{% endblock %}
 
 {% block content %}
 <style>
@@ -170,7 +170,7 @@
 <main class="elimination-shell">
     <header class="elimination-topbar">
         <div>
-            <p class="eyebrow">Rapid elimination</p>
+            <p class="eyebrow">Triage review</p>
             <h1 class="elimination-title">{{ competition.name }}</h1>
             {% if photo %}
                 <p class="elimination-meta">Submission #{{ photo.id }}</p>
