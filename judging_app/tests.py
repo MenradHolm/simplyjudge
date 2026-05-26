@@ -5,7 +5,7 @@ from django.urls import reverse
 from PIL import Image
 from types import SimpleNamespace
 
-from .models import Competition, Photo, PhotoStatusVote, RoundOneScore
+from .models import Competition, Photo, PhotoStatusVote, RoundOneScore, competition_photo_upload_path
 from .views import decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
 
@@ -149,6 +149,17 @@ class CsvEncodingTests(TestCase):
         decoded = decode_csv_bytes(csv_bytes)
 
         self.assertIn('\u201cStrong frame\u201d', decoded)
+
+
+class PhotoUploadPathTests(TestCase):
+    def test_competition_photo_upload_path_uses_competition_name_folder(self):
+        competition = Competition(name='Youth POTY 2026', slug='youth-poty')
+        photo = Photo(competition=competition)
+
+        self.assertEqual(
+            competition_photo_upload_path(photo, 'Rising Tide.jpg'),
+            'competition_photos/youth-poty-2026/Rising Tide.jpg',
+        )
 
 
 class ZipImageMatchingTests(TestCase):

@@ -1,7 +1,17 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.utils.text import slugify
 from django.utils import timezone
+
+def competition_photo_upload_path(instance, filename):
+    competition = getattr(instance, 'competition', None)
+    folder_name = ''
+    if competition is not None:
+        folder_name = slugify(competition.name or competition.slug or '')
+    if not folder_name:
+        folder_name = 'uncategorized'
+    return f'competition_photos/{folder_name}/{filename}'
 
 class Competition(models.Model):
     name = models.CharField(max_length=200)
@@ -41,7 +51,7 @@ class Photo(models.Model):
     photographer_name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    image = models.ImageField(upload_to='competition_photos/', max_length=255)
+    image = models.ImageField(upload_to=competition_photo_upload_path, max_length=255)
     rule_flags = models.TextField(blank=True, null=True)
     organizer_notes = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True) 
