@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from PIL import Image
 from PIL.ExifTags import TAGS
+from PIL import ImageOps
 
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -27,6 +28,8 @@ from django.utils import timezone
 from .models import Competition, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
+CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024
+CLOUDINARY_SAFE_UPLOAD_TARGET_BYTES = int(CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES * 0.92)
 
 def register_user(request):
     if request.method == 'POST':
@@ -869,8 +872,18 @@ def process_entry_zip_job(job_id):
 
                     if image_payload:
                         audit = audit_photo_metadata(image_payload['bytes'])
-                        defaults['rule_flags'] = ' | '.join(audit['flags']) if audit['flags'] else ''
-                        defaults['image'] = ContentFile(image_payload['bytes'], name=image_payload['filename'])
+                        storage_image = prepare_image_for_cloudinary(
+                            image_payload['bytes'],
+                            image_payload['filename'],
+                        )
+                        flags = audit['flags'][:]
+                        if storage_image['compressed']:
+                            flags.append(
+                                'Image optimized for Cloudinary upload limit '
+                                f"({storage_image['original_size']} bytes -> {storage_image['size']} bytes)."
+                            )
+                        defaults['rule_flags'] = ' | '.join(flags) if flags else ''
+                        defaults['image'] = ContentFile(storage_image['bytes'], name=storage_image['filename'])
                         matched += 1
                     else:
                         defaults['image'] = 'competition_photos/placeholder.jpg'
@@ -946,3 +959,64 @@ def audit_photo_metadata(file_bytes):
         return audit_results
     except Exception as e:
         return {'date_valid': False, 'has_gps': False, 'flags': ["Corrupted file or unable to read metadata."]}
+
+def prepare_image_for_cloudinary(file_bytes, filename, max_bytes=CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES):
+    if len(file_bytes) <= max_bytes:
+        return {
+            'bytes': file_bytes,
+            'filename': filename,
+            'compressed': False,
+            'original_size': len(file_bytes),
+            'size': len(file_bytes),
+        }
+
+    target_bytes = min(CLOUDINARY_SAFE_UPLOAD_TARGET_BYTES, int(max_bytes * 0.92))
+    image = Image.open(io.BytesIO(file_bytes))
+    image = ImageOps.exif_transpose(image)
+
+    if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
+        background = Image.new('RGB', image.size, (255, 255, 255))
+        alpha = image.convert('RGBA').getchannel('A')
+        background.paste(image.convert('RGBA'), mask=alpha)
+        image = background
+    elif image.mode != 'RGB':
+        image = image.convert('RGB')
+
+    stem, _ = os.path.splitext(os.path.basename(filename))
+    output_filename = truncate_filename(f'{stem or "photo"}.jpg')
+
+    working = image
+    min_quality = 62
+    max_dimension = max(working.size)
+
+    while max_dimension >= 320:
+        best_payload = None
+        for quality in range(88, min_quality - 1, -4):
+            output = io.BytesIO()
+            working.save(output, format='JPEG', quality=quality, optimize=True, progressive=True)
+            payload = output.getvalue()
+            if len(payload) <= target_bytes:
+                best_payload = payload
+                break
+
+        if best_payload is not None:
+            return {
+                'bytes': best_payload,
+                'filename': output_filename,
+                'compressed': True,
+                'original_size': len(file_bytes),
+                'size': len(best_payload),
+            }
+
+        max_dimension = int(max_dimension * 0.85)
+        ratio = max_dimension / max(working.size)
+        next_size = (
+            max(1, int(working.size[0] * ratio)),
+            max(1, int(working.size[1] * ratio)),
+        )
+        working = working.resize(next_size, Image.Resampling.LANCZOS)
+
+    raise ValueError(
+        f'Image {filename} could not be compressed below the Cloudinary upload limit '
+        f'of {max_bytes} bytes.'
+    )

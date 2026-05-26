@@ -1,10 +1,12 @@
+import io
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from PIL import Image
 from types import SimpleNamespace
 
 from .models import Competition, Photo, PhotoStatusVote, RoundOneScore
-from .views import decode_csv_bytes, find_matching_image, normalize_match_key
+from .views import decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -171,3 +173,26 @@ class ZipImageMatchingTests(TestCase):
         }
 
         self.assertIs(find_matching_image(images, ['The Hunt'], photographer='Yehuda Rabin'), yehuda)
+
+
+class CloudinaryCompressionTests(TestCase):
+    def test_prepare_image_for_cloudinary_leaves_small_images_unchanged(self):
+        payload = b'small-image-bytes'
+
+        result = prepare_image_for_cloudinary(payload, 'small.jpg', max_bytes=1024)
+
+        self.assertEqual(result['bytes'], payload)
+        self.assertFalse(result['compressed'])
+        self.assertEqual(result['filename'], 'small.jpg')
+
+    def test_prepare_image_for_cloudinary_compresses_large_images_under_limit(self):
+        image = Image.effect_noise((1200, 1200), 100).convert('RGB')
+        source = io.BytesIO()
+        image.save(source, format='JPEG', quality=95)
+        payload = source.getvalue()
+
+        result = prepare_image_for_cloudinary(payload, 'large-original.png', max_bytes=90_000)
+
+        self.assertTrue(result['compressed'])
+        self.assertLessEqual(len(result['bytes']), 90_000)
+        self.assertEqual(result['filename'], 'large-original.jpg')
