@@ -21,8 +21,8 @@ class RubricCriterionAdmin(admin.ModelAdmin):
 
 @admin.register(Photo)
 class PhotoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'competition', 'photographer_name', 'category')
-    list_filter = ('competition', 'category')
+    list_display = ('id', 'title', 'competition', 'photographer_name', 'category', 'status')
+    list_filter = ('competition', 'category', 'status')
     search_fields = ('title', 'photographer_name', 'rule_flags')
 
 @admin.register(Score)

@@ -48,20 +48,69 @@ def judge_router(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
-    next_photo = Photo.objects.filter(competition=competition).exclude(score__judge=request.user).first()
+    photo_queue = Photo.objects.filter(competition=competition)
+    if not request.user.is_staff and not request.user.is_superuser:
+        photo_queue = photo_queue.filter(status=Photo.Status.SHORTLISTED)
+    next_photo = photo_queue.exclude(score__judge=request.user).first()
     if next_photo:
         return redirect('judge_photo', comp_slug=competition.slug, photo_id=next_photo.id)
     return render(request, 'judging_app/done.html', {'competition': competition})
+
+@login_required(login_url='/accounts/login/')
+def elimination_mode(request, comp_slug):
+    if not request.user.is_staff:
+        return redirect('home_hub')
+
+    competition = get_object_or_404(Competition, slug=comp_slug)
+
+    if request.method == 'POST':
+        photo_id = request.POST.get('photo_id', '')
+        decision = request.POST.get('decision')
+        if not photo_id.isdigit() or decision not in {'reject', 'shortlist'}:
+            return redirect('elimination_mode', comp_slug=competition.slug)
+
+        photo = get_object_or_404(Photo, id=int(photo_id), competition=competition)
+        if decision == 'reject':
+            photo.status = Photo.Status.REJECTED
+            photo.save(update_fields=['status'])
+        else:
+            photo.status = Photo.Status.SHORTLISTED
+            photo.save(update_fields=['status'])
+        return redirect('elimination_mode', comp_slug=competition.slug)
+
+    current_photo = Photo.objects.filter(
+        competition=competition,
+        status=Photo.Status.PENDING,
+    ).order_by('id').first()
+    counts = {
+        'pending': Photo.objects.filter(competition=competition, status=Photo.Status.PENDING).count(),
+        'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
+        'rejected': Photo.objects.filter(competition=competition, status=Photo.Status.REJECTED).count(),
+    }
+    return render(
+        request,
+        'judging_app/elimination_mode.html',
+        {'competition': competition, 'photo': current_photo, 'counts': counts},
+    )
 
 @login_required(login_url='/accounts/login/')
 def judge_photo(request, comp_slug, photo_id):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
-    photo = get_object_or_404(Photo, id=photo_id, competition=competition)
+    photo_queryset = Photo.objects.filter(id=photo_id, competition=competition)
+    if not request.user.is_staff and not request.user.is_superuser:
+        photo_queryset = photo_queryset.filter(status=Photo.Status.SHORTLISTED)
+    photo = get_object_or_404(photo_queryset)
     rubric = RubricCriterion.objects.filter(competition=competition)
-    total_photos = Photo.objects.filter(competition=competition).count()
-    scored_photos = Score.objects.filter(photo__competition=competition, judge=request.user).count()
+    visible_photos = Photo.objects.filter(competition=competition)
+    if not request.user.is_staff and not request.user.is_superuser:
+        visible_photos = visible_photos.filter(status=Photo.Status.SHORTLISTED)
+    total_photos = visible_photos.count()
+    scored_query = Score.objects.filter(photo__competition=competition, judge=request.user)
+    if not request.user.is_staff and not request.user.is_superuser:
+        scored_query = scored_query.filter(photo__status=Photo.Status.SHORTLISTED)
+    scored_photos = scored_query.count()
     
     if request.method == "POST":
         criteria_scores = {}

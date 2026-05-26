@@ -29,10 +29,16 @@ class RubricCriterion(models.Model):
         return f"{self.name} ({self.competition.name})"
 
 class Photo(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        SHORTLISTED = 'SHORTLISTED', 'Shortlisted'
+        REJECTED = 'REJECTED', 'Rejected'
+
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
     photographer_name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     image = models.ImageField(upload_to='competition_photos/', max_length=255)
     rule_flags = models.TextField(blank=True, null=True)
     organizer_notes = models.TextField(blank=True, null=True)

@@ -1,0 +1,204 @@
+{% extends "judging_app/base.html" %}
+
+{% block title %}Rapid Elimination - {{ competition.name }}{% endblock %}
+
+{% block content %}
+<style>
+    body {
+        background: #070b10;
+    }
+
+    .elimination-shell {
+        min-height: calc(100vh - 86px);
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 18px;
+        padding: 22px clamp(16px, 3vw, 34px) 28px;
+        color: #f8fafc;
+    }
+
+    .elimination-topbar,
+    .elimination-actions,
+    .elimination-empty {
+        width: min(1280px, 100%);
+        margin: 0 auto;
+    }
+
+    .elimination-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .elimination-title {
+        margin: 0;
+        color: #f8fafc;
+        font-size: clamp(1.2rem, 2vw, 1.8rem);
+        line-height: 1.1;
+    }
+
+    .elimination-meta {
+        margin: 7px 0 0;
+        color: #a7b0c0;
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .elimination-stats {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .stat-pill {
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.72);
+        color: #dbeafe;
+        padding: 8px 12px;
+        font-size: 0.82rem;
+        font-weight: 800;
+    }
+
+    .photo-stage {
+        width: min(1280px, 100%);
+        min-height: 0;
+        margin: 0 auto;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 8px;
+        background:
+            radial-gradient(circle at 50% 15%, rgba(20, 184, 166, 0.16), transparent 42%),
+            #0b0f16;
+        overflow: hidden;
+    }
+
+    .photo-stage img {
+        width: 100%;
+        height: min(68vh, 760px);
+        object-fit: contain;
+        display: block;
+    }
+
+    .elimination-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+    }
+
+    .decision-button {
+        border: 0;
+        border-radius: 8px;
+        min-height: 86px;
+        color: #ffffff;
+        font-size: clamp(1.15rem, 2vw, 1.8rem);
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow: 0 20px 44px rgba(0, 0, 0, 0.28);
+        transition: transform 160ms ease, filter 160ms ease;
+    }
+
+    .decision-button:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.05);
+    }
+
+    .decision-reject {
+        background: #dc2626;
+    }
+
+    .decision-shortlist {
+        background: #0891b2;
+    }
+
+    .elimination-empty {
+        min-height: 54vh;
+        display: grid;
+        place-items: center;
+        text-align: center;
+    }
+
+    .elimination-empty-panel {
+        width: min(580px, 100%);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 8px;
+        padding: 34px;
+        background: rgba(15, 23, 42, 0.72);
+    }
+
+    .elimination-empty-panel h2 {
+        margin: 0 0 10px;
+        color: #f8fafc;
+    }
+
+    .elimination-empty-panel p {
+        color: #cbd5e1;
+    }
+
+    @media (max-width: 720px) {
+        .elimination-topbar {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .elimination-stats {
+            justify-content: flex-start;
+        }
+
+        .photo-stage img {
+            height: 58vh;
+        }
+
+        .elimination-actions {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<main class="elimination-shell">
+    <header class="elimination-topbar">
+        <div>
+            <p class="eyebrow">Rapid elimination</p>
+            <h1 class="elimination-title">{{ competition.name }}</h1>
+            {% if photo %}
+                <p class="elimination-meta">Submission #{{ photo.id }}</p>
+            {% endif %}
+        </div>
+        <div class="elimination-stats" aria-label="Elimination totals">
+            <span class="stat-pill">{{ counts.pending }} pending</span>
+            <span class="stat-pill">{{ counts.shortlisted }} shortlisted</span>
+            <span class="stat-pill">{{ counts.rejected }} rejected</span>
+        </div>
+    </header>
+
+    {% if photo %}
+        <section class="photo-stage" aria-label="Photo awaiting elimination decision">
+            <img src="{{ photo.image.url }}" alt="Anonymous photo submission">
+        </section>
+
+        <form method="POST" class="elimination-actions">
+            {% csrf_token %}
+            <input type="hidden" name="photo_id" value="{{ photo.id }}">
+            <button class="decision-button decision-reject" type="submit" name="decision" value="reject">🗑️ Reject</button>
+            <button class="decision-button decision-shortlist" type="submit" name="decision" value="shortlist">⭐ Shortlist</button>
+        </form>
+    {% else %}
+        <section class="elimination-empty">
+            <div class="elimination-empty-panel">
+                <p class="eyebrow">Queue clear</p>
+                <h2>No pending photos left.</h2>
+                <p>Shortlisted photos are now ready for guest judges. Rejected photos stay out of the regular judging queue.</p>
+                <div class="hero-actions">
+                    <a class="button button-primary" href="{% url 'feedback_report' competition.slug %}">Review report</a>
+                    <a class="button button-secondary" href="{% url 'home_hub' %}">Home</a>
+                </div>
+            </div>
+        </section>
+    {% endif %}
+</main>
+{% endblock %}
