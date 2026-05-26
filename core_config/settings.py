@@ -25,6 +25,7 @@ ALLOWED_HOSTS = ['*'] # Allows Render to host it
 # Application definition
 
 INSTALLED_APPS = [
+    'judging_app',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -34,7 +35,7 @@ INSTALLED_APPS = [
     'cloudinary',
     'cloudinary_storage',
     'import_export',
-    'judging_app',
+    
 ]
 
 MIDDLEWARE = [
