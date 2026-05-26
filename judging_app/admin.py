@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Competition, RubricCriterion, Photo, Score
+from .models import Competition, RubricCriterion, Photo, Score, ZipImportJob
 
 # --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
 admin.site.site_header = "SimplyJudge Admin Engine"
@@ -30,3 +30,14 @@ class ScoreAdmin(admin.ModelAdmin):
     list_display = ('id', 'photo', 'judge', 'total_score')
     list_filter = ('photo__competition', 'judge')
     search_fields = ('photo__title', 'judge__username')
+
+@admin.register(ZipImportJob)
+class ZipImportJobAdmin(admin.ModelAdmin):
+    list_display = ('id', 'source_name', 'competition', 'status', 'processed_rows', 'total_rows', 'matched_images', 'created_at', 'finished_at')
+    list_filter = ('status', 'competition')
+    search_fields = ('source_name', 'error_message')
+    readonly_fields = (
+        'competition', 'uploaded_by', 'source_name', 'temp_path', 'status',
+        'total_rows', 'processed_rows', 'matched_images', 'error_message',
+        'created_at', 'updated_at', 'finished_at',
+    )

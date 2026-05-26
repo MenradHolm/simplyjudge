@@ -75,5 +75,23 @@
             <p class="page-copy">The ZIP import runs in the background and wraps database writes in one atomic transaction, so a failed sync rolls back instead of leaving partial rows.</p>
         </div>
     </section>
+
+    {% if recent_jobs %}
+        <section class="panel" style="margin-top: 1rem;">
+            <div class="panel-header">
+                <p class="panel-title">Recent ZIP jobs</p>
+                <span class="tag tag-neutral">{{ recent_jobs|length }} shown</span>
+            </div>
+            {% for job in recent_jobs %}
+                <a class="action-link" href="{% url 'zip_import_status' competition.slug job.id %}">
+                    <span>
+                        {{ job.source_name }}
+                        <span class="muted" style="display: block; font-size: 0.78rem;">{{ job.get_status_display }} - {{ job.processed_rows }}/{{ job.total_rows }} rows</span>
+                    </span>
+                    <span aria-hidden="true">&gt;</span>
+                </a>
+            {% endfor %}
+        </section>
+    {% endif %}
 </main>
 {% endblock %}

@@ -1,0 +1,65 @@
+{% extends "judging_app/base.html" %}
+
+{% block title %}ZIP Import Status - SimplyJudge{% endblock %}
+
+{% block extra_head %}
+    {% if job.status == 'queued' or job.status == 'processing' %}
+        <meta http-equiv="refresh" content="8">
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<main class="shell">
+    <div class="page-head">
+        <div>
+            <p class="eyebrow">ZIP import</p>
+            <h2 class="page-title">{{ job.source_name }}</h2>
+            <p class="page-copy">{{ competition.name }}</p>
+        </div>
+        <span class="tag {% if job.status == 'failed' %}tag-warning{% else %}tag-neutral{% endif %}">{{ job.get_status_display }}</span>
+    </div>
+
+    <section class="panel">
+        <div class="panel-header">
+            <p class="panel-title">Import job status</p>
+            {% if job.status == 'queued' or job.status == 'processing' %}
+                <span class="tag">Auto-refreshing</span>
+            {% endif %}
+        </div>
+        <div class="metric-grid">
+            <div class="metric">
+                <span class="metric-value">{{ job.processed_rows }}</span>
+                <span class="metric-label">Rows committed</span>
+            </div>
+            <div class="metric">
+                <span class="metric-value">{{ job.total_rows }}</span>
+                <span class="metric-label">Rows discovered</span>
+            </div>
+            <div class="metric">
+                <span class="metric-value">{{ job.matched_images }}</span>
+                <span class="metric-label">Images matched</span>
+            </div>
+            <div class="metric">
+                <span class="metric-value">{{ job.created_at|date:"H:i" }}</span>
+                <span class="metric-label">Started</span>
+            </div>
+        </div>
+        <div class="panel-footer">
+            {% if job.status == 'completed' %}
+                Import completed successfully. The matched photos are now available in the feedback report.
+            {% elif job.status == 'failed' %}
+                Import failed and database changes were rolled back. Error: {{ job.error_message }}
+            {% elif job.status == 'processing' %}
+                SimplyJudge is processing the ZIP in the background. For large packages, keep this page open or come back later.
+            {% else %}
+                The ZIP has been staged and is waiting for the background worker to start.
+            {% endif %}
+        </div>
+    </section>
+
+    <div class="actions" style="margin-top: 1rem;">
+        <a href="{% url 'upload_spreadsheet' competition.slug %}" class="button button-secondary">Back to Uploads</a>
+        <a href="{% url 'feedback_report' competition.slug %}" class="button button-primary">Open Feedback Report</a>
+    </div>
+</main>
+{% endblock %}

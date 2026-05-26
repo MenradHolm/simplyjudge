@@ -1,6 +1,8 @@
 import csv
 import os
 import re
+import tempfile
+import uuid
 import zipfile
 import io
 import threading
@@ -15,8 +17,9 @@ from django.contrib.auth.forms import UserCreationForm
 from django.db import close_old_connections, transaction
 from django.db.models import Avg, FloatField
 from django.db.models.functions import Cast
+from django.utils import timezone
 
-from .models import Competition, Photo, Score, RubricCriterion
+from .models import Competition, Photo, Score, RubricCriterion, ZipImportJob
 
 def register_user(request):
     if request.method == 'POST':
@@ -197,7 +200,8 @@ def upload_spreadsheet(request, comp_slug):
             messages.error(request, f'Error parsing spreadsheet data: {str(e)}')
             return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
-    return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
+    recent_jobs = ZipImportJob.objects.filter(competition=competition)[:5]
+    return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition, 'recent_jobs': recent_jobs})
 
 @login_required(login_url='/accounts/login/')
 def upload_photos_zip(request, comp_slug):
@@ -210,19 +214,34 @@ def upload_photos_zip(request, comp_slug):
             messages.error(request, 'Please upload a .zip package containing EntryForm.csv and the photo files.')
             return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
-        zip_bytes = zip_file.read()
+        job = ZipImportJob.objects.create(
+            competition=competition,
+            uploaded_by=request.user,
+            source_name=zip_file.name,
+        )
+        job.temp_path = save_uploaded_zip_to_temp_file(zip_file, job.id)
+        job.save(update_fields=['temp_path', 'updated_at'])
+
         worker = threading.Thread(
-            target=process_entry_zip_package,
-            args=(competition.id, zip_bytes, zip_file.name),
+            target=process_entry_zip_job,
+            args=(job.id,),
             daemon=True,
         )
         worker.start()
         messages.success(
             request,
-            'ZIP sync started. SimplyJudge is importing EntryForm.csv, matching image filenames, and reading EXIF data in the background.',
+            'ZIP sync job created. SimplyJudge is matching images and importing entries in the background.',
         )
-        return redirect('feedback_report', comp_slug=competition.slug)
+        return redirect('zip_import_status', comp_slug=competition.slug, job_id=job.id)
     return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+@login_required(login_url='/accounts/login/')
+def zip_import_status(request, comp_slug, job_id):
+    if not request.user.is_staff:
+        return redirect('home_hub')
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    job = get_object_or_404(ZipImportJob, id=job_id, competition=competition)
+    return render(request, 'judging_app/zip_import_status.html', {'competition': competition, 'job': job})
 
 def public_results(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
@@ -231,6 +250,16 @@ def public_results(request, comp_slug):
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
     return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
+
+def save_uploaded_zip_to_temp_file(uploaded_file, job_id):
+    temp_dir = os.path.join(tempfile.gettempdir(), 'simplyjudge_zip_imports')
+    os.makedirs(temp_dir, exist_ok=True)
+    safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', os.path.basename(uploaded_file.name))
+    target_path = os.path.join(temp_dir, f'{job_id}_{uuid.uuid4().hex}_{safe_name}')
+    with open(target_path, 'wb') as target:
+        for chunk in uploaded_file.chunks():
+            target.write(chunk)
+    return target_path
 
 def clean_cell(row, *names, default=''):
     for name in names:
@@ -262,7 +291,7 @@ def find_entry_csv(zip_file):
             return info
     return csv_members[0]
 
-def collect_zip_images(zip_file):
+def collect_zip_image_index(zip_file):
     image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
     images = {}
     for info in zip_file.infolist():
@@ -272,10 +301,7 @@ def collect_zip_images(zip_file):
         stem, ext = os.path.splitext(filename)
         if ext.lower() not in image_extensions:
             continue
-        images[normalize_match_key(stem)] = {
-            'filename': filename,
-            'bytes': zip_file.read(info.filename),
-        }
+        images[normalize_match_key(stem)] = info
     return images
 
 def parse_entry_rows(csv_bytes):
@@ -285,14 +311,22 @@ def parse_entry_rows(csv_bytes):
         raise ValueError('The CSV has no header row.')
     return list(reader)
 
-def process_entry_zip_package(competition_id, zip_bytes, source_name):
+def process_entry_zip_job(job_id):
     close_old_connections()
+    job = None
     try:
-        competition = Competition.objects.get(id=competition_id)
-        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as package:
+        job = ZipImportJob.objects.select_related('competition').get(id=job_id)
+        job.status = ZipImportJob.Status.PROCESSING
+        job.error_message = ''
+        job.save(update_fields=['status', 'error_message', 'updated_at'])
+
+        with zipfile.ZipFile(job.temp_path) as package:
             csv_info = find_entry_csv(package)
             rows = parse_entry_rows(package.read(csv_info.filename))
-            images = collect_zip_images(package)
+            images = collect_zip_image_index(package)
+
+            job.total_rows = len(rows)
+            job.save(update_fields=['total_rows', 'updated_at'])
 
             with transaction.atomic():
                 imported = 0
@@ -310,12 +344,16 @@ def process_entry_zip_package(competition_id, zip_bytes, source_name):
                     image_payload = None
                     for candidate in match_candidates:
                         if candidate:
-                            image_payload = images.get(normalize_match_key(candidate))
-                            if image_payload:
+                            image_info = images.get(normalize_match_key(candidate))
+                            if image_info:
+                                image_payload = {
+                                    'filename': os.path.basename(image_info.filename),
+                                    'bytes': package.read(image_info.filename),
+                                }
                                 break
 
                     defaults = {
-                        'competition': competition,
+                        'competition': job.competition,
                         'title': title,
                         'photographer_name': photographer,
                         'category': category,
@@ -342,24 +380,39 @@ def process_entry_zip_package(competition_id, zip_bytes, source_name):
 
                     if photo_id is not None:
                         existing = Photo.objects.filter(id=photo_id).first()
-                        if existing and existing.competition_id != competition.id:
+                        if existing and existing.competition_id != job.competition_id:
                             raise ValueError(f'Entry code {photo_id} already belongs to another competition.')
                         if existing and not image_payload:
                             defaults.pop('image', None)
                         Photo.objects.update_or_create(id=photo_id, defaults=defaults)
                     else:
                         Photo.objects.update_or_create(
-                            competition=competition,
+                            competition=job.competition,
                             title=title,
                             photographer_name=photographer,
                             defaults=defaults,
                         )
                     imported += 1
 
-        print(f'SimplyJudge ZIP sync completed for {source_name}: {imported} rows, {matched} images matched.')
+        job.status = ZipImportJob.Status.COMPLETED
+        job.processed_rows = imported
+        job.matched_images = matched
+        job.finished_at = timezone.now()
+        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'finished_at', 'updated_at'])
+        print(f'SimplyJudge ZIP sync completed for {job.source_name}: {imported} rows, {matched} images matched.')
     except Exception as exc:
-        print(f'SimplyJudge ZIP sync failed for {source_name}: {exc}')
+        if job is not None:
+            job.status = ZipImportJob.Status.FAILED
+            job.error_message = str(exc)
+            job.finished_at = timezone.now()
+            job.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+        print(f'SimplyJudge ZIP sync failed for job {job_id}: {exc}')
     finally:
+        if job is not None and job.temp_path and os.path.exists(job.temp_path):
+            try:
+                os.remove(job.temp_path)
+            except OSError:
+                pass
         close_old_connections()
 
 def audit_photo_metadata(file_bytes):
