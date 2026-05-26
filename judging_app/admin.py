@@ -6,6 +6,7 @@ class CompetitionAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'slug', 'is_active', 'created_at')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)} 
+    filter_horizontal = ('judges',) # Restores the side-by-side UI!
 
 @admin.register(RubricCriterion)
 class RubricCriterionAdmin(admin.ModelAdmin):

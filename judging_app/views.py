@@ -35,18 +35,18 @@ def home_hub(request):
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
 
 @login_required(login_url='/login/')
-def judge_router(request, comp_id):
-    competition = get_object_or_404(Competition, id=comp_id)
+def judge_router(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
     next_photo = Photo.objects.filter(competition=competition).exclude(score__judge=request.user).first()
     if next_photo:
-        return redirect('judge_photo', comp_id=competition.id, photo_id=next_photo.id)
+        return redirect('judge_photo', comp_slug=competition.slug, photo_id=next_photo.id)
     return render(request, 'judging_app/done.html', {'competition': competition})
 
 @login_required(login_url='/login/')
-def judge_photo(request, comp_id, photo_id):
-    competition = get_object_or_404(Competition, id=comp_id)
+def judge_photo(request, comp_slug, photo_id):
+    competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
     photo = get_object_or_404(Photo, id=photo_id, competition=competition)
@@ -71,7 +71,7 @@ def judge_photo(request, comp_id, photo_id):
             judge=request.user,
             defaults={'criteria_scores': criteria_scores, 'total_score': total_score, 'comment': comment}
         )
-        return redirect('judge_router', comp_id=competition.id)
+        return redirect('judge_router', comp_slug=competition.slug)
 
     context = {
         'competition': competition,
@@ -82,8 +82,8 @@ def judge_photo(request, comp_id, photo_id):
     return render(request, 'judging_app/judge.html', context)
 
 @login_required(login_url='/login/')
-def leaderboard(request, comp_id):
-    competition = get_object_or_404(Competition, id=comp_id)
+def leaderboard(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
     tie_criterion = competition.tie_breaker_criterion
     photos_query = Photo.objects.filter(competition=competition).annotate(average_score=Avg('score__total_score'))
     if tie_criterion:
@@ -94,8 +94,8 @@ def leaderboard(request, comp_id):
         ranked_photos = photos_query.filter(average_score__isnull=False).order_by('-average_score')
     return render(request, 'judging_app/leaderboard.html', {'competition': competition, 'photos': ranked_photos, 'tie_criterion': tie_criterion})
 
-def submit_photo(request, comp_id):
-    competition = get_object_or_404(Competition, id=comp_id)
+def submit_photo(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
     error_message = None
     if request.method == "POST":
         title = request.POST.get('title')
@@ -115,42 +115,34 @@ def submit_photo(request, comp_id):
     return render(request, 'judging_app/submit.html', {'competition': competition, 'error_message': error_message})
 
 @login_required(login_url='/login/')
-def feedback_report(request, comp_id):
+def feedback_report(request, comp_slug):
     if not request.user.is_staff:
         return redirect('home_hub')
-    competition = get_object_or_404(Competition, id=comp_id)
+    competition = get_object_or_404(Competition, slug=comp_slug)
     photos = list(Photo.objects.filter(competition=competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
     return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
 
-
-# =====================================================================
-# UNIVERSAL CSV INGESTION PORTAL (UPDATED)
-# =====================================================================
-
 @login_required(login_url='/login/')
-def upload_spreadsheet(request, comp_id):
+def upload_spreadsheet(request, comp_slug):
     if not request.user.is_staff:
         return redirect('home_hub')
 
-    competition = get_object_or_404(Competition, id=comp_id)
+    competition = get_object_or_404(Competition, slug=comp_slug)
 
     if request.method == 'POST' and request.FILES.get('csv_file'):
         csv_file = request.FILES['csv_file']
         if not csv_file.name.endswith('.csv'):
             messages.error(request, 'Error: This is not a CSV file!')
-            return redirect('upload_spreadsheet', comp_id=comp_id)
+            return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
         try:
             file_data = csv_file.read().decode('utf-8').splitlines()
             reader = csv.DictReader(file_data)
-            
-            # Look at the first row to determine what kind of CSV this is
             headers = [h.lower().strip() for h in reader.fieldnames] if reader.fieldnames else []
             
-            # --- DETECTOR ROUTE A: RUBRIC CRITERIA SPREADSHEET ---
             if 'criterion name' in headers or 'criterion' in headers:
                 rubric_count = 0
                 for row in reader:
@@ -169,10 +161,9 @@ def upload_spreadsheet(request, comp_id):
                     )
                     rubric_count += 1
                 
-                messages.success(request, f'Successfully built a dynamic {rubric_count}-column rubric matrix for this event!')
+                messages.success(request, f'Successfully built a dynamic {rubric_count}-column rubric matrix!')
                 return redirect('home_hub')
 
-            # --- DETECTOR ROUTE B: PHOTO ENTRIES SPREADSHEET ---
             else:
                 import_count = 0
                 for row in reader:
@@ -193,20 +184,19 @@ def upload_spreadsheet(request, comp_id):
                     import_count += 1
                 
                 messages.success(request, f'Successfully imported {import_count} entries into the judging queue!')
-                return redirect('feedback_report', comp_id=comp_id)
+                return redirect('feedback_report', comp_slug=competition.slug)
 
         except Exception as e:
             messages.error(request, f'Error parsing spreadsheet data: {str(e)}')
-            return redirect('upload_spreadsheet', comp_id=comp_id)
+            return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
     return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
 
-
 @login_required(login_url='/login/')
-def upload_photos_zip(request, comp_id):
+def upload_photos_zip(request, comp_slug):
     if not request.user.is_staff:
         return redirect('home_hub')
-    competition = get_object_or_404(Competition, id=comp_id)
+    competition = get_object_or_404(Competition, slug=comp_slug)
     if request.method == 'POST' and request.FILES.get('zip_file'):
         zip_file = request.FILES['zip_file']
         success_count = 0
@@ -231,11 +221,11 @@ def upload_photos_zip(request, comp_id):
                     photo.save() 
                     success_count += 1
         messages.success(request, f"Successfully processed and matched {success_count} photos!")
-        return redirect('feedback_report', comp_id=comp_id)
-    return redirect('upload_spreadsheet', comp_id=comp_id)
+        return redirect('feedback_report', comp_slug=competition.slug)
+    return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
-def public_results(request, comp_id):
-    competition = get_object_or_404(Competition, id=comp_id)
+def public_results(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
     photos = list(Photo.objects.filter(competition=competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
     for photo in photos:

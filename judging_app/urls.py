@@ -2,7 +2,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Global Hub & Authentication
     path('', views.home_hub, name='home_hub'),
     path('register/', views.register_user, name='register'),
     
