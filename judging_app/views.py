@@ -404,6 +404,20 @@ def clean_cell(row, *names, default=''):
             return str(value).strip()
     return default
 
+def truncate_text(value, max_length):
+    value = str(value or '').strip()
+    if len(value) <= max_length:
+        return value
+    return value[:max_length].rstrip()
+
+def truncate_filename(filename, max_length=180):
+    filename = os.path.basename(str(filename or 'photo.jpg')).strip() or 'photo.jpg'
+    stem, ext = os.path.splitext(filename)
+    if len(filename) <= max_length:
+        return filename
+    allowed_stem_length = max_length - len(ext)
+    return f'{stem[:allowed_stem_length].rstrip()}{ext}'
+
 def normalize_match_key(value):
     stem = os.path.splitext(os.path.basename(str(value).strip()))[0]
     return re.sub(r'[^a-z0-9]', '', stem.lower())
@@ -466,10 +480,10 @@ def process_entry_zip_job(job_id):
             with transaction.atomic():
                 imported = 0
                 matched = 0
-                for row in rows:
-                    title = clean_cell(row, 'Title', 'title', default='Untitled')
-                    photographer = clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown')
-                    category = clean_cell(row, 'Category', 'category', default='General')
+                for row_number, row in enumerate(rows, start=2):
+                    title = truncate_text(clean_cell(row, 'Title', 'title', default='Untitled'), 200)
+                    photographer = truncate_text(clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown'), 200)
+                    category = truncate_text(clean_cell(row, 'Category', 'category', default='General'), 100)
                     entry_code = clean_cell(row, 'Code', 'ID', 'Number', 'Entry ID', 'Entry Code', 'id')
                     image_reference = clean_cell(row, 'Image', 'Image File', 'Filename', 'File Name', 'Photo File', 'Photo Filename', 'Asset')
                     description = clean_cell(row, 'Description', 'description', 'Story', 'story')
@@ -482,7 +496,7 @@ def process_entry_zip_job(job_id):
                             image_info = images.get(normalize_match_key(candidate))
                             if image_info:
                                 image_payload = {
-                                    'filename': os.path.basename(image_info.filename),
+                                    'filename': truncate_filename(image_info.filename),
                                     'bytes': package.read(image_info.filename),
                                 }
                                 break
@@ -516,7 +530,7 @@ def process_entry_zip_job(job_id):
                     if photo_id is not None:
                         existing = Photo.objects.filter(id=photo_id).first()
                         if existing and existing.competition_id != job.competition_id:
-                            raise ValueError(f'Entry code {photo_id} already belongs to another competition.')
+                            raise ValueError(f'CSV row {row_number}: entry code {photo_id} already belongs to another competition.')
                         if existing and not image_payload:
                             defaults.pop('image', None)
                         Photo.objects.update_or_create(id=photo_id, defaults=defaults)

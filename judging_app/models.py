@@ -33,13 +33,13 @@ class Photo(models.Model):
     title = models.CharField(max_length=200)
     photographer_name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
-    image = models.ImageField(upload_to='competition_photos/')
+    image = models.ImageField(upload_to='competition_photos/', max_length=255)
     rule_flags = models.TextField(blank=True, null=True)
     organizer_notes = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True) 
     
     # --- NEW CAMERA SETTINGS FIELD ---
-    camera_settings = models.CharField(max_length=500, blank=True, null=True)
+    camera_settings = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.title} - #{self.id}"
@@ -64,8 +64,8 @@ class ZipImportJob(models.Model):
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='zip_import_jobs')
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     source_name = models.CharField(max_length=255)
-    source_url = models.URLField(blank=True)
-    temp_path = models.CharField(max_length=500, blank=True)
+    source_url = models.URLField(blank=True, max_length=1000)
+    temp_path = models.CharField(max_length=1000, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
     total_rows = models.PositiveIntegerField(default=0)
     processed_rows = models.PositiveIntegerField(default=0)
