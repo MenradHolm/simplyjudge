@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import Competition, Photo
+from .views import decode_csv_bytes
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -56,3 +57,12 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertRedirects(response, reverse('elimination_mode', args=[self.competition.slug]))
         photo.refresh_from_db()
         self.assertEqual(photo.status, Photo.Status.SHORTLISTED)
+
+
+class CsvEncodingTests(TestCase):
+    def test_decode_csv_bytes_accepts_windows_1252_smart_quotes(self):
+        csv_bytes = b'Criterion Name,Description,Weight\r\nComposition,\x93Strong frame\x94,1.0\r\n'
+
+        decoded = decode_csv_bytes(csv_bytes)
+
+        self.assertIn('“Strong frame”', decoded)

@@ -198,7 +198,7 @@ def upload_spreadsheet(request, comp_slug):
             return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
         try:
-            file_data = csv_file.read().decode('utf-8').splitlines()
+            file_data = decode_csv_bytes(csv_file.read()).splitlines()
             reader = csv.DictReader(file_data)
             headers = [h.lower().strip() for h in reader.fieldnames] if reader.fieldnames else []
             
@@ -453,6 +453,14 @@ def clean_cell(row, *names, default=''):
             return str(value).strip()
     return default
 
+def decode_csv_bytes(csv_bytes):
+    for encoding in ('utf-8-sig', 'cp1252', 'latin-1'):
+        try:
+            return csv_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return csv_bytes.decode('utf-8-sig', errors='replace')
+
 def split_multi_value_cell(value):
     value = str(value or '').strip()
     if not value:
@@ -610,7 +618,7 @@ def collect_zip_image_index(zip_file):
     return images
 
 def parse_entry_rows(csv_bytes):
-    text = csv_bytes.decode('utf-8-sig')
+    text = decode_csv_bytes(csv_bytes)
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
         raise ValueError('The CSV has no header row.')
