@@ -24,9 +24,9 @@
                 <div class="text-right">
                     <span class="text-xs font-bold text-gray-300 block">Welcome, {{ user.username }}</span>
                     {% if user.is_staff %}
-                        <span class="text-[9px] font-mono font-bold uppercase text-emerald-400 bg-emerald-950/50 border border-emerald-900/50 px-1.5 py-0.5 rounded">Staff Organizer</span>
+                        <span class="text-[9px] font-mono font-bold uppercase text-emerald-400 bg-emerald-950/50 border border-emerald-400/30 px-1.5 py-0.5 rounded">Staff Organizer</span>
                     {% else %}
-                        <span class="text-[9px] font-mono font-bold uppercase text-indigo-400 bg-indigo-950/50 border border-indigo-900/50 px-1.5 py-0.5 rounded">Active Judge</span>
+                        <span class="text-[9px] font-mono font-bold uppercase text-indigo-400 bg-indigo-950/50 border border-indigo-400/30 px-1.5 py-0.5 rounded">Active Judge</span>
                     {% endif %}
                 </div>
                 <a href="/admin/" target="_blank" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg text-[11px] uppercase tracking-wider transition-colors border border-gray-700">
@@ -64,10 +64,10 @@
             {% for comp in competitions %}
             <div class="bg-gray-900 border border-gray-800 hover:border-gray-700/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition-all group">
                 
-                <div class="mb-6">
+                <div>
                     <div class="flex items-center justify-between gap-4">
-                        <span class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider bg-gray-950 px-2.5 py-1 rounded-md border border-gray-850">
-                            ID Ref: #{{ comp.id }}
+                        <span class="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider bg-gray-950 px-2.5 py-1 rounded-md border border-gray-850">
+                            Slug ID: /{{ comp.slug }}
                         </span>
                         <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-900/60 rounded-full uppercase">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Active
@@ -75,38 +75,38 @@
                     </div>
                     
                     <h3 class="text-xl font-black text-white mt-3 group-hover:text-indigo-400 transition-colors">{{ comp.name }}</h3>
-                    <p class="text-xs text-gray-500 mt-1">Created session context: {{ comp.created_at|date:"d M Y @ H:i" }}</p>
+                    <p class="text-xs text-gray-500 mt-1">Session Context Created: {{ comp.created_at|date:"d M Y @ H:i" }}</p>
                 </div>
 
-                <div class="border-t border-gray-850 pt-5 space-y-4">
+                <div class="border-t border-gray-850 pt-5 space-y-4/5 mt-6">
                     
                     <div class="grid grid-cols-2 gap-2.5">
-                        <a href="{% url 'judge_router' comp.id %}" class="flex flex-col items-center justify-center p-3 bg-indigo-950/30 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-900/50 hover:border-indigo-500 rounded-xl transition-all text-center group/btn shadow-inner">
+                        <a href="{% url 'judge_router' comp.slug %}" class="flex flex-col items-center justify-center p-3 bg-indigo-950/30 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-900/50 hover:border-indigo-500 rounded-xl transition-all text-center group/btn shadow-inner">
                             <span class="text-lg mb-1 group-hover/btn:scale-110 transition-transform">⚖️</span>
                             <span class="text-[10px] font-black uppercase tracking-wider">Judging Room</span>
                         </a>
                         
-                        <a href="{% url 'leaderboard' comp.id %}" class="flex flex-col items-center justify-center p-3 bg-gray-950/60 hover:bg-amber-600 text-amber-500 hover:text-white border border-gray-850 hover:border-amber-500 rounded-xl transition-all text-center group/btn">
+                        <a href="{% url 'leaderboard' comp.slug %}" class="flex flex-col items-center justify-center p-3 bg-gray-950/60 hover:bg-amber-600 text-amber-500 hover:text-white border border-gray-850 hover:border-amber-500 rounded-xl transition-all text-center group/btn">
                             <span class="text-lg mb-1 group-hover/btn:scale-110 transition-transform">🏆</span>
                             <span class="text-[10px] font-black uppercase tracking-wider">Leaderboard</span>
                         </a>
                     </div>
 
                     {% if user.is_staff %}
-                    <div class="space-y-2 bg-gray-950/40 border border-gray-850 p-3 rounded-xl shadow-inner">
+                    <div class="space-y-2 bg-gray-950/40 border border-gray-850 p-3 rounded-xl shadow-inner mt-4">
                         <span class="text-[9px] font-black uppercase tracking-widest text-gray-500 block mb-2">Organizer Operations Console</span>
                         
                         <div class="grid grid-cols-2 gap-2">
-                            <a href="{% url 'upload_spreadsheet' comp.id %}" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-bold transition-all text-center">
+                            <a href="{% url 'upload_spreadsheet' comp.slug %}" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-bold transition-all text-center">
                                 📊 <span>CSV Loader</span>
                             </a>
                             
-                            <a href="/competition/{{ comp.id }}/upload-csv/" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-bold transition-all text-center">
+                            <a href="{% url 'upload_photos_zip' comp.slug %}" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-bold transition-all text-center">
                                 🗄️ <span>ZIP Matcher</span>
                             </a>
                         </div>
 
-                        <a href="{% url 'feedback_report' comp.id %}" class="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-950/40 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-900/40 hover:border-emerald-500 rounded-lg text-xs font-black uppercase tracking-wider transition-all text-center shadow-md">
+                        <a href="{% url 'feedback_report' comp.slug %}" class="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-950/40 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-900/40 hover:border-emerald-500 rounded-lg text-xs font-black uppercase tracking-wider transition-all text-center shadow-md">
                             📄 View Master Ledger Report
                         </a>
                     </div>

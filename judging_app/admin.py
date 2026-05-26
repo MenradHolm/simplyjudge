@@ -1,34 +1,26 @@
 from django.contrib import admin
-from .models import Competition, Photo, RubricCriterion, Score
+from .models import Competition, RubricCriterion, Photo, Score
 
-# --- NEW: The Rubric Grid Layout ---
-class RubricCriterionInline(admin.TabularInline):
-    model = RubricCriterion
-    extra = 5  # This gives you 5 blank rows automatically when creating a competition
-
-# --- UPDATED: The Competition Admin ---
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'is_active', 'created_at')
-    list_filter = ('is_active',)
-    search_fields = ('name',)
-    inlines = [RubricCriterionInline]
-    # Creates UI for assigning judges ---
-    filter_horizontal = ('judges',)
-
-# --- The rest stays exactly the same ---
-@admin.register(Photo)
-class PhotoAdmin(admin.ModelAdmin):
-    list_display = ('title', 'competition', 'photographer_name', 'category', 'uploaded_at')
-    list_filter = ('competition', 'category')
-    search_fields = ('title', 'photographer_name')
+    list_display = ('id', 'name', 'slug', 'is_active', 'created_at')
+    search_fields = ('name', 'slug')
+    prepopulated_fields = {'slug': ('name',)} 
 
 @admin.register(RubricCriterion)
 class RubricCriterionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'competition', 'max_points', 'weight')
+    list_display = ('id', 'name', 'competition', 'weight')
     list_filter = ('competition',)
+    search_fields = ('name',)
+
+@admin.register(Photo)
+class PhotoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'competition', 'photographer_name', 'category')
+    list_filter = ('competition', 'category')
+    search_fields = ('title', 'photographer_name', 'rule_flags')
 
 @admin.register(Score)
 class ScoreAdmin(admin.ModelAdmin):
-    list_display = ('photo', 'judge', 'total_score', 'submitted_at')
+    list_display = ('id', 'photo', 'judge', 'total_score')
     list_filter = ('photo__competition', 'judge')
+    search_fields = ('photo__title', 'judge__username')
