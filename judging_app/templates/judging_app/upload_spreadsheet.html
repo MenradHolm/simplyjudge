@@ -8,45 +8,71 @@
         <div>
             <p class="eyebrow">Data ingestion</p>
             <h2 class="page-title">Upload competition data.</h2>
-            <p class="page-copy">Import rubric criteria or entrant rows from a structured CSV file.</p>
+            <p class="page-copy">Import rubrics from CSV, or upload one ZIP package containing EntryForm.csv plus the matching photo files.</p>
         </div>
         <span class="tag">{{ competition.name }}</span>
     </div>
 
-    <section class="panel panel-padded">
-        {% if messages %}
-            <div class="form-grid" style="margin-bottom: 1rem;">
-                {% for message in messages %}
-                    <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
+    {% if messages %}
+        <div class="form-grid" style="margin-bottom: 1rem;">
+            {% for message in messages %}
+                <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
 
-        <form method="POST" enctype="multipart/form-data" class="form-grid">
-            {% csrf_token %}
-            <div class="field">
-                <label for="csv_file">CSV source file</label>
-                <span class="help-text">Use rubric headers such as Criterion Name, Description, Weight, or entrant headers such as Title, Photographer, Category, Code.</span>
-                <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
-            </div>
+    <section class="grid grid-auto">
+        <article class="panel panel-padded">
+            <p class="eyebrow">Recommended</p>
+            <h3 class="competition-name">ZIP package sync</h3>
+            <p class="page-copy">
+                Upload a ZIP containing <strong>EntryForm.csv</strong> and the photo files. SimplyJudge reads the CSV, creates or updates entries, matches images by filename/code, extracts EXIF data, and saves everything in one transaction.
+            </p>
 
-            <div class="actions">
-                <button type="submit" class="button button-primary">Upload and Parse</button>
-                <a href="{% url 'home_hub' %}" class="button button-secondary">Cancel</a>
-            </div>
-        </form>
+            <form method="POST" action="{% url 'upload_photos_zip' competition.slug %}" enctype="multipart/form-data" class="form-grid">
+                {% csrf_token %}
+                <div class="field">
+                    <label for="zip_file">ZIP package</label>
+                    <span class="help-text">The ZIP should include EntryForm.csv plus image files named with the same entry codes or filenames referenced in the CSV.</span>
+                    <input type="file" name="zip_file" id="zip_file" accept=".zip" required>
+                </div>
+                <button type="submit" class="button button-primary">Start ZIP Sync</button>
+            </form>
+        </article>
+
+        <article class="panel panel-padded">
+            <p class="eyebrow">CSV only</p>
+            <h3 class="competition-name">Rubric or row import</h3>
+            <p class="page-copy">
+                Use this for rubric setup, or for entrant rows when photos will be attached later.
+            </p>
+
+            <form method="POST" enctype="multipart/form-data" class="form-grid">
+                {% csrf_token %}
+                <div class="field">
+                    <label for="csv_file">CSV source file</label>
+                    <span class="help-text">Rubric headers: Criterion Name, Description, Weight. Entrant headers: Title, Photographer, Category, Code.</span>
+                    <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="button button-secondary">Upload CSV</button>
+                    <a href="{% url 'home_hub' %}" class="button button-secondary">Cancel</a>
+                </div>
+            </form>
+        </article>
     </section>
 
     <section class="grid grid-auto" style="margin-top: 1rem;">
         <div class="card">
-            <span class="tag tag-neutral">Rubrics</span>
-            <p class="page-copy">Include <strong>Criterion Name</strong>, <strong>Description</strong>, and <strong>Weight</strong>.</p>
+            <span class="tag tag-neutral">ZIP format</span>
+            <p class="page-copy">Place <strong>EntryForm.csv</strong> anywhere in the ZIP. Images can be in folders; matching uses the filename stem, entry code, or file reference column.</p>
         </div>
         <div class="card">
-            <span class="tag tag-neutral">Entrants</span>
-            <p class="page-copy">Include <strong>Title</strong>, <strong>Photographer</strong>, <strong>Category</strong>, and <strong>Code</strong>.</p>
+            <span class="tag tag-neutral">Safety</span>
+            <p class="page-copy">The ZIP import runs in the background and wraps database writes in one atomic transaction, so a failed sync rolls back instead of leaving partial rows.</p>
         </div>
     </section>
 </main>

@@ -1,7 +1,9 @@
 import csv
 import os
+import re
 import zipfile
 import io
+import threading
 from PIL import Image
 from PIL.ExifTags import TAGS
 
@@ -10,6 +12,7 @@ from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
+from django.db import close_old_connections, transaction
 from django.db.models import Avg, FloatField
 from django.db.models.functions import Cast
 
@@ -203,28 +206,21 @@ def upload_photos_zip(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if request.method == 'POST' and request.FILES.get('zip_file'):
         zip_file = request.FILES['zip_file']
-        success_count = 0
-        with zipfile.ZipFile(zip_file) as z:
-            for file_info in z.infolist():
-                filename = os.path.basename(file_info.filename)
-                if file_info.is_dir() or not filename or filename.startswith('.'):
-                    continue
-                name_without_ext, ext = os.path.splitext(filename)
-                photo = None
-                try:
-                    target_id = int(name_without_ext.strip())
-                    photo = Photo.objects.filter(competition=competition, id=target_id).first()
-                except ValueError:
-                    photo = Photo.objects.filter(competition=competition, title__icontains=filename.strip()).first()
-                if photo:
-                    file_bytes = z.read(file_info.filename)
-                    audit = audit_photo_metadata(file_bytes)
-                    if audit['flags']:
-                        photo.rule_flags = " | ".join(audit['flags'])
-                    photo.image.save(filename, ContentFile(file_bytes))
-                    photo.save() 
-                    success_count += 1
-        messages.success(request, f"Successfully processed and matched {success_count} photos!")
+        if not zip_file.name.lower().endswith('.zip'):
+            messages.error(request, 'Please upload a .zip package containing EntryForm.csv and the photo files.')
+            return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+        zip_bytes = zip_file.read()
+        worker = threading.Thread(
+            target=process_entry_zip_package,
+            args=(competition.id, zip_bytes, zip_file.name),
+            daemon=True,
+        )
+        worker.start()
+        messages.success(
+            request,
+            'ZIP sync started. SimplyJudge is importing EntryForm.csv, matching image filenames, and reading EXIF data in the background.',
+        )
         return redirect('feedback_report', comp_slug=competition.slug)
     return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
@@ -235,6 +231,136 @@ def public_results(request, comp_slug):
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
     return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
+
+def clean_cell(row, *names, default=''):
+    for name in names:
+        value = row.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    lower_row = {str(k).lower().strip(): v for k, v in row.items() if k is not None}
+    for name in names:
+        value = lower_row.get(name.lower().strip())
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return default
+
+def normalize_match_key(value):
+    stem = os.path.splitext(os.path.basename(str(value).strip()))[0]
+    return re.sub(r'[^a-z0-9]', '', stem.lower())
+
+def find_entry_csv(zip_file):
+    csv_members = [
+        info for info in zip_file.infolist()
+        if not info.is_dir()
+        and not os.path.basename(info.filename).startswith('.')
+        and info.filename.lower().endswith('.csv')
+    ]
+    if not csv_members:
+        raise ValueError('No CSV file found in the ZIP package.')
+    for info in csv_members:
+        if os.path.basename(info.filename).lower() == 'entryform.csv':
+            return info
+    return csv_members[0]
+
+def collect_zip_images(zip_file):
+    image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
+    images = {}
+    for info in zip_file.infolist():
+        filename = os.path.basename(info.filename)
+        if info.is_dir() or not filename or filename.startswith('.'):
+            continue
+        stem, ext = os.path.splitext(filename)
+        if ext.lower() not in image_extensions:
+            continue
+        images[normalize_match_key(stem)] = {
+            'filename': filename,
+            'bytes': zip_file.read(info.filename),
+        }
+    return images
+
+def parse_entry_rows(csv_bytes):
+    text = csv_bytes.decode('utf-8-sig').splitlines()
+    reader = csv.DictReader(text)
+    if not reader.fieldnames:
+        raise ValueError('The CSV has no header row.')
+    return list(reader)
+
+def process_entry_zip_package(competition_id, zip_bytes, source_name):
+    close_old_connections()
+    try:
+        competition = Competition.objects.get(id=competition_id)
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as package:
+            csv_info = find_entry_csv(package)
+            rows = parse_entry_rows(package.read(csv_info.filename))
+            images = collect_zip_images(package)
+
+            with transaction.atomic():
+                imported = 0
+                matched = 0
+                for row in rows:
+                    title = clean_cell(row, 'Title', 'title', default='Untitled')
+                    photographer = clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown')
+                    category = clean_cell(row, 'Category', 'category', default='General')
+                    entry_code = clean_cell(row, 'Code', 'ID', 'Number', 'Entry ID', 'Entry Code', 'id')
+                    image_reference = clean_cell(row, 'Image', 'Image File', 'Filename', 'File Name', 'Photo File', 'Photo Filename', 'Asset')
+                    description = clean_cell(row, 'Description', 'description', 'Story', 'story')
+                    camera_settings = clean_cell(row, 'Camera Settings', 'camera settings', 'Settings', 'settings')
+
+                    match_candidates = [image_reference, entry_code, title]
+                    image_payload = None
+                    for candidate in match_candidates:
+                        if candidate:
+                            image_payload = images.get(normalize_match_key(candidate))
+                            if image_payload:
+                                break
+
+                    defaults = {
+                        'competition': competition,
+                        'title': title,
+                        'photographer_name': photographer,
+                        'category': category,
+                        'description': description,
+                        'camera_settings': camera_settings,
+                    }
+
+                    if image_payload:
+                        audit = audit_photo_metadata(image_payload['bytes'])
+                        defaults['rule_flags'] = ' | '.join(audit['flags']) if audit['flags'] else ''
+                        defaults['image'] = ContentFile(image_payload['bytes'], name=image_payload['filename'])
+                        matched += 1
+                    else:
+                        defaults['image'] = 'competition_photos/placeholder.jpg'
+                        defaults['rule_flags'] = 'No matching image file found in uploaded ZIP package.'
+
+                    if entry_code:
+                        try:
+                            photo_id = int(entry_code.strip())
+                        except ValueError:
+                            photo_id = None
+                    else:
+                        photo_id = None
+
+                    if photo_id is not None:
+                        existing = Photo.objects.filter(id=photo_id).first()
+                        if existing and existing.competition_id != competition.id:
+                            raise ValueError(f'Entry code {photo_id} already belongs to another competition.')
+                        if existing and not image_payload:
+                            defaults.pop('image', None)
+                        Photo.objects.update_or_create(id=photo_id, defaults=defaults)
+                    else:
+                        Photo.objects.update_or_create(
+                            competition=competition,
+                            title=title,
+                            photographer_name=photographer,
+                            defaults=defaults,
+                        )
+                    imported += 1
+
+        print(f'SimplyJudge ZIP sync completed for {source_name}: {imported} rows, {matched} images matched.')
+    except Exception as exc:
+        print(f'SimplyJudge ZIP sync failed for {source_name}: {exc}')
+    finally:
+        close_old_connections()
 
 def audit_photo_metadata(file_bytes):
     try:
