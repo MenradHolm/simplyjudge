@@ -404,6 +404,117 @@ def clean_cell(row, *names, default=''):
             return str(value).strip()
     return default
 
+def split_multi_value_cell(value):
+    value = str(value or '').strip()
+    if not value:
+        return []
+    if ';' in value:
+        return [part.strip() for part in value.split(';') if part.strip()]
+    return [part.strip() for part in value.splitlines() if part.strip()]
+
+def strip_number_prefix(value):
+    value = str(value or '').strip()
+    return re.sub(r'^(?:nr|no|number|image|photo|entry)?\s*#?\s*\d{1,2}\s*[:.)-]\s*', '', value, flags=re.IGNORECASE).strip()
+
+def display_title_from_reference(value, fallback):
+    cleaned = strip_number_prefix(value)
+    if not cleaned or cleaned in {'-', '—'}:
+        return fallback
+    basename = os.path.basename(cleaned)
+    stem, ext = os.path.splitext(basename)
+    if ext.lower() in {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}:
+        return stem or fallback
+    return cleaned
+
+def parse_numbered_short_lines(value):
+    numbered = {}
+    plain = []
+    for line in split_multi_value_cell(value):
+        match = re.match(r'^(?:nr|no|number|image|photo|entry)?\s*#?\s*(\d{1,2})\s*[:.)-]\s*(.+)$', line, flags=re.IGNORECASE)
+        if match:
+            numbered[int(match.group(1))] = match.group(2).strip()
+        else:
+            plain.append(line.strip())
+    return numbered, plain
+
+def parse_numbered_long_blocks(value):
+    value = str(value or '').strip()
+    if not value:
+        return {}
+    blocks = {}
+    pattern = re.compile(r'(?:^|\n)\s*(\d{1,2})\.\s+(.*?)(?=(?:\n\s*\d{1,2}\.\s+)|\Z)', re.DOTALL)
+    for match in pattern.finditer(value):
+        blocks[int(match.group(1))] = match.group(2).strip()
+    return blocks
+
+def parse_camera_setting_blocks(value):
+    value = str(value or '').strip()
+    if not value:
+        return {}
+    settings = {}
+    blocks = [block.strip() for block in re.split(r'\n\s*\n', value) if block.strip()]
+    for block in blocks:
+        numbers = [int(num) for num in re.findall(r'\bNr\s*(\d{1,2})\b', block, flags=re.IGNORECASE)]
+        if not numbers:
+            match = re.search(r'camera settings?\s*(\d{1,2})', block, flags=re.IGNORECASE)
+            numbers = [int(match.group(1))] if match else []
+        for number in numbers:
+            settings[number] = block
+    return settings
+
+def is_participant_entry_row(row):
+    keys = {str(key).lower().strip() for key in row.keys() if key is not None}
+    return 'picture titles' in keys and ('10 uploads' in keys or '15 uploads' in keys)
+
+def expand_participant_entry_row(row):
+    first_name = clean_cell(row, 'First name', 'First Name')
+    last_name = clean_cell(row, 'Last name', 'Last Name')
+    photographer = ' '.join(part for part in [first_name, last_name] if part).strip() or 'Unknown'
+    camera_settings = parse_camera_setting_blocks(clean_cell(row, 'Camera settings'))
+    title_map, plain_titles = parse_numbered_short_lines(clean_cell(row, 'Picture titles'))
+    stories_10 = parse_numbered_long_blocks(clean_cell(row, "10 Story's & Context's"))
+    stories_15 = parse_numbered_long_blocks(clean_cell(row, "15 Story's & Context's"))
+    upload_refs = split_multi_value_cell(clean_cell(row, '10 uploads')) + split_multi_value_cell(clean_cell(row, '15 uploads'))
+
+    expected_count_match = re.search(r'\d+', clean_cell(row, 'How many are you planning to submit'))
+    expected_count = int(expected_count_match.group(0)) if expected_count_match else 0
+    plain_title_count = len(plain_titles) if len(plain_titles) > 1 else 0
+    entry_count = max(len(upload_refs), len(title_map), plain_title_count)
+    if entry_count == 0:
+        entry_count = expected_count
+    expanded = []
+
+    for index in range(1, entry_count + 1):
+        raw_title = title_map.get(index)
+        if not raw_title and len(plain_titles) == entry_count:
+            raw_title = plain_titles[index - 1]
+        elif not raw_title and len(plain_titles) == 1:
+            raw_title = f'{plain_titles[0]} {index}'
+        upload_ref = upload_refs[index - 1] if index <= len(upload_refs) else ''
+        fallback_title = f'{photographer} entry {index}'
+        display_title = display_title_from_reference(raw_title or upload_ref, fallback_title)
+
+        expanded.append({
+            'Title': display_title,
+            'Photographer': photographer,
+            'Category': 'General',
+            'Description': stories_10.get(index) or stories_15.get(index) or '',
+            'Camera Settings': camera_settings.get(index, ''),
+            'Image': upload_ref,
+            'Filename': raw_title or '',
+            'Entry Code': '',
+        })
+    return expanded
+
+def expand_entry_rows(rows):
+    expanded = []
+    for row in rows:
+        if is_participant_entry_row(row):
+            expanded.extend(expand_participant_entry_row(row))
+        else:
+            expanded.append(row)
+    return expanded
+
 def truncate_text(value, max_length):
     value = str(value or '').strip()
     if len(value) <= max_length:
@@ -450,8 +561,8 @@ def collect_zip_image_index(zip_file):
     return images
 
 def parse_entry_rows(csv_bytes):
-    text = csv_bytes.decode('utf-8-sig').splitlines()
-    reader = csv.DictReader(text)
+    text = csv_bytes.decode('utf-8-sig')
+    reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
         raise ValueError('The CSV has no header row.')
     return list(reader)
@@ -471,7 +582,7 @@ def process_entry_zip_job(job_id):
 
         with zipfile.ZipFile(job.temp_path) as package:
             csv_info = find_entry_csv(package)
-            rows = parse_entry_rows(package.read(csv_info.filename))
+            rows = expand_entry_rows(parse_entry_rows(package.read(csv_info.filename)))
             images = collect_zip_image_index(package)
 
             job.total_rows = len(rows)
@@ -485,11 +596,19 @@ def process_entry_zip_job(job_id):
                     photographer = truncate_text(clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown'), 200)
                     category = truncate_text(clean_cell(row, 'Category', 'category', default='General'), 100)
                     entry_code = clean_cell(row, 'Code', 'ID', 'Number', 'Entry ID', 'Entry Code', 'id')
-                    image_reference = clean_cell(row, 'Image', 'Image File', 'Filename', 'File Name', 'Photo File', 'Photo Filename', 'Asset')
+                    image_references = [
+                        clean_cell(row, 'Image'),
+                        clean_cell(row, 'Image File'),
+                        clean_cell(row, 'Filename'),
+                        clean_cell(row, 'File Name'),
+                        clean_cell(row, 'Photo File'),
+                        clean_cell(row, 'Photo Filename'),
+                        clean_cell(row, 'Asset'),
+                    ]
                     description = clean_cell(row, 'Description', 'description', 'Story', 'story')
                     camera_settings = clean_cell(row, 'Camera Settings', 'camera settings', 'Settings', 'settings')
 
-                    match_candidates = [image_reference, entry_code, title]
+                    match_candidates = [*image_references, entry_code, title]
                     image_payload = None
                     for candidate in match_candidates:
                         if candidate:
