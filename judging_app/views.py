@@ -12,6 +12,7 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 
 from django.contrib import messages
+from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -22,7 +23,7 @@ from django.db.models import Avg, FloatField
 from django.db.models.functions import Cast
 from django.utils import timezone
 
-from .models import Competition, Photo, Score, RubricCriterion, ZipImportJob
+from .models import Competition, Photo, PhotoStatusVote, Score, RubricCriterion, ZipImportJob
 
 def register_user(request):
     if request.method == 'POST':
@@ -42,6 +43,32 @@ def is_approved_judge(user, competition):
 def home_hub(request):
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
+
+def active_staff_count():
+    return User.objects.filter(is_active=True, is_staff=True).count()
+
+def majority_threshold(panel_size):
+    return (panel_size // 2) + 1 if panel_size else 1
+
+def apply_status_vote_majority(photo):
+    panel_size = active_staff_count()
+    threshold = majority_threshold(panel_size)
+    shortlist_votes = photo.status_votes.filter(decision=PhotoStatusVote.Decision.SHORTLIST).count()
+    reject_votes = photo.status_votes.filter(decision=PhotoStatusVote.Decision.REJECT).count()
+
+    if shortlist_votes >= threshold:
+        photo.status = Photo.Status.SHORTLISTED
+        photo.save(update_fields=['status'])
+    elif reject_votes >= threshold:
+        photo.status = Photo.Status.REJECTED
+        photo.save(update_fields=['status'])
+
+    return {
+        'panel_size': panel_size,
+        'threshold': threshold,
+        'shortlist_votes': shortlist_votes,
+        'reject_votes': reject_votes,
+    }
 
 @login_required(login_url='/accounts/login/')
 def judge_router(request, comp_slug):
@@ -69,28 +96,57 @@ def elimination_mode(request, comp_slug):
         if not photo_id.isdigit() or decision not in {'reject', 'shortlist'}:
             return redirect('elimination_mode', comp_slug=competition.slug)
 
-        photo = get_object_or_404(Photo, id=int(photo_id), competition=competition)
-        if decision == 'reject':
-            photo.status = Photo.Status.REJECTED
-            photo.save(update_fields=['status'])
-        else:
-            photo.status = Photo.Status.SHORTLISTED
-            photo.save(update_fields=['status'])
+        with transaction.atomic():
+            photo = get_object_or_404(
+                Photo.objects.select_for_update(),
+                id=int(photo_id),
+                competition=competition,
+                status=Photo.Status.PENDING,
+            )
+            vote_decision = (
+                PhotoStatusVote.Decision.REJECT
+                if decision == 'reject'
+                else PhotoStatusVote.Decision.SHORTLIST
+            )
+            PhotoStatusVote.objects.update_or_create(
+                photo=photo,
+                voter=request.user,
+                defaults={'decision': vote_decision},
+            )
+            apply_status_vote_majority(photo)
         return redirect('elimination_mode', comp_slug=competition.slug)
 
     current_photo = Photo.objects.filter(
         competition=competition,
         status=Photo.Status.PENDING,
-    ).order_by('id').first()
+    ).exclude(status_votes__voter=request.user).order_by('id').first()
     counts = {
         'pending': Photo.objects.filter(competition=competition, status=Photo.Status.PENDING).count(),
         'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
         'rejected': Photo.objects.filter(competition=competition, status=Photo.Status.REJECTED).count(),
+        'for_you': Photo.objects.filter(
+            competition=competition,
+            status=Photo.Status.PENDING,
+        ).exclude(status_votes__voter=request.user).count(),
     }
+    vote_summary = None
+    if current_photo:
+        panel_size = active_staff_count()
+        vote_summary = {
+            'panel_size': panel_size,
+            'threshold': majority_threshold(panel_size),
+            'shortlist_votes': current_photo.status_votes.filter(decision=PhotoStatusVote.Decision.SHORTLIST).count(),
+            'reject_votes': current_photo.status_votes.filter(decision=PhotoStatusVote.Decision.REJECT).count(),
+        }
     return render(
         request,
         'judging_app/elimination_mode.html',
-        {'competition': competition, 'photo': current_photo, 'counts': counts},
+        {
+            'competition': competition,
+            'photo': current_photo,
+            'counts': counts,
+            'vote_summary': vote_summary,
+        },
     )
 
 @login_required(login_url='/accounts/login/')

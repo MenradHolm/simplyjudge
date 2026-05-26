@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Competition, Photo
+from .models import Competition, Photo, PhotoStatusVote
 from .views import decode_csv_bytes
 
 
@@ -45,7 +45,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_staff_elimination_mode_updates_photo_status(self):
+    def test_single_staff_vote_finalizes_photo_status(self):
         photo = self.create_photo('Pending image', Photo.Status.PENDING)
 
         self.client.force_login(self.staff)
@@ -57,6 +57,37 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertRedirects(response, reverse('elimination_mode', args=[self.competition.slug]))
         photo.refresh_from_db()
         self.assertEqual(photo.status, Photo.Status.SHORTLISTED)
+        self.assertEqual(photo.status_votes.get(voter=self.staff).decision, PhotoStatusVote.Decision.SHORTLIST)
+
+    def test_staff_majority_required_when_multiple_staff_users_exist(self):
+        second_staff = User.objects.create_user(username='staff-two', password='test-pass', is_staff=True)
+        User.objects.create_user(username='staff-three', password='test-pass', is_staff=True)
+        photo = self.create_photo('Pending image', Photo.Status.PENDING)
+
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse('elimination_mode', args=[self.competition.slug]),
+            {'photo_id': photo.id, 'decision': 'shortlist'},
+        )
+        photo.refresh_from_db()
+        self.assertEqual(photo.status, Photo.Status.PENDING)
+
+        self.client.force_login(second_staff)
+        self.client.post(
+            reverse('elimination_mode', args=[self.competition.slug]),
+            {'photo_id': photo.id, 'decision': 'shortlist'},
+        )
+        photo.refresh_from_db()
+        self.assertEqual(photo.status, Photo.Status.SHORTLISTED)
+
+    def test_staff_does_not_see_photos_they_already_voted_on(self):
+        photo = self.create_photo('Pending image', Photo.Status.PENDING)
+        PhotoStatusVote.objects.create(photo=photo, voter=self.staff, decision=PhotoStatusVote.Decision.REJECT)
+
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('elimination_mode', args=[self.competition.slug]))
+
+        self.assertContains(response, 'No pending photos left for you.')
 
 
 class CsvEncodingTests(TestCase):
@@ -65,4 +96,4 @@ class CsvEncodingTests(TestCase):
 
         decoded = decode_csv_bytes(csv_bytes)
 
-        self.assertIn('“Strong frame”', decoded)
+        self.assertIn('\u201cStrong frame\u201d', decoded)

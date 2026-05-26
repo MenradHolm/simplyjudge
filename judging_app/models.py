@@ -50,6 +50,23 @@ class Photo(models.Model):
     def __str__(self):
         return f"{self.title} - #{self.id}"
 
+class PhotoStatusVote(models.Model):
+    class Decision(models.TextChoices):
+        SHORTLIST = 'SHORTLIST', 'Shortlist'
+        REJECT = 'REJECT', 'Reject'
+
+    photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name='status_votes')
+    voter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='photo_status_votes')
+    decision = models.CharField(max_length=20, choices=Decision.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('photo', 'voter')
+
+    def __str__(self):
+        return f"{self.photo_id} - {self.voter} - {self.get_decision_display()}"
+
 class Score(models.Model):
     photo = models.ForeignKey(Photo, on_delete=models.CASCADE)
     judge = models.ForeignKey(User, on_delete=models.CASCADE)
