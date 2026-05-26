@@ -17,48 +17,48 @@
 {% block extrastyle %}{{ block.super }}
 <style>
     :root {
-        --primary: #2557a7;
-        --secondary: #173f7e;
-        --accent: #138a72;
+        --primary: #39c6f4;
+        --secondary: #0f766e;
+        --accent: #16a34a;
         --primary-fg: #ffffff;
-        --body-bg: #f8fafc;
-        --body-fg: #18212f;
-        --body-quiet-color: #697386;
-        --body-loud-color: #18212f;
+        --body-bg: #101318;
+        --body-fg: #f8fafc;
+        --body-quiet-color: #b9c6d8;
+        --body-loud-color: #ffffff;
         --header-color: #ffffff;
         --header-branding-color: #ffffff;
         --header-bg: #18212f;
         --header-link-color: #ffffff;
-        --breadcrumbs-bg: #ffffff;
-        --breadcrumbs-fg: #697386;
-        --breadcrumbs-link-fg: #2557a7;
-        --link-fg: #2557a7;
-        --link-hover-color: #173f7e;
-        --link-selected-fg: #173f7e;
-        --hairline-color: #d9e1ec;
-        --border-color: #d9e1ec;
-        --error-fg: #b42318;
-        --message-success-bg: #e7f6f2;
-        --message-warning-bg: #fff7e6;
-        --message-error-bg: #fff1f0;
-        --darkened-bg: #eef3f9;
-        --selected-bg: #e7f6f2;
-        --selected-row: #f5f7fb;
+        --breadcrumbs-bg: #151a22;
+        --breadcrumbs-fg: #b9c6d8;
+        --breadcrumbs-link-fg: #39c6f4;
+        --link-fg: #39c6f4;
+        --link-hover-color: #7dd3fc;
+        --link-selected-fg: #7dd3fc;
+        --hairline-color: #303844;
+        --border-color: #303844;
+        --error-fg: #ff4f83;
+        --message-success-bg: #0f2f29;
+        --message-warning-bg: #382a12;
+        --message-error-bg: #3a1621;
+        --darkened-bg: #151a22;
+        --selected-bg: #102a2b;
+        --selected-row: #1f2937;
         --button-fg: #ffffff;
         --button-bg: #2557a7;
-        --button-hover-bg: #173f7e;
+        --button-hover-bg: #356fc4;
         --default-button-bg: #138a72;
-        --default-button-hover-bg: #0f766e;
-        --close-button-bg: #697386;
-        --close-button-hover-bg: #455166;
-        color-scheme: light;
+        --default-button-hover-bg: #16a085;
+        --close-button-bg: #455166;
+        --close-button-hover-bg: #697386;
+        color-scheme: dark;
     }
 
     body {
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background:
-            linear-gradient(135deg, rgba(37, 87, 167, 0.08), transparent 34rem),
-            linear-gradient(315deg, rgba(19, 138, 114, 0.08), transparent 30rem),
+            linear-gradient(135deg, rgba(37, 87, 167, 0.16), transparent 34rem),
+            linear-gradient(315deg, rgba(19, 138, 114, 0.16), transparent 30rem),
             var(--body-bg);
     }
 
@@ -107,12 +107,38 @@
     div.breadcrumbs {
         padding: 0.8rem clamp(1rem, 4vw, 2rem);
         border-bottom: 1px solid var(--hairline-color);
-        background: rgba(255, 255, 255, 0.86);
+        background: rgba(21, 26, 34, 0.92);
         color: var(--body-quiet-color);
     }
 
     #content {
-        padding: clamp(1rem, 4vw, 2rem);
+        width: min(1160px, calc(100% - 2rem));
+        max-width: none;
+        margin: 0;
+        padding: clamp(1rem, 3vw, 2rem) 0 2rem clamp(1rem, 3vw, 2rem);
+    }
+
+    .dashboard #content {
+        width: min(1160px, calc(100vw - 4rem)) !important;
+        max-width: none !important;
+        display: grid;
+        grid-template-columns: minmax(0, 750px) 325px;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .dashboard #content h1 {
+        grid-column: 1 / -1;
+        margin: 0 0 0.25rem;
+        color: #f8fafc;
+        font-weight: 500;
+    }
+
+    .dashboard #content-main,
+    .dashboard #content-related {
+        float: none;
+        width: auto !important;
+        margin: 0 !important;
     }
 
     #content-main,
@@ -122,22 +148,59 @@
     .submit-row {
         border: 1px solid var(--hairline-color);
         border-radius: 0.5rem;
-        background: #fff;
-        box-shadow: 0 14px 32px rgba(25, 36, 54, 0.08);
+        background: #151515;
+        box-shadow: 0 18px 38px rgba(0, 0, 0, 0.22);
         overflow: hidden;
+    }
+
+    #content-main {
+        box-shadow: none;
+        background: transparent;
+        border: 0;
+    }
+
+    #content-related {
+        border: 1px solid var(--hairline-color);
+        border-radius: 0.5rem;
+        background: #202020;
+        box-shadow: 0 18px 38px rgba(0, 0, 0, 0.22);
+        overflow: hidden;
+    }
+
+    #content-related .module {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: transparent;
     }
 
     .module h2,
     .module caption,
     .inline-group h2 {
         padding: 0.85rem 1rem;
-        background: #fbfcfe;
-        color: var(--body-fg);
+        background: #20242c;
+        color: #f8fafc;
         font-size: 0.82rem;
         font-weight: 850;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         border-bottom: 1px solid var(--hairline-color);
+    }
+
+    .module table {
+        background: #151515;
+    }
+
+    .module table th,
+    .module table td,
+    #changelist table tbody th,
+    #changelist table tbody td {
+        border-bottom-color: #252a33;
+    }
+
+    .module table tr:nth-child(even),
+    .row2 {
+        background: #202020;
     }
 
     .dashboard .module table th,
@@ -147,15 +210,19 @@
         padding-block: 0.8rem;
     }
 
+    .dashboard .module {
+        margin-bottom: 1.25rem;
+    }
+
     #changelist-filter {
         border-left: 1px solid var(--hairline-color);
-        background: #fbfcfe;
+        background: #20242c;
     }
 
     #toolbar,
     #changelist .actions {
         border-bottom: 1px solid var(--hairline-color);
-        background: #fbfcfe;
+        background: #20242c;
     }
 
     input,
@@ -164,6 +231,8 @@
     .vTextField {
         border-radius: 0.5rem;
         border-color: var(--border-color);
+        background: #101318;
+        color: #f8fafc;
     }
 
     input:focus,
@@ -198,7 +267,19 @@
     .messagelist li {
         border-radius: 0.5rem;
         border: 1px solid var(--hairline-color);
-        box-shadow: 0 10px 24px rgba(25, 36, 54, 0.08);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    }
+
+    @media (max-width: 980px) {
+        #content {
+            width: auto;
+            margin: 0;
+            padding-inline: 1rem;
+        }
+
+        .dashboard #content {
+            grid-template-columns: 1fr;
+        }
     }
 
     @media (max-width: 767px) {
