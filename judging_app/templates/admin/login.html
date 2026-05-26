@@ -1,182 +1,41 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Log In - SimplyJudge</title>
-    <style>
-        /* Deep dark aesthetic styles mimicking our dashboard */
-        body {
-            background-color: #030712;
-            color: #f3f4f6;
-            font-family: system-ui, -apple-system, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0;
-            padding: 16px;
-        }
-        .login-card {
-            background-color: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 24px;
-            padding: 32px;
-            width: 100%;
-            max-width: 380px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 32px;
-            border-bottom: 1px solid #1f2937;
-            padding-bottom: 24px;
-        }
-        .logo-box {
-            width: 48px;
-            height: 48px;
-            background-color: #059669;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            color: white;
-            font-size: 20px;
-            margin: 0 auto 16px auto;
-            box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.3);
-        }
-        h1 {
-            font-size: 24px;
-            font-weight: 900;
-            margin: 0;
-            letter-spacing: 0.5px;
-        }
-        .subtitle {
-            font-size: 11px;
-            color: #34d399;
-            font-family: monospace;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 4px;
-        }
-        .error-alert {
-            background-color: rgba(127, 29, 29, 0.4);
-            color: #f87171;
-            border: 1px solid rgba(185, 28, 28, 0.5);
-            padding: 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 24px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #9ca3af;
-            margin-bottom: 6px;
-        }
-        input {
-            width: 100%;
-            box-sizing: border-box;
-            background-color: #030712;
-            border: 1px solid #1f2937;
-            border-radius: 12px;
-            padding: 12px;
-            font-size: 14px;
-            color: white;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        input:focus {
-            border-color: #059669;
-        }
-        button {
-            width: 100%;
-            background-color: #059669;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 14px;
-            font-size: 12px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            cursor: pointer;
-            box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.2);
-            transition: background-color 0.2s;
-        }
-        button:hover {
-            background-color: #10b981;
-        }
-        .footer-link {
-            text-align: center;
-            margin-top: 32px;
-            border-top: 1px solid #1f2937;
-            padding-top: 24px;
-        }
-        .footer-link a {
-            font-size: 11px;
-            color: #6b7280;
-            text-decoration: none;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: color 0.2s;
-        }
-        .footer-link a:hover {
-            color: #d1d5db;
-        }
-    </style>
-</head>
-<body>
-    
-    <div class="login-card">
-        
-        <div class="header">
-            <div class="logo-box">S</div>
-            <h1>SimplyJudge Admin</h1>
-            <div class="subtitle">Staff Operations Console</div>
-        </div>
+{% extends "judging_app/base.html" %}
+
+{% block title %}Admin Log In - SimplyJudge{% endblock %}
+{% block body_class %}centered{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
+<main class="auth-shell">
+    <section class="panel panel-padded">
+        <p class="eyebrow">Staff operations</p>
+        <h2 class="page-title">Admin log in.</h2>
+        <p class="page-copy">Access the organizer console for competition setup and data management.</p>
 
         {% if form.errors %}
-            <div class="error-alert">
-                ⚠️ Invalid staff credentials. Please try again.
+            <div class="alert alert-error" style="margin: 1rem 0;">
+                Invalid staff credentials. Please try again.
             </div>
         {% endif %}
 
-        <form method="post" action="">
+        <form method="post" action="" class="form-grid" style="margin-top: 1.25rem;">
             {% csrf_token %}
-            
-            <div class="form-group">
+            <div class="field">
                 <label for="id_username">Staff Username</label>
-                <input type="text" name="username" id="id_username" required placeholder="Enter your username">
+                <input type="text" name="username" id="id_username" required autocomplete="username" placeholder="Enter your username">
             </div>
-            
-            <div class="form-group">
+
+            <div class="field">
                 <label for="id_password">Password</label>
-                <input type="password" name="password" id="id_password" required placeholder="••••••••">
+                <input type="password" name="password" id="id_password" required autocomplete="current-password" placeholder="Enter your password">
             </div>
 
             <input type="hidden" name="next" value="{{ next }}">
-
-            <div style="padding-top: 16px;">
-                <button type="submit">Authenticate Admin</button>
-            </div>
+            <button type="submit" class="button button-primary">Authenticate Admin</button>
         </form>
 
-        <div class="footer-link">
-            <a href="{% url 'home_hub' %}">← Return to Public Dashboard</a>
+        <div style="margin-top: 1rem;">
+            <a href="{% url 'home_hub' %}" class="action-link">Return to home <span aria-hidden="true">&gt;</span></a>
         </div>
-
-    </div>
-
-</body>
-</html>
+    </section>
+</main>
+{% endblock %}

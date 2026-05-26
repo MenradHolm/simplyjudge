@@ -1,120 +1,90 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SimplyJudge Panel - Eval Screen</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased flex flex-col">
+{% extends "judging_app/base.html" %}
 
-    <header class="flex items-center justify-between px-6 py-3.5 bg-gray-900 border-b border-gray-800 shadow-xl">
+{% block title %}Judging - SimplyJudge{% endblock %}
+
+{% block content %}
+<main class="shell shell-wide">
+    <div class="page-head">
         <div>
-            <h1 class="text-sm font-black text-gray-400 uppercase tracking-widest">Evaluating Event</h1>
-            <h2 class="text-base font-bold text-white">{{ competition.name }}</h2>
+            <p class="eyebrow">Evaluating event</p>
+            <h2 class="page-title">{{ competition.name }}</h2>
         </div>
-        <div class="bg-indigo-950 border border-indigo-800/60 px-3 py-1 rounded-full text-xs font-mono font-bold text-indigo-400">
-            Progress Queue: {{ progress }}
-        </div>
-    </header>
+        <span class="tag tag-neutral">Progress {{ progress }}</span>
+    </div>
 
-    <main class="flex-1 max-w-[1600px] w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-hidden">
-        
-        <section class="lg:col-span-7 flex flex-col gap-4 min-h-0 bg-gray-900/40 border border-gray-800 rounded-2xl p-4 shadow-2xl">
-            <div class="flex-1 relative flex items-center justify-center bg-black rounded-xl overflow-hidden border border-gray-950 group min-h-[450px]">
-                <img src="{{ photo.image.url }}" alt="Submission File" class="w-full h-full object-contain max-h-[70vh] transition-transform duration-300 group-hover:scale-[1.01]">
-                <span class="absolute bottom-3 left-3 bg-black/70 backdrop-blur border border-gray-800 px-3 py-1 rounded-lg font-mono text-xs text-indigo-400 font-bold">
-                    Serial Reference: #{{ photo.id }}
-                </span>
+    <div class="split-layout">
+        <section class="panel">
+            <div class="photo-stage">
+                <img src="{{ photo.image.url }}" alt="{{ photo.title }}">
             </div>
-            
-            <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-4 shadow-md">
-                <div class="flex items-baseline justify-between gap-4 border-b border-gray-850 pb-2 mb-2.5">
-                    <h3 class="text-lg font-black text-white truncate">{{ photo.title }}</h3>
-                    <span class="text-xs font-bold px-2.5 py-0.5 bg-gray-800 rounded-full text-gray-400 border border-gray-700 whitespace-nowrap uppercase tracking-wider">{{ photo.category }}</span>
-                </div>
-                
-                <div class="space-y-1">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-amber-500">Photographer's Story:</h4>
-                    {% if photo.description %}
-                        <p class="text-sm text-gray-300 leading-relaxed bg-gray-950/50 border border-gray-850 p-3 rounded-lg max-h-[120px] overflow-y-auto whitespace-pre-wrap italic">
-                            "{{ photo.description }}"
-                        </p>
-                    {% else %}
-                        <p class="text-xs text-gray-600 italic bg-gray-950/30 p-3 rounded-lg border border-gray-850/50">
-                            No companion text was submitted.
-                        </p>
-                    {% endif %}
+            <div class="panel-padded">
+                <div class="card-top" style="margin-bottom: 1rem;">
+                    <div>
+                        <p class="eyebrow" style="margin-bottom: 0.35rem;">Submission #{{ photo.id }}</p>
+                        <h3 class="competition-name">{{ photo.title }}</h3>
+                        <p class="card-meta">By {{ photo.photographer_name }}</p>
+                    </div>
+                    <span class="tag tag-neutral">{{ photo.category }}</span>
                 </div>
 
-                <div class="space-y-1 mt-4">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-500">Camera Settings & Metadata:</h4>
-                    {% if photo.camera_settings %}
-                        <p class="text-[11px] font-mono text-gray-400 bg-gray-950/80 border border-gray-800 p-2.5 rounded-lg">
-                            📸 {{ photo.camera_settings }}
-                        </p>
-                    {% else %}
-                        <p class="text-[11px] font-mono text-gray-600 bg-gray-950/30 border border-gray-850/50 p-2.5 rounded-lg">
-                            Metadata unlisted / Stripped by editing software.
-                        </p>
-                    {% endif %}
+                <div class="grid">
+                    <div>
+                        <span class="field-label">Photographer's story</span>
+                        {% if photo.description %}
+                            <p class="page-copy" style="white-space: pre-wrap;">{{ photo.description }}</p>
+                        {% else %}
+                            <p class="muted">No companion text was submitted.</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <span class="field-label">Camera settings and metadata</span>
+                        {% if photo.camera_settings %}
+                            <p class="alert" style="font-family: ui-monospace, SFMono-Regular, Consolas, monospace;">{{ photo.camera_settings }}</p>
+                        {% else %}
+                            <p class="muted">Metadata unlisted or stripped by editing software.</p>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section class="lg:col-span-5 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
-            <div class="p-4 bg-gray-850 border-b border-gray-800 shadow-sm flex items-center justify-between">
-                <h3 class="font-black text-white text-sm uppercase tracking-wider">Metric Score Panel</h3>
-                <span class="text-[10px] text-gray-400 font-medium">Verify weights before hitting save</span>
+        <section class="panel">
+            <div class="panel-header">
+                <p class="panel-title">Score panel</p>
+                <span class="tag tag-neutral">0 to 100</span>
             </div>
 
-            <form method="POST" class="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-5">
+            <form method="POST" class="form-grid panel-padded">
                 {% csrf_token %}
-                
-                <div class="space-y-4">
+
+                {% if rubric %}
                     {% for criterion in rubric %}
-                    <div class="bg-gray-950/40 border border-gray-850 hover:border-gray-800 p-3.5 rounded-xl transition-colors shadow-inner">
-                        <div class="flex justify-between items-baseline mb-1.5">
-                            <label class="text-sm font-bold text-white tracking-wide" for="criterion_{{ criterion.id }}">
-                                {{ criterion.name }}
-                            </label>
-                            <span class="text-[10px] text-indigo-400 font-mono font-semibold bg-indigo-950/50 border border-indigo-900/40 px-2 py-0.5 rounded">
-                                Weight: {{ criterion.weight }}
-                            </span>
-                        </div>
-                        
-                        {% if criterion.description %}
-                            <p class="text-xs text-gray-400 leading-relaxed mb-3 pr-2">{{ criterion.description }}</p>
-                        {% endif %}
-
-                        <div class="relative rounded-lg shadow-sm">
-                            <input class="w-full bg-gray-900 border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2 pl-3 pr-12 text-sm font-black text-white font-mono placeholder-gray-600 transition-shadow outline-none" 
-                                   type="number" step="0.5" min="0" max="100" 
-                                   name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" required>
-                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                <span class="text-xs text-gray-500 font-mono">/ 100</span>
+                        <div class="score-card">
+                            <div class="card-top" style="margin-bottom: 0;">
+                                <label for="criterion_{{ criterion.id }}">{{ criterion.name }}</label>
+                                <span class="tag tag-neutral">Weight {{ criterion.weight }}</span>
                             </div>
+                            {% if criterion.description %}
+                                <p class="muted" style="margin: 0;">{{ criterion.description }}</p>
+                            {% endif %}
+                            <input type="number" step="0.5" min="0" max="100" name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" required>
                         </div>
-                    </div>
                     {% endfor %}
+                {% else %}
+                    <div class="alert alert-error">
+                        No rubric criteria are configured for this competition yet.
+                    </div>
+                {% endif %}
+
+                <div class="field">
+                    <label for="comment">Critique notes</label>
+                    <textarea name="comment" id="comment" rows="4" placeholder="Write concise feedback for the organizer or entrant..."></textarea>
                 </div>
 
-                <div class="bg-gray-950/40 border border-gray-850 p-3.5 rounded-xl">
-                    <label class="block text-sm font-bold text-white tracking-wide mb-1.5" for="comment">
-                        Critique Commentary Notes
-                    </label>
-                    <textarea class="w-full bg-gray-900 border border-gray-850 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg p-3 text-xs text-gray-200 placeholder-gray-600 outline-none leading-relaxed transition-shadow" 
-                              name="comment" id="comment" rows="3" placeholder="Write critique notes here..."></textarea>
-                </div>
-
-                <div class="pt-2 sticky bottom-0 bg-gray-900 mt-auto">
-                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg active:scale-[0.99]">
-                        🔒 Lock In Evaluation & Advance ➡️
-                    </button>
-                </div>
+                <button type="submit" class="button button-primary" {% if not rubric %}disabled{% endif %}>Save Score and Continue</button>
             </form>
         </section>
-
-    </main>
-</body>
-</html>
+    </div>
+</main>
+{% endblock %}

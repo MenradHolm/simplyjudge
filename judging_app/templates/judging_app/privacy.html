@@ -1,49 +1,27 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simply Judge - Privacy Policy</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans flex flex-col">
+{% extends "judging_app/base.html" %}
 
-    <header class="p-6 bg-gray-800 border-b border-gray-700">
-        <a href="{% url 'home_hub' %}" class="text-xl font-bold text-white hover:text-indigo-400 transition-colors">Simply Judge</a>
-    </header>
+{% block title %}Privacy Policy - SimplyJudge{% endblock %}
 
-    <main class="flex-1 max-w-3xl mx-auto p-8 w-full">
-        <div class="bg-gray-800 p-8 rounded-xl shadow-xl border border-gray-700">
-            <h1 class="text-3xl font-bold text-white mb-6">Privacy Policy</h1>
-            
-            <div class="space-y-6 text-gray-300 text-sm leading-relaxed">
-                <p>Protecting your personal data is highly important to us. We process your data exclusively on the basis of legal regulations (GDPR, TKG 2003).</p>
+{% block content %}
+<main class="shell">
+    <section class="panel panel-padded">
+        <p class="eyebrow">Legal</p>
+        <h2 class="page-title">Privacy Policy</h2>
+        <div class="legal-copy">
+            <p>Protecting your personal data is highly important to us. We process your data exclusively on the basis of legal regulations, including GDPR and TKG 2003.</p>
 
-                <h3 class="font-bold text-lg text-white">1. Data we collect</h3>
-                <p>When you register an account or submit a photo to a competition, we collect your name, email address, and the uploaded image file. This data is required to attribute ownership to your submissions and to allow competition organizers to manage their events.</p>
+            <h3>1. Data we collect</h3>
+            <p>When you register an account or submit a photo to a competition, we collect your name, email address, and the uploaded image file. This data is required to attribute ownership to submissions and allow competition organizers to manage their events.</p>
 
-                <h3 class="font-bold text-lg text-white">2. Data Storage & Hosting</h3>
-                <p>Our application and database are hosted securely using Render cloud services. Uploaded media is stored securely and is only accessible to authorized judges and competition administrators.</p>
+            <h3>2. Data storage and hosting</h3>
+            <p>Our application and database are hosted using Render cloud services. Uploaded media is stored securely and is only accessible to authorized judges and competition administrators.</p>
 
-                <h3 class="font-bold text-lg text-white">3. Your Rights</h3>
-                <p>Under the GDPR, you have the right to access, rectify, delete, restrict, and port your data. If you believe the processing of your data violates data protection laws, please contact us at <strong>menradholm2@gmail.com</strong> so we can resolve the issue immediately.</p>
-                
-                <h3 class="font-bold text-lg text-white">4. Cookies</h3>
-                <p>This site only uses strictly necessary session cookies required for logging into your account and maintaining your active session. We do not use third-party tracking cookies for marketing.</p>
-            </div>
+            <h3>3. Your rights</h3>
+            <p>Under the GDPR, you have the right to access, rectify, delete, restrict, and port your data. If you believe the processing of your data violates data protection laws, contact us at <strong>menradholm2@gmail.com</strong> so we can resolve the issue.</p>
+
+            <h3>4. Cookies</h3>
+            <p>This site only uses strictly necessary session cookies required for logging into your account and maintaining your active session. We do not use third-party tracking cookies for marketing.</p>
         </div>
-    </main>
-
-    <!-- GLOBAL LEGAL FOOTER -->
-    <footer class="bg-gray-950 border-t border-gray-800 py-6">
-        <div class="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 text-sm text-gray-500">
-            <p>&copy; 2026 Simply Judge.</p>
-            <div class="flex space-x-6">
-                <a href="{% url 'impressum' %}" class="hover:text-white transition-colors">Impressum</a>
-                <a href="{% url 'privacy' %}" class="text-white">Privacy Policy</a>
-                <a href="{% url 'terms' %}" class="hover:text-white transition-colors">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
-</body>
-</html>
+    </section>
+</main>
+{% endblock %}

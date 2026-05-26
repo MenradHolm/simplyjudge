@@ -1,72 +1,53 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SimplyJudge - Spreadsheet Dashboard Ingestion</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased flex flex-col items-center justify-center p-4">
+{% extends "judging_app/base.html" %}
 
-    <div class="max-w-2xl w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-        
-        <div class="mb-8 border-b border-gray-800 pb-6">
-            <span class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400">Data Hub Loader</span>
-            <h1 class="text-2xl font-black text-white mt-1">Universal Spreadsheet Ingestion</h1>
-            <p class="text-sm text-gray-400 mt-2 leading-relaxed">
-                Our hybrid backend dynamically scans headers. You can drop your **Rubric Setup Matrix CSV** or your **Wix Photo Submission CSV** directly into the portal frame below.
-            </p>
+{% block title %}Upload Data - SimplyJudge{% endblock %}
+
+{% block content %}
+<main class="shell">
+    <div class="page-head">
+        <div>
+            <p class="eyebrow">Data ingestion</p>
+            <h2 class="page-title">Upload competition data.</h2>
+            <p class="page-copy">Import rubric criteria or entrant rows from a structured CSV file.</p>
         </div>
+        <span class="tag">{{ competition.name }}</span>
+    </div>
 
+    <section class="panel panel-padded">
         {% if messages %}
-            <div class="mb-6 space-y-2">
+            <div class="form-grid" style="margin-bottom: 1rem;">
                 {% for message in messages %}
-                    <div class="p-4 rounded-xl text-xs font-bold border {% if message.tags == 'error' %}bg-red-950/40 text-red-400 border-red-900/50{% else %}bg-emerald-950/40 text-emerald-400 border-emerald-900/50{% endif %}">
-                        {% if message.tags == 'error' %}⚠️{% else %}✨{% endif %} {{ message }}
+                    <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">
+                        {{ message }}
                     </div>
                 {% endfor %}
             </div>
         {% endif %}
 
-        <form method="POST" enctype="multipart/form-data" class="space-y-6">
+        <form method="POST" enctype="multipart/form-data" class="form-grid">
             {% csrf_token %}
-            
-            <div class="space-y-2">
-                <label class="block text-xs font-black text-gray-400 uppercase tracking-wider">Select Source File (.CSV)</label>
-                
-                <div class="relative group border-2 border-dashed border-gray-800 hover:border-indigo-500/50 rounded-2xl p-6 text-center bg-gray-950/40 transition-all">
-                    <input type="file" name="csv_file" accept=".csv" required class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                    
-                    <div class="space-y-2 pointer-events-none">
-                        <div class="text-3xl text-gray-600 group-hover:text-indigo-400 transition-colors">📊</div>
-                        <p class="text-sm font-bold text-gray-300">Click to browse or drag file here</p>
-                        <p class="text-[11px] text-gray-500">Accepts system structured .csv spreadsheet formats only</p>
-                    </div>
-                </div>
+            <div class="field">
+                <label for="csv_file">CSV source file</label>
+                <span class="help-text">Use rubric headers such as Criterion Name, Description, Weight, or entrant headers such as Title, Photographer, Category, Code.</span>
+                <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
             </div>
 
-            <div class="pt-4 border-t border-gray-800 flex items-center justify-between gap-4">
-                <a href="{% url 'home_hub' %}" class="px-5 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl text-xs uppercase tracking-wider transition-colors">
-                    Cancel
-                </a>
-                <button type="submit" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg active:scale-[0.99]">
-                    ⚡ Upload & Parse File
-                </button>
+            <div class="actions">
+                <button type="submit" class="button button-primary">Upload and Parse</button>
+                <a href="{% url 'home_hub' %}" class="button button-secondary">Cancel</a>
             </div>
         </form>
+    </section>
 
-        <div class="mt-8 bg-gray-950/50 border border-gray-850 rounded-2xl p-4 grid grid-cols-2 gap-4 text-[11px] text-gray-500 leading-normal">
-            <div>
-                <p class="font-bold text-gray-400 mb-1">💡 For Rubrics Configuration:</p>
-                <p>Include headers: <code class="text-indigo-400 font-mono">Criterion Name</code>, <code class="text-indigo-400 font-mono">Description</code>, <code class="text-indigo-400 font-mono">Weight</code></p>
-            </div>
-            <div>
-                <p class="font-bold text-gray-400 mb-1">📸 For Entrants Queue:</p>
-                <p>Include headers: <code class="text-indigo-400 font-mono">Title</code>, <code class="text-indigo-400 font-mono">Photographer</code>, <code class="text-indigo-400 font-mono">Category</code>, <code class="text-indigo-400 font-mono">Code</code></p>
-            </div>
+    <section class="grid grid-auto" style="margin-top: 1rem;">
+        <div class="card">
+            <span class="tag tag-neutral">Rubrics</span>
+            <p class="page-copy">Include <strong>Criterion Name</strong>, <strong>Description</strong>, and <strong>Weight</strong>.</p>
         </div>
-
-    </div>
-
-</body>
-</html>
+        <div class="card">
+            <span class="tag tag-neutral">Entrants</span>
+            <p class="page-copy">Include <strong>Title</strong>, <strong>Photographer</strong>, <strong>Category</strong>, and <strong>Code</strong>.</p>
+        </div>
+    </section>
+</main>
+{% endblock %}

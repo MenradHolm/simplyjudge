@@ -1,128 +1,120 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simply Judge - List Ledger Report</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <style>
-        @media print {
-            body { 
-                background-color: white !important; 
-                color: #000 !important; 
-                font-size: 9pt !important;
-                padding: 0 !important;
-            }
-            .no-print { display: none !important; }
-            .ledger-row { 
-                page-break-inside: avoid !important; /* Prevents a single photo row splitting across pages */
-                border-bottom: 1px solid #9ca3af !important;
-                background: transparent !important;
-                color: black !important;
-            }
-            .print-text-dark { color: #000 !important; }
-            .print-bg-clear { background: transparent !important; }
-            .pdf-header { display: block !important; text-align: center !important; margin-bottom: 15px; }
-            /* Tighten image for print */
-            .print-thumb { width: 55px !important; height: 55px !important; }
-        }
-        .pdf-header { display: none; }
-    </style>
-</head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans antialiased">
+{% extends "judging_app/base.html" %}
 
-    <div class="pdf-header">
-        <h1 class="text-xl font-bold text-black">Master Feedback Ledger: {{ competition.name }}</h1>
-        <p class="text-xs text-gray-600">Total Entries: {{ photos|length }} | Generated Assessment Sheet</p>
-        <div class="border-b border-gray-400 my-2"></div>
+{% block title %}Feedback Report - SimplyJudge{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ledger-row {
+        grid-template-columns: minmax(14rem, 0.9fr) minmax(18rem, 1.4fr) minmax(14rem, 0.8fr);
+        align-items: start;
+    }
+
+    .entry-summary {
+        display: grid;
+        grid-template-columns: 4rem minmax(0, 1fr);
+        gap: 0.85rem;
+        align-items: start;
+    }
+
+    .judge-score {
+        display: grid;
+        grid-template-columns: minmax(6rem, 9rem) minmax(0, 1fr);
+        gap: 0.75rem;
+        padding: 0.6rem 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .judge-score:last-child {
+        border-bottom: 0;
+    }
+
+    @media (max-width: 980px) {
+        .ledger-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="shell shell-wide">
+    <div class="page-head no-print">
+        <div>
+            <p class="eyebrow">Feedback ledger</p>
+            <h2 class="page-title">{{ competition.name }}</h2>
+            <p class="page-copy">{{ photos|length }} submission{{ photos|length|pluralize }} in this report.</p>
+        </div>
+        <div class="actions">
+            <button onclick="window.print()" class="button button-accent">Print or Save PDF</button>
+            <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
+        </div>
     </div>
 
-    <header class="no-print flex items-center justify-between px-6 py-3 bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md">
-        <div>
-            <h1 class="text-lg font-black text-white">Ledger Room: {{ competition.name }}</h1>
-            <p class="text-xs text-gray-400">High-Density List Layout ({{ photos|length }} Submissions)</p>
+    <section class="panel">
+        <div class="panel-header no-print">
+            <p class="panel-title">Master feedback report</p>
+            <span class="tag tag-neutral">Compact review</span>
         </div>
-        <div class="flex space-x-2">
-            <button onclick="window.print()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5">
-                📄 Print / Save Compact PDF
-            </button>
-            <a href="{% url 'home_hub' %}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors">Back to Hub</a>
-        </div>
-    </header>
 
-    <main class="max-w-7xl mx-auto p-4">
-        <div class="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
-            
+        {% if photos %}
             {% for photo in photos %}
-            <div class="ledger-row border-b border-gray-700/70 p-3 flex flex-col md:flex-row gap-4 items-start hover:bg-gray-800/30 transition-all">
-                
-                <div class="w-full md:w-1/4 flex items-start gap-3">
-                    <div class="flex-shrink-0">
-                        <img src="{% if photo.image %}{{ photo.image.url }}{% else %}/media/competition_photos/placeholder.jpg{% endif %}" alt="Thumb" class="print-thumb w-14 h-14 object-contain rounded bg-black border border-gray-700 shadow-sm">
-                    </div>
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="text-[10px] font-mono font-black text-indigo-400 bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-900/50 print-text-dark print-bg-clear">
-                                #{{ photo.id }}
-                            </span>
-                            <span class="no-print text-[10px] font-semibold text-gray-400">
-                                ({{ photo.judge_scores|length }}/7)
-                            </span>
+                <article class="ledger-row">
+                    <div class="entry-summary">
+                        <img src="{% if photo.image %}{{ photo.image.url }}{% else %}/media/competition_photos/placeholder.jpg{% endif %}" alt="{{ photo.title }}" class="thumb">
+                        <div>
+                            <span class="tag tag-neutral">#{{ photo.id }}</span>
+                            <h3 class="competition-name" style="margin-top: 0.55rem;">{{ photo.title }}</h3>
+                            <p class="card-meta">{{ photo.category }}</p>
+                            <p class="card-meta">{{ photo.judge_scores|length }} score{{ photo.judge_scores|length|pluralize }}</p>
+                            {% if photo.rule_flags %}
+                                <div class="alert alert-error no-print" style="margin-top: 0.75rem;">{{ photo.rule_flags }}</div>
+                            {% endif %}
                         </div>
-                        <h3 class="text-sm font-bold text-white truncate mt-0.5 print-text-dark">{{ photo.title }}</h3>
-                        <span class="text-[10px] text-gray-500 uppercase tracking-wider block font-medium mt-0.5">{{ photo.category }}</span>
-                        
-                        {% if photo.rule_flags %}
-                            <div class="no-print mt-2 text-[10px] text-red-400 font-bold bg-red-950/40 px-2 py-1 rounded border border-red-900/50 leading-tight">
-                                ⚠️ RULE AUDIT: {{ photo.rule_flags }}
-                            </div>
-                        {% endif %}
-                        
                     </div>
-                </div>
 
-                <div class="w-full md:w-1/2 flex-1">
-                    {% if photo.judge_scores %}
-                        <div class="space-y-1">
+                    <div>
+                        {% if photo.judge_scores %}
                             {% for score in photo.judge_scores %}
-                            <div class="text-xs flex items-start gap-2 py-0.5 border-b border-gray-700/30 last:border-0">
-                                <div class="font-mono font-bold text-indigo-300 min-w-[100px] flex justify-between items-center bg-gray-900/30 px-1 py-0.5 rounded border border-gray-700/30 print-text-dark print-bg-clear">
-                                    <span class="truncate pr-1 text-[11px]">{{ score.judge.username }}</span>
-                                    <span class="text-white text-[11px] font-black print-text-dark">{{ score.total_score|floatformat:1 }}</span>
+                                <div class="judge-score">
+                                    <div>
+                                        <strong>{{ score.judge.username }}</strong>
+                                        <span class="metric-label">Score {{ score.total_score|floatformat:1 }}</span>
+                                    </div>
+                                    <div class="muted">
+                                        {% if score.comment %}
+                                            {{ score.comment }}
+                                        {% else %}
+                                            <em>No comment.</em>
+                                        {% endif %}
+                                    </div>
                                 </div>
-                                <div class="flex-1 text-gray-300 italic truncate print-text-dark text-[11px] pt-0.5">
-                                    {% if score.comment %}"{{ score.comment }}"{% else %}<span class="text-gray-600 print-text-dark italic opacity-40">No comment.</span>{% endif %}
-                                </div>
-                            </div>
                             {% endfor %}
-                        </div>
-                    {% else %}
-                        <p class="text-gray-600 italic text-xs py-2">No evaluative raw data registered from judges yet.</p>
-                    {% endif %}
-                </div>
-
-                <div class="w-full md:w-1/4 border-t md:border-t-0 md:border-l border-gray-700/50 pl-0 md:pl-4 pt-2 md:pt-0 flex flex-col justify-between self-stretch text-right">
-                    <div class="text-left w-full">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Organizer Notes</span>
-                            <a href="/admin/judging_app/photo/{{ photo.id }}/change/" target="_blank" class="no-print text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5">
-                                ✏️ Edit
-                            </a>
-                        </div>
-                        {% if photo.organizer_notes %}
-                            <p class="text-xs text-gray-300 line-clamp-3 leading-tight print-text-dark">{{ photo.organizer_notes }}</p>
                         {% else %}
-                            <p class="text-gray-600 text-[11px] italic print-text-dark opacity-40">Empty record.</p>
+                            <p class="muted">No judge feedback has been registered yet.</p>
                         {% endif %}
                     </div>
-                </div>
 
-            </div>
+                    <div>
+                        <div class="card" style="box-shadow: none;">
+                            <div class="card-top" style="margin-bottom: 0.75rem;">
+                                <strong>Organizer notes</strong>
+                                <a href="/admin/judging_app/photo/{{ photo.id }}/change/" class="tag tag-neutral no-print">Edit</a>
+                            </div>
+                            {% if photo.organizer_notes %}
+                                <p class="page-copy">{{ photo.organizer_notes }}</p>
+                            {% else %}
+                                <p class="muted">Empty record.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </article>
             {% endfor %}
-
-        </div>
-    </main>
-
-</body>
-</html>
+        {% else %}
+            <div class="empty-state" style="border: 0; box-shadow: none;">
+                <strong>No submissions yet.</strong>
+                <p>Uploaded or imported entries will appear here.</p>
+            </div>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

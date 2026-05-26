@@ -1,9 +1,13 @@
 from django.urls import path
+from django.views.generic import TemplateView
 from . import views
 
 urlpatterns = [
     path('', views.home_hub, name='home_hub'),
     path('register/', views.register_user, name='register'),
+    path('impressum/', TemplateView.as_view(template_name='judging_app/impressum.html'), name='impressum'),
+    path('privacy/', TemplateView.as_view(template_name='judging_app/privacy.html'), name='privacy'),
+    path('terms/', TemplateView.as_view(template_name='judging_app/terms.html'), name='terms'),
     
     # Competition-Specific Routes (Using Slugs)
     path('competition/<slug:comp_slug>/', views.judge_router, name='judge_router'),

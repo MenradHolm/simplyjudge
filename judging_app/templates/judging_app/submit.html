@@ -1,64 +1,65 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Submit Entry - African Youth POTY</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased flex flex-col items-center justify-center p-4">
+{% extends "judging_app/base.html" %}
 
-    <div class="max-w-xl w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl relative">
-        
-        <div class="mb-6 border-b border-gray-800 pb-4">
-            <span class="text-xs font-mono font-bold uppercase tracking-widest text-amber-500">Submission Portal</span>
-            <h1 class="text-xl font-black text-white mt-1">Submit Your Photo Entry</h1>
-            <p class="text-xs text-gray-400 mt-1">Make sure your asset payload is under 5 MB in size.</p>
+{% block title %}Submit Entry - SimplyJudge{% endblock %}
+
+{% block content %}
+<main class="shell">
+    <div class="page-head">
+        <div>
+            <p class="eyebrow">Submission portal</p>
+            <h2 class="page-title">Submit your photo entry.</h2>
+            <p class="page-copy">Upload one image with the details judges need for a fair evaluation.</p>
         </div>
-
-        {% if error_message %}
-            <div class="mb-4 p-4 rounded-xl text-xs font-bold bg-red-950/40 text-red-400 border border-red-900/50">
-                ⚠️ {{ error_message }}
-            </div>
+        {% if competition %}
+            <span class="tag">{{ competition.name }}</span>
         {% endif %}
-
-        <form method="POST" enctype="multipart/form-data" class="space-y-4">
-            {% csrf_token %}
-
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="title">Photo Title</label>
-                <input class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 text-sm text-white outline-none" type="text" name="title" id="title" required placeholder="e.g., Starry Night">
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="photographer_name">Photographer Name</label>
-                <input class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 text-sm text-white outline-none" type="text" name="photographer_name" id="photographer_name" required placeholder="e.g., John Doe">
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="category">Category Classification</label>
-                <input class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 text-sm text-white outline-none" type="text" name="category" id="category" required placeholder="e.g., Landscape / Wildlife">
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="description">Photographer's Story / Background Context</label>
-                <p class="text-[11px] text-gray-500 mb-1.5">Explain the narrative behind the scene. Essential parameter for storytelling metrics.</p>
-                <textarea class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 text-xs text-white outline-none leading-relaxed" name="description" id="description" rows="4" placeholder="Describe your photo details..."></textarea>
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="image">Image Asset File</label>
-                <input class="w-full text-xs text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" type="file" name="image" id="image" accept="image/*" required>
-            </div>
-
-            <div class="pt-4 border-t border-gray-800">
-                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg active:scale-[0.99]">
-                    Upload Entry Asset File
-                </button>
-            </div>
-        </form>
-
     </div>
 
-</body>
-</html>
+    <section class="panel panel-padded">
+        {% if error_message %}
+            <div class="alert alert-error" style="margin-bottom: 1rem;">{{ error_message }}</div>
+        {% endif %}
+
+        <form method="POST" enctype="multipart/form-data" class="form-grid">
+            {% csrf_token %}
+
+            <div class="field">
+                <label for="title">Photo Title</label>
+                <input type="text" name="title" id="title" required placeholder="e.g. Starry Night">
+            </div>
+
+            <div class="field">
+                <label for="photographer_name">Photographer Name</label>
+                <input type="text" name="photographer_name" id="photographer_name" required placeholder="e.g. John Doe">
+            </div>
+
+            <div class="field">
+                <label for="category">Category</label>
+                <input type="text" name="category" id="category" required placeholder="e.g. Landscape / Wildlife">
+            </div>
+
+            <div class="field">
+                <label for="description">Photographer's Story</label>
+                <span class="help-text">Share useful context for storytelling and interpretation criteria.</span>
+                <textarea name="description" id="description" rows="4" placeholder="Describe your photo details..."></textarea>
+            </div>
+
+            <div class="field">
+                <label for="camera_settings">Camera Settings</label>
+                <input type="text" name="camera_settings" id="camera_settings" placeholder="e.g. 35mm, f/2.8, 1/500s, ISO 400">
+            </div>
+
+            <div class="field">
+                <label for="image">Image File</label>
+                <span class="help-text">Maximum file size is 5 MB.</span>
+                <input type="file" name="image" id="image" accept="image/*" required>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="button button-primary">Upload Entry</button>
+                <a href="{% url 'home_hub' %}" class="button button-secondary">Cancel</a>
+            </div>
+        </form>
+    </section>
+</main>
+{% endblock %}
