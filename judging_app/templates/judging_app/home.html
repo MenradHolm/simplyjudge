@@ -1,35 +1,603 @@
-<header class="flex items-center justify-between px-8 py-4 bg-gray-900 border-b border-gray-800 sticky top-0 z-50 shadow-xl">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-sm shadow-md shadow-indigo-900/30">
-                S
-            </div>
-            <div>
-                <h1 class="text-base font-black text-white tracking-wide">SimplyJudge</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimplyJudge</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #18212f;
+            --muted: #697386;
+            --line: #d9e1ec;
+            --panel: #ffffff;
+            --soft: #f5f7fb;
+            --brand: #2557a7;
+            --brand-dark: #173f7e;
+            --accent: #138a72;
+            --warn: #b7791f;
+            --shadow: 0 18px 45px rgba(25, 36, 54, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--ink);
+            background:
+                linear-gradient(135deg, rgba(37, 87, 167, 0.08), transparent 34rem),
+                linear-gradient(315deg, rgba(19, 138, 114, 0.08), transparent 30rem),
+                #f8fafc;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.85rem clamp(1rem, 4vw, 3rem);
+            background: rgba(255, 255, 255, 0.9);
+            border-bottom: 1px solid rgba(217, 225, 236, 0.85);
+            backdrop-filter: blur(14px);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+
+        .mark {
+            width: 2.35rem;
+            height: 2.35rem;
+            display: grid;
+            place-items: center;
+            border-radius: 0.65rem;
+            color: #fff;
+            font-weight: 850;
+            background: linear-gradient(135deg, var(--brand), #0f766e);
+            box-shadow: 0 10px 25px rgba(37, 87, 167, 0.24);
+            flex: 0 0 auto;
+        }
+
+        .brand-title {
+            margin: 0;
+            font-size: 1rem;
+            line-height: 1.1;
+            letter-spacing: 0;
+        }
+
+        .brand-subtitle,
+        .user-role,
+        .eyebrow {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .account {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-block {
+            display: none;
+            text-align: right;
+        }
+
+        .user-name {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 800;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            min-height: 2.55rem;
+            padding: 0.65rem 0.95rem;
+            border: 1px solid transparent;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 800;
+            white-space: nowrap;
+            transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+        }
+
+        .button-primary {
+            color: #fff;
+            background: var(--brand);
+            box-shadow: 0 10px 24px rgba(37, 87, 167, 0.22);
+        }
+
+        .button-primary:hover {
+            background: var(--brand-dark);
+        }
+
+        .button-secondary {
+            color: var(--ink);
+            background: #fff;
+            border-color: var(--line);
+        }
+
+        .button-secondary:hover {
+            box-shadow: 0 10px 24px rgba(25, 36, 54, 0.08);
+        }
+
+        .shell {
+            width: min(1120px, calc(100% - 2rem));
+            margin: 0 auto;
+            padding: clamp(2rem, 5vw, 4rem) 0 3rem;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(19rem, 0.85fr);
+            gap: clamp(1.25rem, 4vw, 2.25rem);
+            align-items: stretch;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-copy {
+            padding: clamp(1.5rem, 4vw, 2.5rem) 0;
+        }
+
+        .eyebrow {
+            color: var(--accent);
+            margin-bottom: 0.9rem;
+        }
+
+        h2 {
+            margin: 0;
+            max-width: 12ch;
+            font-size: clamp(2.45rem, 7vw, 4.8rem);
+            line-height: 0.95;
+            letter-spacing: 0;
+        }
+
+        .lead {
+            max-width: 38rem;
+            margin: 1.15rem 0 0;
+            color: #455166;
+            font-size: clamp(1rem, 2vw, 1.2rem);
+            line-height: 1.65;
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 1.6rem;
+        }
+
+        .status-panel {
+            align-self: center;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 0.5rem;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.1rem;
+            border-bottom: 1px solid var(--line);
+            background: #fbfcfe;
+        }
+
+        .panel-title {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 850;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            min-height: 1.65rem;
+            padding: 0.25rem 0.55rem;
+            border-radius: 999px;
+            color: #0f766e;
+            background: #e7f6f2;
+            font-size: 0.72rem;
+            font-weight: 850;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .metric {
+            padding: 1.2rem;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .metric:nth-child(odd) {
+            border-right: 1px solid var(--line);
+        }
+
+        .metric-value {
+            display: block;
+            font-size: 2rem;
+            line-height: 1;
+            font-weight: 900;
+        }
+
+        .metric-label {
+            display: block;
+            margin-top: 0.35rem;
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 750;
+        }
+
+        .panel-footer {
+            padding: 1rem 1.1rem;
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.55;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 2rem 0 1rem;
+        }
+
+        .section-head h3 {
+            margin: 0;
+            font-size: 1.45rem;
+        }
+
+        .section-note {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .competition-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+            gap: 1rem;
+        }
+
+        .competition-card,
+        .empty-state {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 28px rgba(25, 36, 54, 0.08);
+        }
+
+        .competition-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 14.5rem;
+            padding: 1.1rem;
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .competition-name {
+            margin: 0;
+            font-size: 1.1rem;
+            line-height: 1.25;
+        }
+
+        .card-meta {
+            margin: 0.35rem 0 0;
+            color: var(--muted);
+            font-size: 0.82rem;
+            font-weight: 650;
+        }
+
+        .status-dot {
+            width: 0.7rem;
+            height: 0.7rem;
+            margin-top: 0.25rem;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 0.25rem rgba(19, 138, 114, 0.12);
+            flex: 0 0 auto;
+        }
+
+        .card-actions {
+            display: grid;
+            gap: 0.55rem;
+            margin-top: auto;
+        }
+
+        .action-link {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 2.55rem;
+            padding: 0.68rem 0.75rem;
+            border: 1px solid var(--line);
+            border-radius: 0.45rem;
+            color: var(--ink);
+            background: var(--soft);
+            font-size: 0.86rem;
+            font-weight: 800;
+        }
+
+        .action-link:hover {
+            border-color: #b8c5d8;
+            background: #eef3f9;
+        }
+
+        .action-link.primary {
+            color: #fff;
+            border-color: var(--brand);
+            background: var(--brand);
+        }
+
+        .action-link.disabled {
+            color: var(--muted);
+            background: #f1f4f8;
+            cursor: default;
+        }
+
+        .empty-state {
+            padding: 1.4rem;
+        }
+
+        .empty-state p {
+            margin: 0.45rem 0 0;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        @media (min-width: 720px) {
+            .user-block {
+                display: block;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .topbar {
+                align-items: flex-start;
+            }
+
+            .account {
+                flex-direction: column;
+                align-items: flex-end;
+            }
+
+            .hero {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-copy {
+                padding-bottom: 0;
+            }
+
+            .section-head {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .topbar {
+                padding-inline: 0.8rem;
+            }
+
+            .brand-subtitle {
+                display: none;
+            }
+
+            .shell {
+                width: min(100% - 1rem, 1120px);
+            }
+
+            .button {
+                width: 100%;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+            }
+
+            .metric-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metric:nth-child(odd) {
+                border-right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="{% url 'home_hub' %}" aria-label="SimplyJudge home">
+            <span class="mark">S</span>
+            <span>
+                <h1 class="brand-title">SimplyJudge</h1>
                 {% if user.is_staff %}
-                    <p class="text-[11px] text-emerald-400 font-medium font-mono">Platform Admin Engine v2.0</p>
+                    <p class="brand-subtitle">Organizer Console</p>
                 {% elif user.is_authenticated %}
-                    <p class="text-[11px] text-indigo-400 font-medium font-mono">Judging Terminal Console</p>
+                    <p class="brand-subtitle">Judging Workspace</p>
                 {% else %}
-                    <p class="text-[11px] text-gray-500 font-medium font-mono">Evaluation Platform</p>
+                    <p class="brand-subtitle">Photo Competition Platform</p>
                 {% endif %}
-            </div>
-        </div>
-        
-        <div class="flex items-center gap-3">
+            </span>
+        </a>
+
+        <nav class="account" aria-label="Account actions">
             {% if user.is_authenticated %}
-                <div class="text-right">
-                    <span class="text-xs font-bold text-gray-300 block">Welcome, {{ user.username }}</span>
+                <span class="user-block">
+                    <span class="user-name">{{ user.username }}</span>
                     {% if user.is_staff %}
-                        <span class="text-[9px] font-mono font-bold uppercase text-emerald-400 bg-emerald-950/50 border border-emerald-400/30 px-1.5 py-0.5 rounded">Staff Organizer</span>
+                        <span class="user-role">Staff Organizer</span>
                     {% else %}
-                        <span class="text-[9px] font-mono font-bold uppercase text-indigo-400 bg-indigo-950/50 border border-indigo-400/30 px-1.5 py-0.5 rounded">Active Judge</span>
+                        <span class="user-role">Active Judge</span>
+                    {% endif %}
+                </span>
+                {% if user.is_staff %}
+                    <a class="button button-secondary" href="/admin/">Admin</a>
+                {% endif %}
+            {% else %}
+                <a class="button button-primary" href="{% url 'login' %}">Log In</a>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main class="shell">
+        <section class="hero" aria-labelledby="hero-title">
+            <div class="hero-copy">
+                <p class="eyebrow">Competition operations, simplified</p>
+                <h2 id="hero-title">Photo judging without the spreadsheet chaos.</h2>
+                <p class="lead">
+                    Run active competitions, route judges to their next image, collect weighted scores,
+                    and publish results from one focused workspace.
+                </p>
+                <div class="hero-actions">
+                    {% if user.is_authenticated %}
+                        {% if user.is_staff %}
+                            <a class="button button-primary" href="/admin/">Manage Platform</a>
+                        {% endif %}
+                        {% if competitions %}
+                            <a class="button button-secondary" href="#competitions">Open Active Competition</a>
+                        {% endif %}
+                    {% else %}
+                        <a class="button button-primary" href="{% url 'login' %}">Judge Log In</a>
+                        <a class="button button-secondary" href="#competitions">View Open Competitions</a>
                     {% endif %}
                 </div>
-                <a href="/admin/" target="_blank" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg text-[11px] uppercase tracking-wider transition-colors border border-gray-700">
-                    🔧 Django Admin
-                </a>
+            </div>
+
+            <aside class="status-panel" aria-label="Platform status">
+                <div class="panel-header">
+                    <p class="panel-title">Today at a glance</p>
+                    <span class="pill">Live</span>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric">
+                        <span class="metric-value">{{ competitions|length }}</span>
+                        <span class="metric-label">Active competition{{ competitions|length|pluralize }}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value">{% if user.is_staff %}Admin{% elif user.is_authenticated %}Judge{% else %}Guest{% endif %}</span>
+                        <span class="metric-label">Current access</span>
+                    </div>
+                </div>
+                <div class="panel-footer">
+                    {% if user.is_staff %}
+                        Upload rubrics, match photo files, review reports, and keep judging moving.
+                    {% elif user.is_authenticated %}
+                        Pick a competition below to continue scoring assigned photos.
+                    {% else %}
+                        Sign in with your judge account to begin scoring entries.
+                    {% endif %}
+                </div>
+            </aside>
+        </section>
+
+        <section id="competitions" aria-labelledby="competitions-title">
+            <div class="section-head">
+                <div>
+                    <p class="eyebrow">Active workspace</p>
+                    <h3 id="competitions-title">Open competitions</h3>
+                </div>
+                <p class="section-note">Choose where you want to work next.</p>
+            </div>
+
+            {% if competitions %}
+                <div class="competition-grid">
+                    {% for competition in competitions %}
+                        <article class="competition-card">
+                            <div class="card-top">
+                                <div>
+                                    <h4 class="competition-name">{{ competition.name }}</h4>
+                                    <p class="card-meta">Created {{ competition.created_at|date:"M j, Y" }}</p>
+                                </div>
+                                <span class="status-dot" aria-label="Active"></span>
+                            </div>
+                            <div class="card-actions">
+                                {% if competition.slug %}
+                                    <a class="action-link primary" href="{% url 'judge_router' competition.slug %}">
+                                        Start judging
+                                        <span aria-hidden="true">→</span>
+                                    </a>
+                                    <a class="action-link" href="{% url 'leaderboard' competition.slug %}">
+                                        Leaderboard
+                                        <span aria-hidden="true">→</span>
+                                    </a>
+                                    {% if user.is_staff %}
+                                        <a class="action-link" href="{% url 'feedback_report' competition.slug %}">
+                                            Feedback report
+                                            <span aria-hidden="true">→</span>
+                                        </a>
+                                        <a class="action-link" href="{% url 'upload_spreadsheet' competition.slug %}">
+                                            Upload data
+                                            <span aria-hidden="true">→</span>
+                                        </a>
+                                    {% endif %}
+                                {% else %}
+                                    {% if user.is_staff %}
+                                        <a class="action-link primary" href="/admin/judging_app/competition/{{ competition.id }}/change/">
+                                            Add URL slug
+                                            <span aria-hidden="true">→</span>
+                                        </a>
+                                        <a class="action-link" href="/admin/judging_app/competition/{{ competition.id }}/change/">
+                                            Open in admin
+                                            <span aria-hidden="true">→</span>
+                                        </a>
+                                    {% else %}
+                                        <span class="action-link disabled">
+                                            Waiting for organizer setup
+                                        </span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
             {% else %}
-                <a href="{% url 'login' %}" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs uppercase tracking-wider transition-all">Log In</a>
+                <div class="empty-state">
+                    <strong>No active competitions yet.</strong>
+                    <p>Once an organizer creates and activates a competition, it will appear here for judges and staff.</p>
+                </div>
             {% endif %}
-        </div>
-    </header>
+        </section>
+    </main>
+</body>
+</html>
