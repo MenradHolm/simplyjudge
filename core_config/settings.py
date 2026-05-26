@@ -53,10 +53,15 @@ ROOT_URLCONF = 'core_config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        
+        # --- THIS IS THE BULLETPROOF OVERRIDE ---
+        # It forces Django to load your custom templates before its own
+        'DIRS': [BASE_DIR / 'judging_app' / 'templates'], 
+        
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
