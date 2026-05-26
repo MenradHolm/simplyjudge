@@ -24,7 +24,7 @@
             <div class="flex-1 relative flex items-center justify-center bg-black rounded-xl overflow-hidden border border-gray-950 group min-h-[450px]">
                 <img src="{{ photo.image.url }}" alt="Submission File" class="w-full h-full object-contain max-h-[70vh] transition-transform duration-300 group-hover:scale-[1.01]">
                 <span class="absolute bottom-3 left-3 bg-black/70 backdrop-blur border border-gray-800 px-3 py-1 rounded-lg font-mono text-xs text-indigo-400 font-bold">
-                    Submission Serial Reference: #{{ photo.id }}
+                    Serial Reference: #{{ photo.id }}
                 </span>
             </div>
             
@@ -35,14 +35,27 @@
                 </div>
                 
                 <div class="space-y-1">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-amber-500">Photographer's Story / Submission Context:</h4>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-amber-500">Photographer's Story:</h4>
                     {% if photo.description %}
-                        <p class="text-sm text-gray-300 leading-relaxed bg-gray-950/50 border border-gray-850 p-3 rounded-lg max-h-[150px] overflow-y-auto whitespace-pre-wrap italic">
+                        <p class="text-sm text-gray-300 leading-relaxed bg-gray-950/50 border border-gray-850 p-3 rounded-lg max-h-[120px] overflow-y-auto whitespace-pre-wrap italic">
                             "{{ photo.description }}"
                         </p>
                     {% else %}
                         <p class="text-xs text-gray-600 italic bg-gray-950/30 p-3 rounded-lg border border-gray-850/50">
-                            No companion text or description was submitted with this entry. Evaluate purely on visual parameters.
+                            No companion text was submitted.
+                        </p>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-1 mt-4">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-500">Camera Settings & Metadata:</h4>
+                    {% if photo.camera_settings %}
+                        <p class="text-[11px] font-mono text-gray-400 bg-gray-950/80 border border-gray-800 p-2.5 rounded-lg">
+                            📸 {{ photo.camera_settings }}
+                        </p>
+                    {% else %}
+                        <p class="text-[11px] font-mono text-gray-600 bg-gray-950/30 border border-gray-850/50 p-2.5 rounded-lg">
+                            Metadata unlisted / Stripped by editing software.
                         </p>
                     {% endif %}
                 </div>
@@ -51,7 +64,7 @@
 
         <section class="lg:col-span-5 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden">
             <div class="p-4 bg-gray-850 border-b border-gray-800 shadow-sm flex items-center justify-between">
-                <h3 class="font-black text-white text-sm uppercase tracking-wider">Metric Score Allocation Panel</h3>
+                <h3 class="font-black text-white text-sm uppercase tracking-wider">Metric Score Panel</h3>
                 <span class="text-[10px] text-gray-400 font-medium">Verify weights before hitting save</span>
             </div>
 
@@ -66,7 +79,7 @@
                                 {{ criterion.name }}
                             </label>
                             <span class="text-[10px] text-indigo-400 font-mono font-semibold bg-indigo-950/50 border border-indigo-900/40 px-2 py-0.5 rounded">
-                                Multiplier Weight: {{ criterion.weight }}
+                                Weight: {{ criterion.weight }}
                             </span>
                         </div>
                         
@@ -76,14 +89,8 @@
 
                         <div class="relative rounded-lg shadow-sm">
                             <input class="w-full bg-gray-900 border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2 pl-3 pr-12 text-sm font-black text-white font-mono placeholder-gray-600 transition-shadow outline-none" 
-                                   type="number" 
-                                   step="0.5" 
-                                   min="0" 
-                                   max="100" 
-                                   name="criterion_{{ criterion.id }}" 
-                                   id="criterion_{{ criterion.id }}" 
-                                   placeholder="0.0" 
-                                   required>
+                                   type="number" step="0.5" min="0" max="100" 
+                                   name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" required>
                             <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                                 <span class="text-xs text-gray-500 font-mono">/ 100</span>
                             </div>
@@ -96,12 +103,8 @@
                     <label class="block text-sm font-bold text-white tracking-wide mb-1.5" for="comment">
                         Critique Commentary Notes
                     </label>
-                    <p class="text-xs text-gray-400 leading-relaxed mb-2">Provide constructive stylistic feedback for the participant ledger report.</p>
                     <textarea class="w-full bg-gray-900 border border-gray-850 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg p-3 text-xs text-gray-200 placeholder-gray-600 outline-none leading-relaxed transition-shadow" 
-                              name="comment" 
-                              id="comment" 
-                              rows="3" 
-                              placeholder="Write critique notes here..."></textarea>
+                              name="comment" id="comment" rows="3" placeholder="Write critique notes here..."></textarea>
                 </div>
 
                 <div class="pt-2 sticky bottom-0 bg-gray-900 mt-auto">
@@ -113,6 +116,5 @@
         </section>
 
     </main>
-
 </body>
 </html>

@@ -36,6 +36,9 @@ class Photo(models.Model):
     rule_flags = models.TextField(blank=True, null=True)
     organizer_notes = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True) 
+    
+    # --- NEW CAMERA SETTINGS FIELD ---
+    camera_settings = models.CharField(max_length=500, blank=True, null=True)
 
     def __str__(self):
         return f"{self.title} - #{self.id}"

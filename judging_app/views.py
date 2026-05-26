@@ -103,13 +103,14 @@ def submit_photo(request, comp_slug):
         category = request.POST.get('category')
         image = request.FILES.get('image')
         description = request.POST.get('description', '')
+        camera_settings = request.POST.get('camera_settings', '')
         if title and photographer_name and category and image:
             if image.size > 5 * 1024 * 1024:
                 error_message = "The uploaded file is too large! Please keep your photo under 5 MB."
             else:
                 Photo.objects.create(
                     competition=competition, title=title, photographer_name=photographer_name,
-                    category=category, image=image, description=description
+                    category=category, image=image, description=description, camera_settings=camera_settings
                 )
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
     return render(request, 'judging_app/submit.html', {'competition': competition, 'error_message': error_message})
@@ -172,6 +173,9 @@ def upload_spreadsheet(request, comp_slug):
                     category = row.get('Category') or row.get('category') or 'General'
                     custom_code = row.get('Code') or row.get('ID') or row.get('Number') or row.get('id')
                     desc = row.get('Description') or row.get('description') or row.get('Story') or row.get('story') or ''
+                    
+                    # Look for settings column
+                    cam_settings = row.get('Camera Settings') or row.get('camera settings') or row.get('Settings') or row.get('settings') or ''
 
                     if not custom_code:
                         continue
@@ -179,7 +183,7 @@ def upload_spreadsheet(request, comp_slug):
                     Photo.objects.create(
                         id=int(custom_code.strip()), competition=competition, title=title,
                         photographer_name=photographer, category=category,
-                        image='competition_photos/placeholder.jpg', description=desc
+                        image='competition_photos/placeholder.jpg', description=desc, camera_settings=cam_settings
                     )
                     import_count += 1
                 
