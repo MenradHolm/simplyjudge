@@ -12,6 +12,8 @@ urlpatterns = [
     # Competition-Specific Routes (Using Slugs)
     path('competition/<slug:comp_slug>/', views.judge_router, name='judge_router'),
     path('competition/<slug:comp_slug>/eliminate/', views.elimination_mode, name='elimination_mode'),
+    path('competition/<slug:comp_slug>/gut-check/', views.gut_check_mode, name='gut_check_mode'),
+    path('competition/<slug:comp_slug>/promote-shortlist/', views.promote_top_gut_check, name='promote_top_gut_check'),
     path('competition/<slug:comp_slug>/judge/<int:photo_id>/', views.judge_photo, name='judge_photo'),
     path('competition/<slug:comp_slug>/leaderboard/', views.leaderboard, name='leaderboard'),
     path('competition/<slug:comp_slug>/submit/', views.submit_photo, name='submit_photo'),

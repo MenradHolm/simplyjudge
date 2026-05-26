@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.utils import timezone
 
 class Competition(models.Model):
@@ -31,8 +32,9 @@ class RubricCriterion(models.Model):
 class Photo(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
-        SHORTLISTED = 'SHORTLISTED', 'Shortlisted'
         REJECTED = 'REJECTED', 'Rejected'
+        ROUND_1 = 'ROUND_1', 'Round 1'
+        SHORTLISTED = 'SHORTLISTED', 'Shortlisted'
 
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
@@ -52,7 +54,7 @@ class Photo(models.Model):
 
 class PhotoStatusVote(models.Model):
     class Decision(models.TextChoices):
-        SHORTLIST = 'SHORTLIST', 'Shortlist'
+        ROUND_1 = 'ROUND_1', 'Advance to Round 1'
         REJECT = 'REJECT', 'Reject'
 
     photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name='status_votes')
@@ -66,6 +68,19 @@ class PhotoStatusVote(models.Model):
 
     def __str__(self):
         return f"{self.photo_id} - {self.voter} - {self.get_decision_display()}"
+
+class GutCheckScore(models.Model):
+    photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name='gut_check_scores')
+    judge = models.ForeignKey(User, on_delete=models.CASCADE, related_name='gut_check_scores')
+    score = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(10)])
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('photo', 'judge')
+
+    def __str__(self):
+        return f"{self.photo_id} - {self.judge} - {self.score}/10"
 
 class Score(models.Model):
     photo = models.ForeignKey(Photo, on_delete=models.CASCADE)

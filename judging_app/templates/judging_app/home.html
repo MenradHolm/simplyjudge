@@ -12,9 +12,28 @@
         max-width: 100vw;
         overflow-x: hidden;
     }
+    .card-actions form {
+        margin: 0;
+    }
+    .card-actions button.action-link {
+        width: 100%;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
 </style>
 
 <main class="shell">
+    {% if messages %}
+        <div class="form-grid" style="margin-bottom: 1rem;">
+            {% for message in messages %}
+                <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
             <p class="eyebrow">Competition operations, simplified</p>
@@ -105,6 +124,17 @@
                                         Rapid elimination
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
+                                    <a class="action-link" href="{% url 'gut_check_mode' competition.slug %}">
+                                        Gut check
+                                        <span aria-hidden="true">&gt;</span>
+                                    </a>
+                                    <form method="POST" action="{% url 'promote_top_gut_check' competition.slug %}">
+                                        {% csrf_token %}
+                                        <button class="action-link" type="submit">
+                                            Promote top 10%
+                                            <span aria-hidden="true">&gt;</span>
+                                        </button>
+                                    </form>
                                     <a class="action-link" href="{% url 'upload_spreadsheet' competition.slug %}">
                                         Upload data
                                         <span aria-hidden="true">&gt;</span>

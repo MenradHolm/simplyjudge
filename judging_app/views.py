@@ -1,4 +1,5 @@
 import csv
+import math
 import os
 import re
 import tempfile
@@ -23,7 +24,7 @@ from django.db.models import Avg, FloatField
 from django.db.models.functions import Cast
 from django.utils import timezone
 
-from .models import Competition, Photo, PhotoStatusVote, Score, RubricCriterion, ZipImportJob
+from .models import Competition, GutCheckScore, Photo, PhotoStatusVote, Score, RubricCriterion, ZipImportJob
 
 def register_user(request):
     if request.method == 'POST':
@@ -53,11 +54,11 @@ def majority_threshold(panel_size):
 def apply_status_vote_majority(photo):
     panel_size = active_staff_count()
     threshold = majority_threshold(panel_size)
-    shortlist_votes = photo.status_votes.filter(decision=PhotoStatusVote.Decision.SHORTLIST).count()
+    round_1_votes = photo.status_votes.filter(decision=PhotoStatusVote.Decision.ROUND_1).count()
     reject_votes = photo.status_votes.filter(decision=PhotoStatusVote.Decision.REJECT).count()
 
-    if shortlist_votes >= threshold:
-        photo.status = Photo.Status.SHORTLISTED
+    if round_1_votes >= threshold:
+        photo.status = Photo.Status.ROUND_1
         photo.save(update_fields=['status'])
     elif reject_votes >= threshold:
         photo.status = Photo.Status.REJECTED
@@ -66,7 +67,7 @@ def apply_status_vote_majority(photo):
     return {
         'panel_size': panel_size,
         'threshold': threshold,
-        'shortlist_votes': shortlist_votes,
+        'round_1_votes': round_1_votes,
         'reject_votes': reject_votes,
     }
 
@@ -93,7 +94,7 @@ def elimination_mode(request, comp_slug):
     if request.method == 'POST':
         photo_id = request.POST.get('photo_id', '')
         decision = request.POST.get('decision')
-        if not photo_id.isdigit() or decision not in {'reject', 'shortlist'}:
+        if not photo_id.isdigit() or decision not in {'reject', 'round_1'}:
             return redirect('elimination_mode', comp_slug=competition.slug)
 
         with transaction.atomic():
@@ -106,7 +107,7 @@ def elimination_mode(request, comp_slug):
             vote_decision = (
                 PhotoStatusVote.Decision.REJECT
                 if decision == 'reject'
-                else PhotoStatusVote.Decision.SHORTLIST
+                else PhotoStatusVote.Decision.ROUND_1
             )
             PhotoStatusVote.objects.update_or_create(
                 photo=photo,
@@ -122,6 +123,7 @@ def elimination_mode(request, comp_slug):
     ).exclude(status_votes__voter=request.user).order_by('id').first()
     counts = {
         'pending': Photo.objects.filter(competition=competition, status=Photo.Status.PENDING).count(),
+        'round_1': Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1).count(),
         'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
         'rejected': Photo.objects.filter(competition=competition, status=Photo.Status.REJECTED).count(),
         'for_you': Photo.objects.filter(
@@ -135,7 +137,7 @@ def elimination_mode(request, comp_slug):
         vote_summary = {
             'panel_size': panel_size,
             'threshold': majority_threshold(panel_size),
-            'shortlist_votes': current_photo.status_votes.filter(decision=PhotoStatusVote.Decision.SHORTLIST).count(),
+            'round_1_votes': current_photo.status_votes.filter(decision=PhotoStatusVote.Decision.ROUND_1).count(),
             'reject_votes': current_photo.status_votes.filter(decision=PhotoStatusVote.Decision.REJECT).count(),
         }
     return render(
@@ -148,6 +150,85 @@ def elimination_mode(request, comp_slug):
             'vote_summary': vote_summary,
         },
     )
+
+@login_required(login_url='/accounts/login/')
+def gut_check_mode(request, comp_slug):
+    if not request.user.is_staff:
+        return redirect('home_hub')
+
+    competition = get_object_or_404(Competition, slug=comp_slug)
+
+    if request.method == 'POST':
+        photo_id = request.POST.get('photo_id', '')
+        raw_score = request.POST.get('score', '')
+        try:
+            score = int(raw_score)
+        except ValueError:
+            score = 0
+
+        if photo_id.isdigit() and 1 <= score <= 10:
+            photo = get_object_or_404(
+                Photo,
+                id=int(photo_id),
+                competition=competition,
+                status=Photo.Status.ROUND_1,
+            )
+            GutCheckScore.objects.update_or_create(
+                photo=photo,
+                judge=request.user,
+                defaults={'score': score},
+            )
+        return redirect('gut_check_mode', comp_slug=competition.slug)
+
+    current_photo = Photo.objects.filter(
+        competition=competition,
+        status=Photo.Status.ROUND_1,
+    ).exclude(gut_check_scores__judge=request.user).order_by('id').first()
+
+    counts = {
+        'for_you': Photo.objects.filter(
+            competition=competition,
+            status=Photo.Status.ROUND_1,
+        ).exclude(gut_check_scores__judge=request.user).count(),
+        'round_1': Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1).count(),
+        'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
+    }
+    return render(
+        request,
+        'judging_app/gut_check.html',
+        {
+            'competition': competition,
+            'photo': current_photo,
+            'counts': counts,
+            'score_range': range(1, 11),
+        },
+    )
+
+@login_required(login_url='/accounts/login/')
+def promote_top_gut_check(request, comp_slug):
+    if not request.user.is_staff:
+        return redirect('home_hub')
+    if request.method != 'POST':
+        return redirect('home_hub')
+
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    scored_round_1 = list(
+        Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1)
+        .annotate(gut_check_average=Avg('gut_check_scores__score'))
+        .filter(gut_check_average__isnull=False)
+        .order_by('-gut_check_average', 'id')
+    )
+    promote_count = math.ceil(len(scored_round_1) * 0.1)
+    selected = scored_round_1[:promote_count]
+    selected_ids = [photo.id for photo in selected]
+
+    if selected_ids:
+        Photo.objects.filter(id__in=selected_ids, competition=competition).update(status=Photo.Status.SHORTLISTED)
+        messages.success(request, f'Promoted {len(selected_ids)} top Round 1 photo(s) to the VIP shortlist.')
+    else:
+        messages.error(request, 'No scored Round 1 photos are ready for shortlist promotion yet.')
+
+    return redirect('home_hub')
 
 @login_required(login_url='/accounts/login/')
 def judge_photo(request, comp_slug, photo_id):

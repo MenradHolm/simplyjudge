@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Competition, Photo, PhotoStatusVote
+from .models import Competition, GutCheckScore, Photo, PhotoStatusVote
 from .views import decode_csv_bytes
 
 
@@ -13,18 +13,23 @@ class PhotoStatusWorkflowTests(TestCase):
         self.staff = User.objects.create_user(username='staff', password='test-pass', is_staff=True)
         self.competition.judges.add(self.guest_judge)
 
-    def create_photo(self, title, status):
+    def create_photo(self, title, status, **overrides):
+        defaults = {
+            'competition': self.competition,
+            'title': title,
+            'photographer_name': 'Hidden Entrant',
+            'category': 'General',
+            'image': 'competition_photos/placeholder.jpg',
+            'status': status,
+        }
+        defaults.update(overrides)
         return Photo.objects.create(
-            competition=self.competition,
-            title=title,
-            photographer_name='Hidden Entrant',
-            category='General',
-            image='competition_photos/placeholder.jpg',
-            status=status,
+            **defaults,
         )
 
     def test_guest_judge_router_only_serves_shortlisted_photos(self):
         self.create_photo('Pending image', Photo.Status.PENDING)
+        self.create_photo('Round 1 image', Photo.Status.ROUND_1)
         shortlisted = self.create_photo('Shortlisted image', Photo.Status.SHORTLISTED)
         self.create_photo('Rejected image', Photo.Status.REJECTED)
 
@@ -51,13 +56,13 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.staff)
         response = self.client.post(
             reverse('elimination_mode', args=[self.competition.slug]),
-            {'photo_id': photo.id, 'decision': 'shortlist'},
+            {'photo_id': photo.id, 'decision': 'round_1'},
         )
 
         self.assertRedirects(response, reverse('elimination_mode', args=[self.competition.slug]))
         photo.refresh_from_db()
-        self.assertEqual(photo.status, Photo.Status.SHORTLISTED)
-        self.assertEqual(photo.status_votes.get(voter=self.staff).decision, PhotoStatusVote.Decision.SHORTLIST)
+        self.assertEqual(photo.status, Photo.Status.ROUND_1)
+        self.assertEqual(photo.status_votes.get(voter=self.staff).decision, PhotoStatusVote.Decision.ROUND_1)
 
     def test_staff_majority_required_when_multiple_staff_users_exist(self):
         second_staff = User.objects.create_user(username='staff-two', password='test-pass', is_staff=True)
@@ -67,7 +72,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.staff)
         self.client.post(
             reverse('elimination_mode', args=[self.competition.slug]),
-            {'photo_id': photo.id, 'decision': 'shortlist'},
+            {'photo_id': photo.id, 'decision': 'round_1'},
         )
         photo.refresh_from_db()
         self.assertEqual(photo.status, Photo.Status.PENDING)
@@ -75,10 +80,10 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(second_staff)
         self.client.post(
             reverse('elimination_mode', args=[self.competition.slug]),
-            {'photo_id': photo.id, 'decision': 'shortlist'},
+            {'photo_id': photo.id, 'decision': 'round_1'},
         )
         photo.refresh_from_db()
-        self.assertEqual(photo.status, Photo.Status.SHORTLISTED)
+        self.assertEqual(photo.status, Photo.Status.ROUND_1)
 
     def test_staff_does_not_see_photos_they_already_voted_on(self):
         photo = self.create_photo('Pending image', Photo.Status.PENDING)
@@ -88,6 +93,50 @@ class PhotoStatusWorkflowTests(TestCase):
         response = self.client.get(reverse('elimination_mode', args=[self.competition.slug]))
 
         self.assertContains(response, 'No pending photos left for you.')
+
+    def test_staff_gut_check_displays_full_context_and_records_score(self):
+        photo = self.create_photo(
+            'Context image',
+            Photo.Status.ROUND_1,
+            category='Portrait',
+            description='A full story for the photo.',
+            camera_settings='50mm, f/2.8, ISO 400',
+        )
+
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('gut_check_mode', args=[self.competition.slug]))
+
+        self.assertContains(response, 'Context image')
+        self.assertContains(response, 'Portrait')
+        self.assertContains(response, 'A full story for the photo.')
+        self.assertContains(response, '50mm, f/2.8, ISO 400')
+
+        response = self.client.post(
+            reverse('gut_check_mode', args=[self.competition.slug]),
+            {'photo_id': photo.id, 'score': '8'},
+        )
+
+        self.assertRedirects(response, reverse('gut_check_mode', args=[self.competition.slug]))
+        self.assertEqual(photo.gut_check_scores.get(judge=self.staff).score, 8)
+
+    def test_promote_top_ten_percent_of_round_1_by_average_gut_check_score(self):
+        photos = [
+            self.create_photo(f'Round 1 image {index}', Photo.Status.ROUND_1)
+            for index in range(10)
+        ]
+        for index, photo in enumerate(photos):
+            GutCheckScore.objects.create(photo=photo, judge=self.staff, score=index + 1)
+
+        self.client.force_login(self.staff)
+        response = self.client.post(reverse('promote_top_gut_check', args=[self.competition.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
+        statuses = {photo.id: Photo.objects.get(id=photo.id).status for photo in photos}
+        self.assertEqual(statuses[photos[-1].id], Photo.Status.SHORTLISTED)
+        self.assertEqual(
+            sum(1 for status in statuses.values() if status == Photo.Status.SHORTLISTED),
+            1,
+        )
 
 
 class CsvEncodingTests(TestCase):

@@ -176,7 +176,7 @@
                 <p class="elimination-meta">Submission #{{ photo.id }}</p>
                 {% if vote_summary %}
                     <p class="vote-progress">
-                        Shortlist {{ vote_summary.shortlist_votes }} / {{ vote_summary.threshold }}
+                        Round 1 {{ vote_summary.round_1_votes }} / {{ vote_summary.threshold }}
                         &middot; Reject {{ vote_summary.reject_votes }} / {{ vote_summary.threshold }}
                     </p>
                 {% endif %}
@@ -185,6 +185,7 @@
         <div class="elimination-stats" aria-label="Elimination totals">
             <span class="stat-pill">{{ counts.for_you }} for you</span>
             <span class="stat-pill">{{ counts.pending }} pending</span>
+            <span class="stat-pill">{{ counts.round_1 }} round 1</span>
             <span class="stat-pill">{{ counts.shortlisted }} shortlisted</span>
             <span class="stat-pill">{{ counts.rejected }} rejected</span>
         </div>
@@ -199,14 +200,14 @@
             {% csrf_token %}
             <input type="hidden" name="photo_id" value="{{ photo.id }}">
             <button class="decision-button decision-reject" type="submit" name="decision" value="reject">&#128465;&#65039; Reject</button>
-            <button class="decision-button decision-shortlist" type="submit" name="decision" value="shortlist">&#11088; Shortlist</button>
+            <button class="decision-button decision-shortlist" type="submit" name="decision" value="round_1">&#11088; Round 1</button>
         </form>
     {% else %}
         <section class="elimination-empty">
             <div class="elimination-empty-panel">
                 <p class="eyebrow">Queue clear</p>
                 <h2>No pending photos left for you.</h2>
-                <p>Photos waiting on other in-house votes will finalize automatically once a staff majority is reached.</p>
+                <p>Photos waiting on other in-house votes will move into Round 1 automatically once a staff majority is reached.</p>
                 <div class="hero-actions">
                     <a class="button button-primary" href="{% url 'feedback_report' competition.slug %}">Review report</a>
                     <a class="button button-secondary" href="{% url 'home_hub' %}">Home</a>
