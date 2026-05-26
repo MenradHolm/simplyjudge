@@ -39,7 +39,8 @@ class Photo(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
     rule_flags = models.TextField(blank=True, null=True)
     organizer_notes = models.TextField(blank=True, help_text="Organizer's final feedback or notes for this photo.")
-
+    description = models.TextField(blank=True, null=True)
+    
     def __str__(self):
         return self.title
 

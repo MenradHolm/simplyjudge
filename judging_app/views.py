@@ -1,26 +1,24 @@
+# =====================================================================
+# MODIFIED VIEWS.PY (FULL FILE)
+# =====================================================================
 import csv
 import os
 import zipfile
 import io
 from PIL import Image
-from PIL.ExifTags import TAGS, GPSTAGS
+from PIL.ExifTags import TAGS
 
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.db.models import Avg, Q, FloatField
+from django.db.models import Avg, FloatField
 from django.db.models.functions import Cast
 
 from .models import Competition, Photo, Score, RubricCriterion
 
-# =====================================================================
-# 1. USER ACCOUNT REGISTRATION & PERMISSIONS
-# =====================================================================
-
 def register_user(request):
-    """Allows users to register an account. Access is restricted until given permissions."""
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
@@ -31,87 +29,50 @@ def register_user(request):
     return render(request, 'judging_app/register.html', {'form': form})
 
 def is_approved_judge(user, competition):
-    """Bouncer helper: Checks if user is explicitly assigned to this competition, or is a superuser."""
     if user.is_superuser:
         return True
     return competition.judges.filter(id=user.id).exists()
 
-
-# =====================================================================
-# 2. GLOBAL HOME HUB
-# =====================================================================
-
 def home_hub(request):
-    """The landing page. Shows all active competitions available on the system."""
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
 
-# =====================================================================
-# 3. COMPETITION JUDGING PANEL & ROUTER
-# =====================================================================
-
 @login_required(login_url='/login/')
 def judge_router(request, comp_id):
-    """Finds the next unrated photo within a specific competition for this judge."""
     competition = get_object_or_404(Competition, id=comp_id)
-    
-    # NEW SECURITY CHECK
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
-        
-    # Find the first photo...
     next_photo = Photo.objects.filter(competition=competition).exclude(score__judge=request.user).first()
-    
     if next_photo:
         return redirect('judge_photo', comp_id=competition.id, photo_id=next_photo.id)
-        
     return render(request, 'judging_app/done.html', {'competition': competition})
-
 
 @login_required(login_url='/login/')
 def judge_photo(request, comp_id, photo_id):
-    """Displays a single photo and handles saving judge metrics for a specific competition."""
-    
-    # 1. Grab the competition FIRST
     competition = get_object_or_404(Competition, id=comp_id)
-    
-    # 2. THEN check if the user is on the VIP list for this specific event
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
-        
-    # 3. THEN grab the photo and continue as normal
     photo = get_object_or_404(Photo, id=photo_id, competition=competition)
-    
-    # Grab only the criteria assigned to this specific competition
     rubric = RubricCriterion.objects.filter(competition=competition)
-    
     total_photos = Photo.objects.filter(competition=competition).count()
     scored_photos = Score.objects.filter(photo__competition=competition, judge=request.user).count()
     
     if request.method == "POST":
         criteria_scores = {}
         total_score = 0.0
-        
         for criterion in rubric:
             val = request.POST.get(f'criterion_{criterion.id}', 0)
             try:
                 score_val = float(val)
             except ValueError:
                 score_val = 0.0
-                
             criteria_scores[str(criterion.id)] = score_val
             total_score += (score_val * criterion.weight)
-            
         comment = request.POST.get('comment', '')
-        
         Score.objects.update_or_create(
             photo=photo,
             judge=request.user,
-            defaults={
-                'criteria_scores': criteria_scores,
-                'total_score': total_score,
-                'comment': comment
-            }
+            defaults={'criteria_scores': criteria_scores, 'total_score': total_score, 'comment': comment}
         )
         return redirect('judge_router', comp_id=competition.id)
 
@@ -123,232 +84,137 @@ def judge_photo(request, comp_id, photo_id):
     }
     return render(request, 'judging_app/judge.html', context)
 
-
-# =====================================================================
-# 4. LIVE LEADERBOARD
-# =====================================================================
-
 @login_required(login_url='/login/')
 def leaderboard(request, comp_id):
-    """Calculates average scores and ranks photos, using a chosen criterion as a tie-breaker."""
     competition = get_object_or_404(Competition, id=comp_id)
     tie_criterion = competition.tie_breaker_criterion
-
-    # 1. Start building the photo query for this competition
-    photos_query = Photo.objects.filter(competition=competition).annotate(
-        average_score=Avg('score__total_score')
-    )
-
-    # 2. If a specific tie-breaker criterion is selected, calculate its specific average
+    photos_query = Photo.objects.filter(competition=competition).annotate(average_score=Avg('score__total_score'))
     if tie_criterion:
-        criterion_key = f"criteria_scores__{tie_criterion.id}"
-        
         ranked_photos = photos_query.annotate(
             tie_breaker_score=Avg(Cast(f'score__criteria_scores__{tie_criterion.id}', FloatField()))
-        ).filter(
-            average_score__isnull=False
-        ).order_by('-average_score', '-tie_breaker_score')
+        ).filter(average_score__isnull=False).order_by('-average_score', '-tie_breaker_score')
     else:
-        # Fallback to standard sorting if no tie-breaker is chosen
-        ranked_photos = photos_query.filter(
-            average_score__isnull=False
-        ).order_by('-average_score')
-
-    return render(request, 'judging_app/leaderboard.html', {
-        'competition': competition, 
-        'photos': ranked_photos,
-        'tie_criterion': tie_criterion
-    })
-
-# =====================================================================
-# 5. PUBLIC PHOTO SUBMISSION PORTAL
-# =====================================================================
+        ranked_photos = photos_query.filter(average_score__isnull=False).order_by('-average_score')
+    return render(request, 'judging_app/leaderboard.html', {'competition': competition, 'photos': ranked_photos, 'tie_criterion': tie_criterion})
 
 def submit_photo(request, comp_id):
-    """Public upload form for photographers to enter a specific competition."""
     competition = get_object_or_404(Competition, id=comp_id)
     error_message = None
-
     if request.method == "POST":
         title = request.POST.get('title')
         photographer_name = request.POST.get('photographer_name')
         category = request.POST.get('category')
         image = request.FILES.get('image')
-
+        description = request.POST.get('description', '')
         if title and photographer_name and category and image:
-            max_size_bytes = 5 * 1024 * 1024 # 5 MB Limit
-            
-            if image.size > max_size_bytes:
+            if image.size > 5 * 1024 * 1024:
                 error_message = "The uploaded file is too large! Please keep your photo under 5 MB."
             else:
                 Photo.objects.create(
-                    competition=competition,
-                    title=title,
-                    photographer_name=photographer_name,
-                    category=category,
-                    image=image
+                    competition=competition, title=title, photographer_name=photographer_name,
+                    category=category, image=image, description=description
                 )
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
-
-    return render(request, 'judging_app/submit.html', {
-        'competition': competition, 
-        'error_message': error_message
-    })
-
-# =====================================================================
-# 6. ORGANIZER FEEDBACK REPORT & METADATA UPLOADS
-# =====================================================================
+    return render(request, 'judging_app/submit.html', {'competition': competition, 'error_message': error_message})
 
 @login_required(login_url='/login/')
 def feedback_report(request, comp_id):
-    """A master view for the organizer to see every individual judge's score and comment."""
     if not request.user.is_staff:
         return redirect('home_hub')
-
     competition = get_object_or_404(Competition, id=comp_id)
-    
     photos = list(Photo.objects.filter(competition=competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
-    
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
-
-    return render(request, 'judging_app/feedback_report.html', {
-        'competition': competition,
-        'photos': photos
-    })
+    return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
 
 @login_required(login_url='/login/')
 def upload_spreadsheet(request, comp_id):
-    """Allows the organizer to upload a CSV file and forces database IDs to match Kyle's custom codes."""
     if not request.user.is_staff:
         return redirect('home_hub')
-
     competition = get_object_or_404(Competition, id=comp_id)
-
     if request.method == 'POST' and request.FILES.get('csv_file'):
         csv_file = request.FILES['csv_file']
-        
         if not csv_file.name.endswith('.csv'):
             messages.error(request, 'Error: This is not a CSV file!')
             return redirect('upload_spreadsheet', comp_id=comp_id)
-
         try:
             file_data = csv_file.read().decode('utf-8').splitlines()
             reader = csv.DictReader(file_data)
-
             import_count = 0
             for row in reader:
                 title = row.get('Title') or row.get('title') or 'Untitled'
                 photographer = row.get('Photographer') or row.get('photographer') or 'Unknown'
                 category = row.get('Category') or row.get('category') or 'General'
-                
                 custom_code = row.get('Code') or row.get('ID') or row.get('Number') or row.get('id')
                 
+                # Look for story columns from form aggregations
+                desc = row.get('Description') or row.get('description') or row.get('Story') or row.get('story') or ''
+
                 if not custom_code:
                     continue
 
                 Photo.objects.create(
-                    id=int(custom_code.strip()),
-                    competition=competition,
-                    title=title,
-                    photographer_name=photographer,
-                    category=category,
-                    image='competition_photos/placeholder.jpg'
+                    id=int(custom_code.strip()), competition=competition, title=title,
+                    photographer_name=photographer, category=category,
+                    image='competition_photos/placeholder.jpg', description=desc
                 )
                 import_count += 1
-
-            messages.success(request, f'Successfully imported {import_count} entries with their unique codes!')
+            messages.success(request, f'Successfully imported {import_count} entries!')
             return redirect('feedback_report', comp_id=comp_id)
-
         except Exception as e:
             messages.error(request, f'Error parsing spreadsheet: {str(e)}')
             return redirect('upload_spreadsheet', comp_id=comp_id)
-
     return render(request, 'judging_app/upload_spreadsheet.html', {'competition': competition})
 
 @login_required(login_url='/login/')
 def upload_photos_zip(request, comp_id):
     if not request.user.is_staff:
         return redirect('home_hub')
-
     competition = get_object_or_404(Competition, id=comp_id)
-
     if request.method == 'POST' and request.FILES.get('zip_file'):
         zip_file = request.FILES['zip_file']
         success_count = 0
-
         with zipfile.ZipFile(zip_file) as z:
             for file_info in z.infolist():
                 filename = os.path.basename(file_info.filename)
                 if file_info.is_dir() or not filename or filename.startswith('.'):
                     continue
-
                 name_without_ext, ext = os.path.splitext(filename)
                 photo = None
-
-                # HYBRID MATCHING ENGINE
                 try:
-                    # 1. Try Kyle's method
                     target_id = int(name_without_ext.strip())
                     photo = Photo.objects.filter(competition=competition, id=target_id).first()
                 except ValueError:
-                    # 2. Try POTY method
-                    photo = Photo.objects.filter(
-                        competition=competition, 
-                        title__icontains=filename.strip()
-                    ).first()
-
-                # If found, save the image stream straight to Cloudinary
+                    photo = Photo.objects.filter(competition=competition, title__icontains=filename.strip()).first()
                 if photo:
                     file_bytes = z.read(file_info.filename)
-                    # --- NEW: RUN THE AI/METADATA AUDIT ---
                     audit = audit_photo_metadata(file_bytes)
                     if audit['flags']:
                         photo.rule_flags = " | ".join(audit['flags'])
-                    
-                    # Save the image and the new flags ONCE
                     photo.image.save(filename, ContentFile(file_bytes))
                     photo.save() 
                     success_count += 1
-
         messages.success(request, f"Successfully processed and matched {success_count} photos!")
         return redirect('feedback_report', comp_id=comp_id)
-
     return redirect('upload_spreadsheet', comp_id=comp_id)
 
 def public_results(request, comp_id):
-    """Public results page for all participants to see the feedback ledger."""
     competition = get_object_or_404(Competition, id=comp_id)
-    
     photos = list(Photo.objects.filter(competition=competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
-    
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
-
-    return render(request, 'judging_app/feedback_report.html', {
-        'competition': competition,
-        'photos': photos
-    })
+    return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
 
 def audit_photo_metadata(file_bytes):
-    """Scans image bytes for EXIF Date and GPS data."""
     try:
         img = Image.open(io.BytesIO(file_bytes))
         exif_raw = img.getexif()
-        
-        audit_results = {
-            'date_valid': False,
-            'has_gps': False,
-            'flags': []
-        }
-
+        audit_results = {'date_valid': False, 'has_gps': False, 'flags': []}
         if not exif_raw:
             audit_results['flags'].append("No EXIF data found (Likely stripped by editing software/Wix).")
             return audit_results
-
-        # 1. Check the Date
         for tag_id, value in exif_raw.items():
             tag = TAGS.get(tag_id, tag_id)
             if tag == 'DateTimeOriginal':
@@ -358,15 +224,11 @@ def audit_photo_metadata(file_bytes):
                 else:
                     audit_results['flags'].append(f"Taken outside valid date range: {year}")
                 break
-
-        # 2. Check for GPS Data
         gps_info = exif_raw.get_ifd(0x8825)
         if gps_info:
             audit_results['has_gps'] = True
         else:
             audit_results['flags'].append("No GPS location data found (Privacy filter applied).")
-
         return audit_results
-
     except Exception as e:
         return {'date_valid': False, 'has_gps': False, 'flags': ["Corrupted file or unable to read metadata."]}
