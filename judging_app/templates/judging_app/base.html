@@ -810,8 +810,13 @@
                     {% if user.is_staff %}
                         <a class="button button-secondary" href="/admin/">Admin</a>
                     {% endif %}
-                {% elif request.resolver_match.url_name != 'login' and request.path != '/admin/login/' %}
-                    <a class="button button-primary" href="{% url 'login' %}">Log In</a>
+                {% elif request.path != '/admin/login/' %}
+                    {% if request.resolver_match.url_name != 'register' %}
+                        <a class="button button-secondary" href="{% url 'register' %}">Sign Up</a>
+                    {% endif %}
+                    {% if request.resolver_match.url_name != 'login' %}
+                        <a class="button button-primary" href="{% url 'login' %}">Log In</a>
+                    {% endif %}
                 {% endif %}
             </nav>
         </header>

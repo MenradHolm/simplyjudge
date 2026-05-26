@@ -36,7 +36,8 @@
             <button type="submit" class="button button-primary">Log In</button>
         </form>
 
-        <div style="margin-top: 1rem;">
+        <div class="form-grid" style="margin-top: 1rem;">
+            <a href="{% url 'register' %}" class="action-link">Create a judge account <span aria-hidden="true">&gt;</span></a>
             <a href="{% url 'home_hub' %}" class="action-link">Return to home <span aria-hidden="true">&gt;</span></a>
         </div>
     </section>
