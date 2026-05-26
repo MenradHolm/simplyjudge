@@ -37,7 +37,7 @@ class ZipImportJobAdmin(admin.ModelAdmin):
     list_filter = ('status', 'competition')
     search_fields = ('source_name', 'error_message')
     readonly_fields = (
-        'competition', 'uploaded_by', 'source_name', 'temp_path', 'status',
+        'competition', 'uploaded_by', 'source_name', 'source_url', 'temp_path', 'status',
         'total_rows', 'processed_rows', 'matched_images', 'error_message',
         'created_at', 'updated_at', 'finished_at',
     )

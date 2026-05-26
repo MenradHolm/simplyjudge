@@ -6,6 +6,8 @@ import uuid
 import zipfile
 import io
 import threading
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from PIL import Image
 from PIL.ExifTags import TAGS
 
@@ -209,6 +211,31 @@ def upload_photos_zip(request, comp_slug):
     if not request.user.is_staff:
         return redirect('home_hub')
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if request.method == 'POST' and request.POST.get('zip_url'):
+        zip_url = request.POST.get('zip_url', '').strip()
+        parsed_url = urlparse(zip_url)
+        if parsed_url.scheme not in {'http', 'https'}:
+            messages.error(request, 'Please provide a direct http(s) download link to the ZIP package.')
+            return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+        job = ZipImportJob.objects.create(
+            competition=competition,
+            uploaded_by=request.user,
+            source_name=os.path.basename(parsed_url.path) or 'remote-package.zip',
+            source_url=zip_url,
+        )
+        worker = threading.Thread(
+            target=process_entry_zip_job,
+            args=(job.id,),
+            daemon=True,
+        )
+        worker.start()
+        messages.success(
+            request,
+            'Remote ZIP sync job created. SimplyJudge will download and import it in the background.',
+        )
+        return redirect('zip_import_status', comp_slug=competition.slug, job_id=job.id)
+
     if request.method == 'POST' and request.FILES.get('zip_file'):
         zip_file = request.FILES['zip_file']
         if not zip_file.name.lower().endswith('.zip'):
@@ -323,6 +350,21 @@ def save_uploaded_zip_to_temp_file(uploaded_file, job_id):
             target.write(chunk)
     return target_path
 
+def download_zip_url_to_temp_file(source_url, job_id):
+    temp_dir = os.path.join(tempfile.gettempdir(), 'simplyjudge_zip_imports')
+    os.makedirs(temp_dir, exist_ok=True)
+    parsed_url = urlparse(source_url)
+    safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', os.path.basename(parsed_url.path) or 'remote-package.zip')
+    target_path = os.path.join(temp_dir, f'{job_id}_{uuid.uuid4().hex}_{safe_name}')
+    request = Request(source_url, headers={'User-Agent': 'SimplyJudge ZIP Importer'})
+    with urlopen(request, timeout=60) as response, open(target_path, 'wb') as target:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            target.write(chunk)
+    return target_path
+
 def get_chunk_upload_dir(upload_id):
     safe_upload_id = re.sub(r'[^a-zA-Z0-9_-]', '', upload_id)
     if not safe_upload_id:
@@ -408,6 +450,10 @@ def process_entry_zip_job(job_id):
         job.status = ZipImportJob.Status.PROCESSING
         job.error_message = ''
         job.save(update_fields=['status', 'error_message', 'updated_at'])
+
+        if job.source_url and not job.temp_path:
+            job.temp_path = download_zip_url_to_temp_file(job.source_url, job.id)
+            job.save(update_fields=['temp_path', 'updated_at'])
 
         with zipfile.ZipFile(job.temp_path) as package:
             csv_info = find_entry_csv(package)

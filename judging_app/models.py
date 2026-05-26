@@ -64,6 +64,7 @@ class ZipImportJob(models.Model):
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='zip_import_jobs')
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     source_name = models.CharField(max_length=255)
+    source_url = models.URLField(blank=True)
     temp_path = models.CharField(max_length=500, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
     total_rows = models.PositiveIntegerField(default=0)

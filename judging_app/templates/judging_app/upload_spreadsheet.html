@@ -8,7 +8,7 @@
         <div>
             <p class="eyebrow">Data ingestion</p>
             <h2 class="page-title">Upload competition data.</h2>
-            <p class="page-copy">Import rubrics from CSV, or upload one ZIP package containing EntryForm.csv plus the matching photo files.</p>
+            <p class="page-copy">Import rubrics from CSV, upload a ZIP in chunks, or start a server-side sync from a direct ZIP download link.</p>
         </div>
         <span class="tag">{{ competition.name }}</span>
     </div>
@@ -26,9 +26,9 @@
     <section class="grid grid-auto">
         <article class="panel panel-padded">
             <p class="eyebrow">Recommended</p>
-            <h3 class="competition-name">ZIP package sync</h3>
+            <h3 class="competition-name">Chunked ZIP package sync</h3>
             <p class="page-copy">
-                Upload a ZIP containing <strong>EntryForm.csv</strong> and the photo files. SimplyJudge reads the CSV, creates or updates entries, matches images by filename/code, extracts EXIF data, and saves everything in one transaction.
+                Upload a ZIP containing <strong>EntryForm.csv</strong> and the photo files. The browser sends it in small chunks so large local packages do not sit in one timeout-prone request.
             </p>
 
             <form method="POST" action="{% url 'upload_spreadsheet' competition.slug %}" data-chunk-url="{% url 'upload_zip_chunk' competition.slug %}" enctype="multipart/form-data" class="form-grid" id="zip-upload-form">
@@ -43,6 +43,24 @@
                     <div class="alert alert-error">Chunked ZIP upload requires JavaScript. Enable JavaScript before uploading large photo packages.</div>
                 </noscript>
                 <button type="submit" class="button button-primary" id="zip-upload-button">Start Chunked ZIP Sync</button>
+            </form>
+        </article>
+
+        <article class="panel panel-padded">
+            <p class="eyebrow">Best for huge ZIPs</p>
+            <h3 class="competition-name">Remote ZIP sync</h3>
+            <p class="page-copy">
+                Paste a direct download link and SimplyJudge will fetch the ZIP from the server-side background job.
+            </p>
+
+            <form method="POST" action="{% url 'upload_photos_zip' competition.slug %}" class="form-grid">
+                {% csrf_token %}
+                <div class="field">
+                    <label for="zip_url">Direct ZIP download URL</label>
+                    <span class="help-text">Use a link that downloads the .zip directly, not a preview page.</span>
+                    <input type="url" name="zip_url" id="zip_url" placeholder="https://example.com/youth-poty-package.zip" required>
+                </div>
+                <button type="submit" class="button button-secondary">Start Remote ZIP Sync</button>
             </form>
         </article>
 
