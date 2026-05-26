@@ -3,69 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simply Judge - Home</title>
+    <title>SimplyJudge - Command Center Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans flex flex-col">
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased">
 
-    <header class="flex items-center justify-between px-6 py-4 bg-gray-800 border-b border-gray-700 shadow-sm">
-        <div class="flex items-center space-x-3">
-            <h1 class="text-xl font-bold tracking-tight text-white">Simply Judge</h1>
+    <header class="flex items-center justify-between px-8 py-4 bg-gray-900 border-b border-gray-800 sticky top-0 z-50 shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-black text-white text-sm shadow-md shadow-indigo-900/30">
+                S
+            </div>
+            <div>
+                <h1 class="text-base font-black text-white tracking-wide">SimplyJudge</h1>
+                <p class="text-[11px] text-gray-400 font-medium font-mono">Platform Admin Engine v2.0</p>
+            </div>
         </div>
-        <div class="flex space-x-4">
+        
+        <div class="flex items-center gap-3">
             {% if user.is_authenticated %}
-                <span class="px-4 py-1.5 text-sm text-gray-400">Logged in as {{ user.username }}</span>
-                {% if user.is_staff %}
-                    <a href="{% url 'admin:index' %}" class="px-4 py-1.5 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Admin Panel</a>
-                {% endif %}
-                <form action="{% url 'logout' %}" method="post" class="inline">
-                    {% csrf_token %}
-                    <button type="submit" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700 transition-colors">Log Out</button>
-                </form>
+                <div class="text-right">
+                    <span class="text-xs font-bold text-gray-300 block">Welcome, {{ user.username }}</span>
+                    {% if user.is_staff %}
+                        <span class="text-[9px] font-mono font-bold uppercase text-emerald-400 bg-emerald-950/50 border border-emerald-900/50 px-1.5 py-0.5 rounded">Staff Organizer</span>
+                    {% else %}
+                        <span class="text-[9px] font-mono font-bold uppercase text-indigo-400 bg-indigo-950/50 border border-indigo-900/50 px-1.5 py-0.5 rounded">Active Judge</span>
+                    {% endif %}
+                </div>
+                <a href="/admin/" target="_blank" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg text-[11px] uppercase tracking-wider transition-colors border border-gray-700">
+                    🔧 Django Admin
+                </a>
             {% else %}
-                <a href="{% url 'login' %}" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-300 hover:text-white hover:bg-gray-700 transition-colors">Log In</a>
+                <a href="{% url 'login' %}" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs uppercase tracking-wider transition-all">Log In</a>
             {% endif %}
         </div>
     </header>
 
-    <main class="flex-1 max-w-5xl mx-auto p-8 w-full">
-        <h2 class="text-3xl font-bold text-white mb-8">Active Competitions</h2>
+    <main class="max-w-7xl mx-auto px-6 py-10">
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {% if competitions %}
-                {% for comp in competitions %}
-                <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-6 flex flex-col">
-                    <h3 class="text-xl font-bold text-white mb-2">{{ comp.name }}</h3>
-                    <p class="text-sm text-gray-400 mb-6 flex-1">{{ comp.description|default:"No description provided." }}</p>
-                    
-                    <div class="flex flex-col space-y-3">
-                        {# <a href="{% url 'submit_photo' comp.id %}" class="text-center w-full bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded transition-colors">Submit a Photo</a> #}
-    
-                        <div class="flex space-x-3">
-
-                            <a href="{% url 'judge_router' comp.id %}" class="text-center w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded transition-colors">Judge Panel</a>
-                            <a href="{% url 'leaderboard' comp.id %}" class="text-center w-1/2 border border-gray-600 hover:bg-gray-700 text-gray-300 font-medium py-2 px-4 rounded transition-colors">Leaderboard</a>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p class="text-gray-500 col-span-2">No active competitions right now.</p>
-            {% endif %}
-        </div>
-    </main>
-
-    <!-- GLOBAL LEGAL FOOTER -->
-    <footer class="bg-gray-950 border-t border-gray-800 py-6">
-        <div class="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 text-sm text-gray-500">
-            <p>&copy; 2026 Simply Judge.</p>
-            <div class="flex space-x-6">
-                <a href="{% url 'impressum' %}" class="hover:text-white transition-colors">Impressum</a>
-                <a href="{% url 'privacy' %}" class="hover:text-white transition-colors">Privacy Policy</a>
-                <a href="{% url 'terms' %}" class="hover:text-white transition-colors">Terms of Service</a>
+        <div class="mb-10 bg-gradient-to-r from-gray-900 to-indigo-950/40 border border-gray-800 rounded-3xl p-8 shadow-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div>
+                <span class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400">Control Dashboard</span>
+                <h2 class="text-3xl font-black text-white mt-1">Active Competitions</h2>
+                <p class="text-sm text-gray-400 mt-2 max-w-xl leading-relaxed">
+                    Select a workflow deployment module below to process rubrics setup, ingest competitor files data, track active judging metrics, or export clean print ledgers.
+                </p>
             </div>
         </div>
-    </footer>
+
+        {% if messages %}
+            <div class="mb-8 space-y-2">
+                {% for message in messages %}
+                    <div class="p-4 rounded-xl text-xs font-bold border bg-emerald-950/40 text-emerald-400 border-emerald-900/50">
+                        ✨ {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for comp in competitions %}
+            <div class="bg-gray-900 border border-gray-800 hover:border-gray-700/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between transition-all group">
+                
+                <div class="mb-6">
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider bg-gray-950 px-2.5 py-1 rounded-md border border-gray-850">
+                            ID Ref: #{{ comp.id }}
+                        </span>
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-900/60 rounded-full uppercase">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Active
+                        </span>
+                    </div>
+                    
+                    <h3 class="text-xl font-black text-white mt-3 group-hover:text-indigo-400 transition-colors">{{ comp.name }}</h3>
+                    <p class="text-xs text-gray-500 mt-1">Created session context: {{ comp.created_at|date:"d M Y @ H:i" }}</p>
+                </div>
+
+                <div class="border-t border-gray-850 pt-5 space-y-4">
+                    
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <a href="{% url 'judge_router' comp.id %}" class="flex flex-col items-center justify-center p-3 bg-indigo-950/30 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-900/50 hover:border-indigo-500 rounded-xl transition-all text-center group/btn shadow-inner">
+                            <span class="text-lg mb-1 group-hover/btn:scale-110 transition-transform">⚖️</span>
+                            <span class="text-[10px] font-black uppercase tracking-wider">Judging Room</span>
+                        </a>
+                        
+                        <a href="{% url 'leaderboard' comp.id %}" class="flex flex-col items-center justify-center p-3 bg-gray-950/60 hover:bg-amber-600 text-amber-500 hover:text-white border border-gray-850 hover:border-amber-500 rounded-xl transition-all text-center group/btn">
+                            <span class="text-lg mb-1 group-hover/btn:scale-110 transition-transform">🏆</span>
+                            <span class="text-[10px] font-black uppercase tracking-wider">Leaderboard</span>
+                        </a>
+                    </div>
+
+                    {% if user.is_staff %}
+                    <div class="space-y-2 bg-gray-950/40 border border-gray-850 p-3 rounded-xl shadow-inner">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-gray-500 block mb-2">Organizer Operations Console</span>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <a href="{% url 'upload_spreadsheet' comp.id %}" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-bold transition-all text-center">
+                                📊 <span>CSV Loader</span>
+                            </a>
+                            
+                            <a href="/competition/{{ comp.id }}/upload-csv/" class="flex items-center justify-center gap-1.5 py-2 px-3 bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-bold transition-all text-center">
+                                🗄️ <span>ZIP Matcher</span>
+                            </a>
+                        </div>
+
+                        <a href="{% url 'feedback_report' comp.id %}" class="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-3 bg-emerald-950/40 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-900/40 hover:border-emerald-500 rounded-lg text-xs font-black uppercase tracking-wider transition-all text-center shadow-md">
+                            📄 View Master Ledger Report
+                        </a>
+                    </div>
+                    {% endif %}
+
+                </div>
+
+            </div>
+            {% empty %}
+            <div class="col-span-2 bg-gray-900 border border-gray-800 rounded-2xl p-12 text-center text-gray-500 shadow-xl">
+                <span class="text-3xl block mb-2">📥</span>
+                <p class="text-sm font-bold text-gray-400">No active systems initialized on this server array yet.</p>
+                <p class="text-xs text-gray-600 mt-1">Initialize dynamic database configurations via backend administration portals.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+    </main>
 
 </body>
 </html>
