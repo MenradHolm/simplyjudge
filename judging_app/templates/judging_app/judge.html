@@ -15,21 +15,21 @@
     <div class="split-layout">
         <section class="panel">
             <div class="photo-stage">
-                <img src="{{ photo.image.url }}" alt="{{ photo.title }}">
+                <img src="{{ photo.image.url }}" alt="Anonymous competition submission">
             </div>
             <div class="panel-padded">
                 <div class="card-top" style="margin-bottom: 1rem;">
                     <div>
                         <p class="eyebrow" style="margin-bottom: 0.35rem;">Submission #{{ photo.id }}</p>
-                        <h3 class="competition-name">{{ photo.title }}</h3>
-                        <p class="card-meta">By {{ photo.photographer_name }}</p>
+                        <h3 class="competition-name">Anonymous entry</h3>
+                        <p class="card-meta">Identity hidden for judging</p>
                     </div>
                     <span class="tag tag-neutral">{{ photo.category }}</span>
                 </div>
 
                 <div class="grid">
                     <div>
-                        <span class="field-label">Photographer's story</span>
+                        <span class="field-label">Entry story</span>
                         {% if photo.description %}
                             <p class="page-copy" style="white-space: pre-wrap;">{{ photo.description }}</p>
                         {% else %}
