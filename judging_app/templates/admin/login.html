@@ -4,52 +4,176 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Log In - SimplyJudge</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Deep dark aesthetic styles mimicking our dashboard */
+        body {
+            background-color: #030712;
+            color: #f3f4f6;
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 16px;
+        }
+        .login-card {
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 24px;
+            padding: 32px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            border-bottom: 1px solid #1f2937;
+            padding-bottom: 24px;
+        }
+        .logo-box {
+            width: 48px;
+            height: 48px;
+            background-color: #059669;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: white;
+            font-size: 20px;
+            margin: 0 auto 16px auto;
+            box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.3);
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 900;
+            margin: 0;
+            letter-spacing: 0.5px;
+        }
+        .subtitle {
+            font-size: 11px;
+            color: #34d399;
+            font-family: monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+        .error-alert {
+            background-color: rgba(127, 29, 29, 0.4);
+            color: #f87171;
+            border: 1px solid rgba(185, 28, 28, 0.5);
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #9ca3af;
+            margin-bottom: 6px;
+        }
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            background-color: #030712;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 14px;
+            color: white;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            border-color: #059669;
+        }
+        button {
+            width: 100%;
+            background-color: #059669;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.2);
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #10b981;
+        }
+        .footer-link {
+            text-align: center;
+            margin-top: 32px;
+            border-top: 1px solid #1f2937;
+            padding-top: 24px;
+        }
+        .footer-link a {
+            font-size: 11px;
+            color: #6b7280;
+            text-decoration: none;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.2s;
+        }
+        .footer-link a:hover {
+            color: #d1d5db;
+        }
+    </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased flex flex-col items-center justify-center p-4">
+<body>
     
-    <div class="max-w-md w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl relative">
+    <div class="login-card">
         
-        <div class="flex flex-col items-center mb-8 border-b border-gray-800 pb-6">
-            <div class="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center font-black text-white text-xl shadow-lg shadow-emerald-900/50 mb-4">
-                S
-            </div>
-            <h1 class="text-2xl font-black text-white tracking-wide">SimplyJudge Admin</h1>
-            <p class="text-xs text-emerald-400 mt-1 font-mono uppercase tracking-wider">Staff Operations Console</p>
+        <div class="header">
+            <div class="logo-box">S</div>
+            <h1>SimplyJudge Admin</h1>
+            <div class="subtitle">Staff Operations Console</div>
         </div>
 
         {% if form.errors %}
-            <div class="mb-6 p-4 rounded-xl text-xs font-bold bg-red-950/40 text-red-400 border border-red-900/50 text-center">
+            <div class="error-alert">
                 ⚠️ Invalid staff credentials. Please try again.
             </div>
         {% endif %}
 
-        <form method="post" action="" class="space-y-5">
+        <form method="post" action="">
             {% csrf_token %}
             
-            <div>
-                <label for="id_username" class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">Staff Username</label>
-                <input type="text" name="username" id="id_username" required class="w-full bg-gray-950 border border-gray-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl p-3 text-sm text-white outline-none transition-all placeholder-gray-700" placeholder="Enter your username">
+            <div class="form-group">
+                <label for="id_username">Staff Username</label>
+                <input type="text" name="username" id="id_username" required placeholder="Enter your username">
             </div>
             
-            <div>
-                <label for="id_password" class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">Password</label>
-                <input type="password" name="password" id="id_password" required class="w-full bg-gray-950 border border-gray-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl p-3 text-sm text-white outline-none transition-all placeholder-gray-700" placeholder="••••••••">
+            <div class="form-group">
+                <label for="id_password">Password</label>
+                <input type="password" name="password" id="id_password" required placeholder="••••••••">
             </div>
 
             <input type="hidden" name="next" value="{{ next }}">
 
-            <div class="pt-4 mt-2">
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg active:scale-[0.99]">
-                    Authenticate Admin
-                </button>
+            <div style="padding-top: 16px;">
+                <button type="submit">Authenticate Admin</button>
             </div>
         </form>
 
-        <div class="mt-8 text-center border-t border-gray-800 pt-6">
-            <a href="{% url 'home_hub' %}" class="text-[11px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-wider transition-colors">
-                ← Return to Public Dashboard
-            </a>
+        <div class="footer-link">
+            <a href="{% url 'home_hub' %}">← Return to Public Dashboard</a>
         </div>
 
     </div>
