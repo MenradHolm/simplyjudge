@@ -1,12 +1,17 @@
 from django.contrib import admin
 from .models import Competition, RubricCriterion, Photo, Score
 
+# --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
+admin.site.site_header = "SimplyJudge Admin Engine"
+admin.site.site_title = "SimplyJudge Administration"
+admin.site.index_title = "Platform Administration Console"
+
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'slug', 'is_active', 'created_at')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)} 
-    filter_horizontal = ('judges',) # Restores the side-by-side UI!
+    filter_horizontal = ('judges',)
 
 @admin.register(RubricCriterion)
 class RubricCriterionAdmin(admin.ModelAdmin):
