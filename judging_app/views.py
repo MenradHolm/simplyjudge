@@ -26,6 +26,8 @@ from django.utils import timezone
 
 from .models import Competition, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
 
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
+
 def register_user(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
@@ -725,7 +727,53 @@ def truncate_filename(filename, max_length=180):
 
 def normalize_match_key(value):
     stem = os.path.splitext(os.path.basename(str(value).strip()))[0]
+    while True:
+        nested_stem, nested_ext = os.path.splitext(stem.rstrip('. '))
+        if nested_ext.lower() not in IMAGE_EXTENSIONS:
+            break
+        stem = nested_stem
     return re.sub(r'[^a-z0-9]', '', stem.lower())
+
+def photographer_tokens(photographer):
+    return [
+        normalize_match_key(token)
+        for token in re.split(r'\s+', str(photographer or '').strip())
+        if len(normalize_match_key(token)) >= 4
+    ]
+
+def image_key_matches_photographer(image_key, photographer):
+    full_name = normalize_match_key(photographer)
+    if full_name and full_name in image_key:
+        return True
+    return any(token in image_key for token in photographer_tokens(photographer))
+
+def find_matching_image(images, candidates, photographer=''):
+    candidate_keys = [normalize_match_key(candidate) for candidate in candidates if candidate]
+
+    for key in candidate_keys:
+        if key in images:
+            return images[key]
+
+    for key in candidate_keys:
+        if not key or key.isdigit():
+            continue
+        suffix_matches = [
+            (image_key, image_info)
+            for image_key, image_info in images.items()
+            if image_key.endswith(key)
+        ]
+        if len(suffix_matches) == 1:
+            return suffix_matches[0][1]
+
+        photographer_matches = [
+            image_info
+            for image_key, image_info in suffix_matches
+            if image_key_matches_photographer(image_key, photographer)
+        ]
+        if len(photographer_matches) == 1:
+            return photographer_matches[0]
+
+    return None
 
 def find_entry_csv(zip_file):
     csv_members = [
@@ -742,14 +790,13 @@ def find_entry_csv(zip_file):
     return csv_members[0]
 
 def collect_zip_image_index(zip_file):
-    image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
     images = {}
     for info in zip_file.infolist():
         filename = os.path.basename(info.filename)
         if info.is_dir() or not filename or filename.startswith('.'):
             continue
         stem, ext = os.path.splitext(filename)
-        if ext.lower() not in image_extensions:
+        if ext.lower() not in IMAGE_EXTENSIONS:
             continue
         images[normalize_match_key(stem)] = info
     return images
@@ -803,16 +850,13 @@ def process_entry_zip_job(job_id):
                     camera_settings = clean_cell(row, 'Camera Settings', 'camera settings', 'Settings', 'settings')
 
                     match_candidates = [*image_references, entry_code, title]
+                    image_info = find_matching_image(images, match_candidates, photographer=photographer)
                     image_payload = None
-                    for candidate in match_candidates:
-                        if candidate:
-                            image_info = images.get(normalize_match_key(candidate))
-                            if image_info:
-                                image_payload = {
-                                    'filename': truncate_filename(image_info.filename),
-                                    'bytes': package.read(image_info.filename),
-                                }
-                                break
+                    if image_info:
+                        image_payload = {
+                            'filename': truncate_filename(image_info.filename),
+                            'bytes': package.read(image_info.filename),
+                        }
 
                     defaults = {
                         'competition': job.competition,

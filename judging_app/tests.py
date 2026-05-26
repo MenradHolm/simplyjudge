@@ -1,9 +1,10 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from types import SimpleNamespace
 
 from .models import Competition, Photo, PhotoStatusVote, RoundOneScore
-from .views import decode_csv_bytes
+from .views import decode_csv_bytes, find_matching_image, normalize_match_key
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -146,3 +147,27 @@ class CsvEncodingTests(TestCase):
         decoded = decode_csv_bytes(csv_bytes)
 
         self.assertIn('\u201cStrong frame\u201d', decoded)
+
+
+class ZipImageMatchingTests(TestCase):
+    def test_normalize_match_key_handles_double_image_extensions(self):
+        self.assertEqual(
+            normalize_match_key('rsa_rubensteyn_thegreatescape.jpeg..jpg'),
+            'rsarubensteynthegreatescape',
+        )
+
+    def test_find_matching_image_allows_prefixed_title_filename(self):
+        image = SimpleNamespace(filename='ZA_CalvinSeverin_RisingTide.jpeg')
+        images = {normalize_match_key(image.filename): image}
+
+        self.assertIs(find_matching_image(images, ['Rising Tide']), image)
+
+    def test_find_matching_image_uses_photographer_for_duplicate_titles(self):
+        calvin = SimpleNamespace(filename='ZA_Calvin_TheHunt.jpeg')
+        yehuda = SimpleNamespace(filename='ZA_YehudaRabin_TheHunt.jpeg')
+        images = {
+            normalize_match_key(calvin.filename): calvin,
+            normalize_match_key(yehuda.filename): yehuda,
+        }
+
+        self.assertIs(find_matching_image(images, ['The Hunt'], photographer='Yehuda Rabin'), yehuda)
