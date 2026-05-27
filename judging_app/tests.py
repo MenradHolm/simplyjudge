@@ -245,6 +245,21 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(judge_response.status_code, 200)
 
 
+class AuthNavigationTests(TestCase):
+    def test_logged_in_standard_user_can_log_out_from_topbar(self):
+        user = User.objects.create_user(username='standard', password='test-pass')
+
+        self.client.force_login(user)
+        home_response = self.client.get(reverse('home_hub'))
+
+        self.assertContains(home_response, 'Log Out')
+
+        logout_response = self.client.post(reverse('logout'))
+
+        self.assertRedirects(logout_response, reverse('home_hub'))
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+
 class CsvEncodingTests(TestCase):
     def test_decode_csv_bytes_accepts_windows_1252_smart_quotes(self):
         csv_bytes = b'Criterion Name,Description,Weight\r\nComposition,\x93Strong frame\x94,1.0\r\n'

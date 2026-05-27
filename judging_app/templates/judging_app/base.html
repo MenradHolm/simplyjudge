@@ -118,6 +118,10 @@
             gap: 0.75rem;
         }
 
+        .logout-form {
+            margin: 0;
+        }
+
         .user-block {
             display: none;
             text-align: right;
@@ -811,6 +815,10 @@
                     {% if user.is_superuser %}
                         <a class="button button-secondary" href="/admin/">Admin</a>
                     {% endif %}
+                    <form class="logout-form" method="POST" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button class="button button-secondary" type="submit">Log Out</button>
+                    </form>
                 {% elif request.path != '/admin/login/' %}
                     {% if request.resolver_match.url_name != 'register' %}
                         <a class="button button-secondary" href="{% url 'register' %}">Sign Up</a>
