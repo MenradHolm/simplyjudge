@@ -1,17 +1,35 @@
 from django.contrib import admin
-from .models import Competition, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
+from .models import Competition, CompetitionMembership, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
 
 # --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
 admin.site.site_header = "SimplyJudge Admin Engine"
 admin.site.site_title = "SimplyJudge Administration"
 admin.site.index_title = "Platform Administration Console"
 
+
+def platform_admin_permission(request):
+    return request.user.is_active and request.user.is_superuser
+
+
+admin.site.has_permission = platform_admin_permission
+
+class CompetitionMembershipInline(admin.TabularInline):
+    model = CompetitionMembership
+    extra = 0
+
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'slug', 'is_active', 'created_at')
     search_fields = ('name', 'slug')
-    prepopulated_fields = {'slug': ('name',)} 
-    filter_horizontal = ('judges',)
+    prepopulated_fields = {'slug': ('name',)}
+    exclude = ('judges',)
+    inlines = (CompetitionMembershipInline,)
+
+@admin.register(CompetitionMembership)
+class CompetitionMembershipAdmin(admin.ModelAdmin):
+    list_display = ('id', 'competition', 'user', 'role', 'is_active', 'created_at')
+    list_filter = ('role', 'is_active', 'competition')
+    search_fields = ('competition__name', 'user__username', 'user__email')
 
 @admin.register(RubricCriterion)
 class RubricCriterionAdmin(admin.ModelAdmin):

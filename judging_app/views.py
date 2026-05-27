@@ -14,7 +14,6 @@ from PIL.ExifTags import TAGS
 from PIL import ImageOps
 
 from django.contrib import messages
-from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -25,7 +24,7 @@ from django.db.models import Avg, FloatField
 from django.db.models.functions import Cast
 from django.utils import timezone
 
-from .models import Competition, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
+from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
 CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024
@@ -41,23 +40,84 @@ def register_user(request):
         form = UserCreationForm()
     return render(request, 'judging_app/register.html', {'form': form})
 
+ORGANIZER_ROLES = {CompetitionMembership.Role.ORGANIZER}
+INTERNAL_REVIEW_ROLES = {
+    CompetitionMembership.Role.INTERNAL_JUDGE,
+}
+VIP_JUDGE_ROLES = {CompetitionMembership.Role.VIP_JUDGE}
+COMPETITION_MEMBER_ROLES = {
+    CompetitionMembership.Role.ORGANIZER,
+    CompetitionMembership.Role.INTERNAL_JUDGE,
+    CompetitionMembership.Role.VIP_JUDGE,
+}
+
+def has_competition_role(user, competition, roles):
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return CompetitionMembership.objects.filter(
+        user=user,
+        competition=competition,
+        role__in=roles,
+        is_active=True,
+    ).exists()
+
+def is_competition_member(user, competition):
+    return has_competition_role(user, competition, COMPETITION_MEMBER_ROLES)
+
+def is_competition_organizer(user, competition):
+    return has_competition_role(user, competition, ORGANIZER_ROLES)
+
+def is_internal_reviewer(user, competition):
+    return has_competition_role(user, competition, INTERNAL_REVIEW_ROLES)
+
 def is_approved_judge(user, competition):
+    if has_competition_role(user, competition, VIP_JUDGE_ROLES):
+        return True
+    if not user.is_authenticated:
+        return False
     if user.is_superuser:
         return True
     return competition.judges.filter(id=user.id).exists()
 
+def competition_role_for_user(user, competition):
+    if user.is_superuser:
+        return 'Platform admin'
+    membership = CompetitionMembership.objects.filter(
+        user=user,
+        competition=competition,
+        is_active=True,
+    ).order_by('role').first()
+    return membership.get_role_display() if membership else ''
+
 def home_hub(request):
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
+    if request.user.is_authenticated and not request.user.is_superuser:
+        active_competitions = active_competitions.filter(
+            memberships__user=request.user,
+            memberships__is_active=True,
+        ).distinct()
+    for competition in active_competitions:
+        competition.user_role = competition_role_for_user(request.user, competition) if request.user.is_authenticated else ''
+        competition.can_manage = is_competition_organizer(request.user, competition)
+        competition.can_review = is_internal_reviewer(request.user, competition)
+        competition.can_judge = is_approved_judge(request.user, competition)
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
 
-def active_staff_count():
-    return User.objects.filter(is_active=True, is_staff=True).count()
+def internal_review_panel_count(competition):
+    return CompetitionMembership.objects.filter(
+        competition=competition,
+        role__in=INTERNAL_REVIEW_ROLES,
+        is_active=True,
+        user__is_active=True,
+    ).values('user').distinct().count()
 
 def majority_threshold(panel_size):
     return (panel_size // 2) + 1 if panel_size else 1
 
 def apply_status_vote_majority(photo):
-    panel_size = active_staff_count()
+    panel_size = internal_review_panel_count(photo.competition)
     threshold = majority_threshold(panel_size)
     round_1_votes = photo.status_votes.filter(decision=PhotoStatusVote.Decision.ROUND_1).count()
     reject_votes = photo.status_votes.filter(decision=PhotoStatusVote.Decision.REJECT).count()
@@ -82,7 +142,7 @@ def judge_router(request, comp_slug):
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
     photo_queue = Photo.objects.filter(competition=competition)
-    if not request.user.is_staff and not request.user.is_superuser:
+    if not request.user.is_superuser:
         photo_queue = photo_queue.filter(status=Photo.Status.SHORTLISTED)
     next_photo = photo_queue.exclude(score__judge=request.user).first()
     if next_photo:
@@ -91,10 +151,9 @@ def judge_router(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def elimination_mode(request, comp_slug):
-    if not request.user.is_staff:
-        return redirect('home_hub')
-
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_internal_reviewer(request.user, competition):
+        return redirect('home_hub')
 
     if request.method == 'POST':
         photo_id = request.POST.get('photo_id', '')
@@ -138,7 +197,7 @@ def elimination_mode(request, comp_slug):
     }
     vote_summary = None
     if current_photo:
-        panel_size = active_staff_count()
+        panel_size = internal_review_panel_count(competition)
         vote_summary = {
             'panel_size': panel_size,
             'threshold': majority_threshold(panel_size),
@@ -158,10 +217,9 @@ def elimination_mode(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def round_1_review(request, comp_slug):
-    if not request.user.is_staff:
-        return redirect('home_hub')
-
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_internal_reviewer(request.user, competition):
+        return redirect('home_hub')
 
     if request.method == 'POST':
         photo_id = request.POST.get('photo_id', '')
@@ -211,12 +269,12 @@ def round_1_review(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def finalize_shortlist(request, comp_slug):
-    if not request.user.is_staff:
-        return redirect('home_hub')
     if request.method != 'POST':
         return redirect('home_hub')
 
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
     scored_round_1 = list(
         Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1)
         .annotate(round_1_average=Avg('round_1_scores__score'))
@@ -241,16 +299,16 @@ def judge_photo(request, comp_slug, photo_id):
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
     photo_queryset = Photo.objects.filter(id=photo_id, competition=competition)
-    if not request.user.is_staff and not request.user.is_superuser:
+    if not request.user.is_superuser:
         photo_queryset = photo_queryset.filter(status=Photo.Status.SHORTLISTED)
     photo = get_object_or_404(photo_queryset)
     rubric = RubricCriterion.objects.filter(competition=competition)
     visible_photos = Photo.objects.filter(competition=competition)
-    if not request.user.is_staff and not request.user.is_superuser:
+    if not request.user.is_superuser:
         visible_photos = visible_photos.filter(status=Photo.Status.SHORTLISTED)
     total_photos = visible_photos.count()
     scored_query = Score.objects.filter(photo__competition=competition, judge=request.user)
-    if not request.user.is_staff and not request.user.is_superuser:
+    if not request.user.is_superuser:
         scored_query = scored_query.filter(photo__status=Photo.Status.SHORTLISTED)
     scored_photos = scored_query.count()
     
@@ -284,6 +342,8 @@ def judge_photo(request, comp_slug, photo_id):
 @login_required(login_url='/accounts/login/')
 def leaderboard(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_member(request.user, competition):
+        return redirect('home_hub')
     tie_criterion = competition.tie_breaker_criterion
     photos_query = Photo.objects.filter(competition=competition).annotate(average_score=Avg('score__total_score'))
     if tie_criterion:
@@ -317,9 +377,9 @@ def submit_photo(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def feedback_report(request, comp_slug):
-    if not request.user.is_staff:
-        return redirect('home_hub')
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
     photos = list(Photo.objects.filter(competition=competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
     for photo in photos:
@@ -328,10 +388,9 @@ def feedback_report(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def upload_spreadsheet(request, comp_slug):
-    if not request.user.is_staff:
-        return redirect('home_hub')
-
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
 
     if request.method == 'POST' and request.FILES.get('csv_file'):
         csv_file = request.FILES['csv_file']
@@ -399,9 +458,9 @@ def upload_spreadsheet(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def upload_photos_zip(request, comp_slug):
-    if not request.user.is_staff:
-        return redirect('home_hub')
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
     if request.method == 'POST' and request.POST.get('zip_url'):
         zip_url = request.POST.get('zip_url', '').strip()
         parsed_url = urlparse(zip_url)
@@ -456,12 +515,12 @@ def upload_photos_zip(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def upload_zip_chunk(request, comp_slug):
-    if not request.user.is_staff:
-        return JsonResponse({'error': 'Staff access required.'}, status=403)
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required.'}, status=405)
 
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return JsonResponse({'error': 'Competition organizer access required.'}, status=403)
     chunk = request.FILES.get('chunk')
     upload_id = request.POST.get('upload_id', '')
     filename = request.POST.get('filename', 'upload.zip')
@@ -517,9 +576,9 @@ def upload_zip_chunk(request, comp_slug):
 
 @login_required(login_url='/accounts/login/')
 def zip_import_status(request, comp_slug, job_id):
-    if not request.user.is_staff:
-        return redirect('home_hub')
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
     job = get_object_or_404(ZipImportJob, id=job_id, competition=competition)
     return render(request, 'judging_app/zip_import_status.html', {'competition': competition, 'job': job})
 

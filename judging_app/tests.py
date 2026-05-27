@@ -5,7 +5,7 @@ from django.urls import reverse
 from PIL import Image
 from types import SimpleNamespace
 
-from .models import Competition, Photo, PhotoStatusVote, RoundOneScore, competition_photo_upload_path
+from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, competition_photo_upload_path
 from .views import decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
 
@@ -13,8 +13,23 @@ class PhotoStatusWorkflowTests(TestCase):
     def setUp(self):
         self.competition = Competition.objects.create(name='Youth POTY', slug='youth-poty')
         self.guest_judge = User.objects.create_user(username='judge', password='test-pass')
-        self.staff = User.objects.create_user(username='staff', password='test-pass', is_staff=True)
-        self.competition.judges.add(self.guest_judge)
+        self.internal_judge = User.objects.create_user(username='reviewer', password='test-pass')
+        self.organizer = User.objects.create_user(username='organizer', password='test-pass')
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=self.guest_judge,
+            role=CompetitionMembership.Role.VIP_JUDGE,
+        )
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=self.internal_judge,
+            role=CompetitionMembership.Role.INTERNAL_JUDGE,
+        )
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=self.organizer,
+            role=CompetitionMembership.Role.ORGANIZER,
+        )
 
     def create_photo(self, title, status, **overrides):
         defaults = {
@@ -53,10 +68,10 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_single_staff_vote_finalizes_photo_status(self):
+    def test_single_internal_reviewer_vote_finalizes_photo_status(self):
         photo = self.create_photo('Pending image', Photo.Status.PENDING)
 
-        self.client.force_login(self.staff)
+        self.client.force_login(self.internal_judge)
         response = self.client.post(
             reverse('elimination_mode', args=[self.competition.slug]),
             {'photo_id': photo.id, 'decision': 'round_1'},
@@ -65,14 +80,18 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertRedirects(response, reverse('elimination_mode', args=[self.competition.slug]))
         photo.refresh_from_db()
         self.assertEqual(photo.status, Photo.Status.ROUND_1)
-        self.assertEqual(photo.status_votes.get(voter=self.staff).decision, PhotoStatusVote.Decision.ROUND_1)
+        self.assertEqual(photo.status_votes.get(voter=self.internal_judge).decision, PhotoStatusVote.Decision.ROUND_1)
 
-    def test_staff_majority_required_when_multiple_staff_users_exist(self):
-        second_staff = User.objects.create_user(username='staff-two', password='test-pass', is_staff=True)
-        User.objects.create_user(username='staff-three', password='test-pass', is_staff=True)
+    def test_internal_review_majority_required_when_multiple_reviewers_exist(self):
+        second_reviewer = User.objects.create_user(username='reviewer-two', password='test-pass')
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=second_reviewer,
+            role=CompetitionMembership.Role.INTERNAL_JUDGE,
+        )
         photo = self.create_photo('Pending image', Photo.Status.PENDING)
 
-        self.client.force_login(self.staff)
+        self.client.force_login(self.internal_judge)
         self.client.post(
             reverse('elimination_mode', args=[self.competition.slug]),
             {'photo_id': photo.id, 'decision': 'round_1'},
@@ -80,7 +99,7 @@ class PhotoStatusWorkflowTests(TestCase):
         photo.refresh_from_db()
         self.assertEqual(photo.status, Photo.Status.PENDING)
 
-        self.client.force_login(second_staff)
+        self.client.force_login(second_reviewer)
         self.client.post(
             reverse('elimination_mode', args=[self.competition.slug]),
             {'photo_id': photo.id, 'decision': 'round_1'},
@@ -88,16 +107,16 @@ class PhotoStatusWorkflowTests(TestCase):
         photo.refresh_from_db()
         self.assertEqual(photo.status, Photo.Status.ROUND_1)
 
-    def test_staff_does_not_see_photos_they_already_voted_on(self):
+    def test_internal_reviewer_does_not_see_photos_they_already_voted_on(self):
         photo = self.create_photo('Pending image', Photo.Status.PENDING)
-        PhotoStatusVote.objects.create(photo=photo, voter=self.staff, decision=PhotoStatusVote.Decision.REJECT)
+        PhotoStatusVote.objects.create(photo=photo, voter=self.internal_judge, decision=PhotoStatusVote.Decision.REJECT)
 
-        self.client.force_login(self.staff)
+        self.client.force_login(self.internal_judge)
         response = self.client.get(reverse('elimination_mode', args=[self.competition.slug]))
 
         self.assertContains(response, 'No pending photos left for you.')
 
-    def test_staff_round_1_review_displays_full_context_and_records_score(self):
+    def test_internal_round_1_review_displays_full_context_and_records_score(self):
         photo = self.create_photo(
             'Context image',
             Photo.Status.ROUND_1,
@@ -106,7 +125,7 @@ class PhotoStatusWorkflowTests(TestCase):
             camera_settings='50mm, f/2.8, ISO 400',
         )
 
-        self.client.force_login(self.staff)
+        self.client.force_login(self.internal_judge)
         response = self.client.get(reverse('round_1_review', args=[self.competition.slug]))
 
         self.assertContains(response, 'Context image')
@@ -120,7 +139,7 @@ class PhotoStatusWorkflowTests(TestCase):
         )
 
         self.assertRedirects(response, reverse('round_1_review', args=[self.competition.slug]))
-        self.assertEqual(photo.round_1_scores.get(judge=self.staff).score, 8)
+        self.assertEqual(photo.round_1_scores.get(judge=self.internal_judge).score, 8)
 
     def test_finalize_shortlist_uses_top_ten_percent_of_round_1_scores(self):
         photos = [
@@ -128,9 +147,9 @@ class PhotoStatusWorkflowTests(TestCase):
             for index in range(10)
         ]
         for index, photo in enumerate(photos):
-            RoundOneScore.objects.create(photo=photo, judge=self.staff, score=index + 1)
+            RoundOneScore.objects.create(photo=photo, judge=self.internal_judge, score=index + 1)
 
-        self.client.force_login(self.staff)
+        self.client.force_login(self.organizer)
         response = self.client.post(reverse('finalize_shortlist', args=[self.competition.slug]))
 
         self.assertRedirects(response, reverse('home_hub'))
@@ -140,6 +159,27 @@ class PhotoStatusWorkflowTests(TestCase):
             sum(1 for status in statuses.values() if status == Photo.Status.SHORTLISTED),
             1,
         )
+
+    def test_organizer_only_sees_assigned_competitions_on_home(self):
+        other_competition = Competition.objects.create(name='Private Client Cup', slug='private-client-cup')
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('home_hub'))
+
+        self.assertContains(response, self.competition.name)
+        self.assertNotContains(response, other_competition.name)
+
+        direct_response = self.client.get(reverse('upload_spreadsheet', args=[other_competition.slug]))
+        self.assertRedirects(direct_response, reverse('home_hub'))
+
+    def test_internal_reviewer_cannot_upload_or_finalize(self):
+        self.client.force_login(self.internal_judge)
+
+        upload_response = self.client.get(reverse('upload_spreadsheet', args=[self.competition.slug]))
+        finalize_response = self.client.post(reverse('finalize_shortlist', args=[self.competition.slug]))
+
+        self.assertRedirects(upload_response, reverse('home_hub'))
+        self.assertRedirects(finalize_response, reverse('home_hub'))
 
 
 class CsvEncodingTests(TestCase):

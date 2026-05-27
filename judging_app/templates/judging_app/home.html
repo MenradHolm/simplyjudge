@@ -44,7 +44,7 @@
             </p>
             <div class="hero-actions">
                 {% if user.is_authenticated %}
-                    {% if user.is_staff %}
+                    {% if user.is_superuser %}
                         <a class="button button-primary" href="/admin/">Manage Platform</a>
                     {% endif %}
                     {% if competitions %}
@@ -69,17 +69,17 @@
                     <span class="metric-label">Active competition{{ competitions|length|pluralize }}</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-value">{% if user.is_staff %}Admin{% elif user.is_authenticated %}Judge{% else %}Guest{% endif %}</span>
+                    <span class="metric-value">{% if user.is_superuser %}Admin{% elif user.is_authenticated %}Member{% else %}Guest{% endif %}</span>
                     <span class="metric-label">Current access</span>
                 </div>
             </div>
             <div class="panel-footer">
-                {% if user.is_staff %}
-                    Upload rubrics, match photo files, review reports, and keep judging moving.
+                {% if user.is_superuser %}
+                    Create competitions, assign organizers and judges, and keep the platform governed.
                 {% elif user.is_authenticated %}
-                    Pick a competition below to continue scoring assigned photos.
+                    Pick your assigned competition below to continue your work.
                 {% else %}
-                    Sign in with your judge account to begin scoring entries.
+                    Sign in with your assigned competition account to begin.
                 {% endif %}
             </div>
         </aside>
@@ -102,24 +102,33 @@
                             <div>
                                 <h4 class="competition-name">{{ competition.name }}</h4>
                                 <p class="card-meta">Created {{ competition.created_at|date:"M j, Y" }}</p>
+                                {% if competition.user_role %}
+                                    <p class="card-meta">{{ competition.user_role }}</p>
+                                {% endif %}
                             </div>
                             <span class="status-dot" aria-label="Active"></span>
                         </div>
                         <div class="card-actions">
                             {% if competition.slug %}
-                                <a class="action-link primary" href="{% url 'judge_router' competition.slug %}">
-                                    Start judging
-                                    <span aria-hidden="true">&gt;</span>
-                                </a>
-                                <a class="action-link" href="{% url 'leaderboard' competition.slug %}">
-                                    Leaderboard
-                                    <span aria-hidden="true">&gt;</span>
-                                </a>
-                                {% if user.is_staff %}
+                                {% if competition.can_judge %}
+                                    <a class="action-link primary" href="{% url 'judge_router' competition.slug %}">
+                                        Start judging
+                                        <span aria-hidden="true">&gt;</span>
+                                    </a>
+                                {% endif %}
+                                {% if user.is_superuser or competition.user_role %}
+                                    <a class="action-link" href="{% url 'leaderboard' competition.slug %}">
+                                        Leaderboard
+                                        <span aria-hidden="true">&gt;</span>
+                                    </a>
+                                {% endif %}
+                                {% if competition.can_manage %}
                                     <a class="action-link" href="{% url 'feedback_report' competition.slug %}">
                                         Feedback report
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
+                                {% endif %}
+                                {% if competition.can_review %}
                                     <a class="action-link" href="{% url 'elimination_mode' competition.slug %}">
                                         Triage review
                                         <span aria-hidden="true">&gt;</span>
@@ -128,6 +137,8 @@
                                         Round 1 review
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
+                                {% endif %}
+                                {% if competition.can_manage %}
                                     <form method="POST" action="{% url 'finalize_shortlist' competition.slug %}">
                                         {% csrf_token %}
                                         <button class="action-link" type="submit">
@@ -141,7 +152,7 @@
                                     </a>
                                 {% endif %}
                             {% else %}
-                                {% if user.is_staff %}
+                                {% if user.is_superuser %}
                                     <a class="action-link primary" href="/admin/judging_app/competition/{{ competition.id }}/change/">
                                         Add URL slug
                                         <span aria-hidden="true">&gt;</span>

@@ -788,10 +788,10 @@
                 <span class="mark">S</span>
                 <span>
                     <h1 class="brand-title">SimplyJudge</h1>
-                    {% if user.is_staff %}
-                        <p class="brand-subtitle">Organizer Console</p>
+                    {% if user.is_superuser %}
+                        <p class="brand-subtitle">Platform Admin</p>
                     {% elif user.is_authenticated %}
-                        <p class="brand-subtitle">Judging Workspace</p>
+                        <p class="brand-subtitle">Competition Workspace</p>
                     {% else %}
                         <p class="brand-subtitle">Photo Competition Platform</p>
                     {% endif %}
@@ -802,13 +802,13 @@
                 {% if user.is_authenticated %}
                     <span class="user-block">
                         <span class="user-name">{{ user.username }}</span>
-                        {% if user.is_staff %}
-                            <span class="user-role">Staff Organizer</span>
+                        {% if user.is_superuser %}
+                            <span class="user-role">Platform Admin</span>
                         {% else %}
-                            <span class="user-role">Active Judge</span>
+                            <span class="user-role">Competition User</span>
                         {% endif %}
                     </span>
-                    {% if user.is_staff %}
+                    {% if user.is_superuser %}
                         <a class="button button-secondary" href="/admin/">Admin</a>
                     {% endif %}
                 {% elif request.path != '/admin/login/' %}

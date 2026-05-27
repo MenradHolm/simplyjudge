@@ -30,6 +30,25 @@ class Competition(models.Model):
     def __str__(self):
         return self.name
 
+class CompetitionMembership(models.Model):
+    class Role(models.TextChoices):
+        ORGANIZER = 'ORGANIZER', 'Competition Organizer'
+        INTERNAL_JUDGE = 'INTERNAL_JUDGE', 'Internal Reviewer'
+        VIP_JUDGE = 'VIP_JUDGE', 'VIP Guest Judge'
+
+    competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='memberships')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='competition_memberships')
+    role = models.CharField(max_length=30, choices=Role.choices)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('competition', 'user', 'role')
+        ordering = ['competition__name', 'user__username', 'role']
+
+    def __str__(self):
+        return f"{self.user} - {self.competition} - {self.get_role_display()}"
+
 class RubricCriterion(models.Model):
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='rubrics')
     name = models.CharField(max_length=100)
