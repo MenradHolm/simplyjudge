@@ -48,7 +48,12 @@
         </div>
         <div class="panel-footer">
             {% if job.status == 'completed' %}
-                Import completed successfully. The matched photos are now available in the feedback report.
+                Import completed successfully. The entries and matched photos are now in this competition workspace.
+                {% if is_feedback_portal %}
+                    Assigned reviewers can now score every photo and leave member feedback.
+                {% else %}
+                    The next step is internal triage, then Round 1, then the final shortlist.
+                {% endif %}
             {% elif job.status == 'failed' %}
                 Import failed and database changes were rolled back. Error: {{ job.error_message }}
             {% elif job.status == 'processing' %}
@@ -60,8 +65,20 @@
     </section>
 
     <div class="actions" style="margin-top: 1rem;">
-        <a href="{% url 'upload_spreadsheet' competition.slug %}" class="button button-secondary">Back to Uploads</a>
-        <a href="{% url 'feedback_report' competition.slug %}" class="button button-primary">Open Feedback Report</a>
+        {% if job.status == 'completed' %}
+            {% if can_start_feedback_review %}
+                <a href="{% url 'judge_router' competition.slug %}" class="button button-primary">Start Feedback Review</a>
+            {% elif can_start_triage %}
+                <a href="{% url 'elimination_mode' competition.slug %}" class="button button-primary">Start Triage Review</a>
+            {% else %}
+                <a href="{% url 'home_hub' %}" class="button button-primary">Back to Workspace</a>
+            {% endif %}
+            <a href="{% url 'feedback_report' competition.slug %}" class="button button-secondary">Review Imported Entries</a>
+            <a href="{% url 'upload_spreadsheet' competition.slug %}" class="button button-secondary">Upload More Data</a>
+        {% else %}
+            <a href="{% url 'upload_spreadsheet' competition.slug %}" class="button button-secondary">Back to Uploads</a>
+            <a href="{% url 'home_hub' %}" class="button button-secondary">Back to Workspace</a>
+        {% endif %}
     </div>
 </main>
 {% endblock %}

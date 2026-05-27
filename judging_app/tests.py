@@ -6,7 +6,7 @@ from django.utils import timezone
 from PIL import Image
 from types import SimpleNamespace
 
-from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, competition_photo_upload_path
+from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
@@ -215,6 +215,43 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertRedirects(upload_response, reverse('home_hub'))
         self.assertRedirects(finalize_response, reverse('home_hub'))
+
+    def test_completed_zip_import_points_organizer_to_workspace_next_steps(self):
+        job = ZipImportJob.objects.create(
+            competition=self.competition,
+            uploaded_by=self.organizer,
+            source_name='entries.zip',
+            status=ZipImportJob.Status.COMPLETED,
+            total_rows=3,
+            processed_rows=3,
+            matched_images=3,
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('zip_import_status', args=[self.competition.slug, job.id]))
+
+        self.assertContains(response, 'Import completed successfully')
+        self.assertContains(response, 'Back to Workspace')
+        self.assertContains(response, 'Review Imported Entries')
+        self.assertNotContains(response, 'Open Feedback Report')
+
+    def test_completed_zip_import_allows_reviewer_to_start_triage(self):
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=self.organizer,
+            role=CompetitionMembership.Role.INTERNAL_JUDGE,
+        )
+        job = ZipImportJob.objects.create(
+            competition=self.competition,
+            uploaded_by=self.organizer,
+            source_name='entries.zip',
+            status=ZipImportJob.Status.COMPLETED,
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('zip_import_status', args=[self.competition.slug, job.id]))
+
+        self.assertContains(response, 'Start Triage Review')
 
     def test_feedback_portal_hides_funnel_actions(self):
         feedback_competition = Competition.objects.create(

@@ -614,7 +614,14 @@ def zip_import_status(request, comp_slug, job_id):
     if not is_competition_organizer(request.user, competition):
         return redirect('home_hub')
     job = get_object_or_404(ZipImportJob, id=job_id, competition=competition)
-    return render(request, 'judging_app/zip_import_status.html', {'competition': competition, 'job': job})
+    context = {
+        'competition': competition,
+        'job': job,
+        'can_start_triage': is_full_competition(competition) and is_internal_reviewer(request.user, competition),
+        'can_start_feedback_review': is_feedback_portal(competition) and is_approved_judge(request.user, competition),
+        'is_feedback_portal': is_feedback_portal(competition),
+    }
+    return render(request, 'judging_app/zip_import_status.html', context)
 
 def public_results(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
