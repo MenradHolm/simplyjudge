@@ -369,7 +369,9 @@ def judge_photo(request, comp_slug, photo_id):
         'competition': competition,
         'photo': photo,
         'rubric': rubric,
-        'progress': f"{scored_photos + 1} / {total_photos}"
+        'progress': f"{scored_photos + 1} / {total_photos}",
+        'current_index': scored_photos + 1,
+        'total_photos': total_photos,
     }
     return render(request, 'judging_app/judge.html', context)
 

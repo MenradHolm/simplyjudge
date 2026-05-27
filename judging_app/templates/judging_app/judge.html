@@ -2,23 +2,235 @@
 
 {% block title %}Judging - SimplyJudge{% endblock %}
 
+{% block extra_head %}
+<style>
+    .jury-shell {
+        width: min(1560px, calc(100% - 2rem));
+    }
+
+    .jury-head {
+        align-items: center;
+        padding-bottom: 1.1rem;
+        border-bottom: 1px solid rgba(217, 225, 236, 0.9);
+    }
+
+    .jury-kicker {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 0.65rem;
+    }
+
+    .jury-title {
+        max-width: 20ch;
+    }
+
+    .progress-badge {
+        display: grid;
+        gap: 0.25rem;
+        min-width: 8.5rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 12px 28px rgba(25, 36, 54, 0.08);
+        text-align: right;
+    }
+
+    .progress-badge strong {
+        font-size: 1.45rem;
+        line-height: 1;
+    }
+
+    .jury-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(22rem, 0.55fr);
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .jury-photo-panel {
+        overflow: hidden;
+        background: #0c111b;
+        border-color: #1f2937;
+        box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
+    }
+
+    .jury-photo-stage {
+        display: grid;
+        place-items: center;
+        min-height: min(72vh, 52rem);
+        padding: clamp(0.8rem, 2vw, 1.4rem);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 18rem),
+            #0c111b;
+    }
+
+    .jury-photo-stage img {
+        width: 100%;
+        height: 100%;
+        max-height: 76vh;
+        object-fit: contain;
+        border-radius: 0.35rem;
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+    }
+
+    .jury-context {
+        display: grid;
+        gap: 1rem;
+        padding: clamp(1.1rem, 2vw, 1.45rem);
+        color: #dbe4f0;
+        background: #111827;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .jury-context .eyebrow,
+    .jury-context .field-label {
+        color: #8ccfc0;
+    }
+
+    .jury-context .competition-name,
+    .jury-context .page-copy {
+        color: #f8fafc;
+    }
+
+    .jury-context .muted,
+    .jury-context .card-meta {
+        color: #a7b4c5;
+    }
+
+    .jury-meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .jury-details {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(16rem, 0.65fr);
+        gap: 1rem;
+    }
+
+    .metadata-block {
+        padding: 0.85rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.045);
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        color: #dbe4f0;
+        line-height: 1.55;
+    }
+
+    .jury-score-panel {
+        position: sticky;
+        top: 5.2rem;
+        box-shadow: 0 20px 50px rgba(25, 36, 54, 0.13);
+    }
+
+    .score-panel-head {
+        align-items: flex-start;
+        background: #ffffff;
+    }
+
+    .score-panel-head .panel-title {
+        font-size: 1.05rem;
+    }
+
+    .score-form {
+        gap: 0.85rem;
+    }
+
+    .premium-score-card {
+        gap: 0.8rem;
+        padding: 0.95rem;
+        background: #ffffff;
+        border-color: #d6deea;
+    }
+
+    .criterion-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 0.85rem;
+    }
+
+    .criterion-head label {
+        color: var(--ink);
+        font-size: 0.92rem;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    .score-input-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .score-input-row input {
+        min-height: 3.2rem;
+        font-size: 1.25rem;
+        font-weight: 850;
+        text-align: center;
+    }
+
+    .score-scale {
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 850;
+    }
+
+    .feedback-field textarea {
+        min-height: 9rem;
+        background: #fbfcfe;
+    }
+
+    .submit-evaluation {
+        width: 100%;
+        min-height: 3rem;
+        margin-top: 0.25rem;
+    }
+
+    @media (max-width: 1020px) {
+        .jury-layout,
+        .jury-details {
+            grid-template-columns: 1fr;
+        }
+
+        .jury-score-panel {
+            position: static;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<main class="shell shell-wide">
-    <div class="page-head">
+<main class="shell jury-shell">
+    <div class="page-head jury-head">
         <div>
-            <p class="eyebrow">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback review{% else %}Evaluating event{% endif %}</p>
-            <h2 class="page-title">{{ competition.name }}</h2>
+            <div class="jury-kicker">
+                <p class="eyebrow" style="margin-bottom: 0;">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback review{% else %}Private jury review{% endif %}</p>
+                <span class="tag tag-neutral">Confidential</span>
+            </div>
+            <h2 class="page-title jury-title">{{ competition.name }}</h2>
         </div>
-        <span class="tag tag-neutral">Progress {{ progress }}</span>
+        <div class="progress-badge" aria-label="Judging progress">
+            <span class="metric-label">Progress</span>
+            <strong>{{ current_index }} / {{ total_photos }}</strong>
+        </div>
     </div>
 
-    <div class="split-layout">
-        <section class="panel">
-            <div class="photo-stage">
+    <div class="jury-layout">
+        <section class="panel jury-photo-panel">
+            <div class="jury-photo-stage">
                 <img src="{{ photo.image.url }}" alt="Anonymous competition submission">
             </div>
-            <div class="panel-padded">
-                <div class="card-top" style="margin-bottom: 1rem;">
+            <div class="jury-context">
+                <div class="jury-meta-row">
                     <div>
                         <p class="eyebrow" style="margin-bottom: 0.35rem;">Submission #{{ photo.id }}</p>
                         <h3 class="competition-name">Anonymous entry</h3>
@@ -27,7 +239,7 @@
                     <span class="tag tag-neutral">{{ photo.category }}</span>
                 </div>
 
-                <div class="grid">
+                <div class="jury-details">
                     <div>
                         <span class="field-label">Entry story</span>
                         {% if photo.description %}
@@ -40,7 +252,7 @@
                     <div>
                         <span class="field-label">Camera settings and metadata</span>
                         {% if photo.camera_settings %}
-                            <p class="alert" style="font-family: ui-monospace, SFMono-Regular, Consolas, monospace;">{{ photo.camera_settings }}</p>
+                            <p class="metadata-block">{{ photo.camera_settings }}</p>
                         {% else %}
                             <p class="muted">Metadata unlisted or stripped by editing software.</p>
                         {% endif %}
@@ -49,26 +261,32 @@
             </div>
         </section>
 
-        <section class="panel">
-            <div class="panel-header">
-                <p class="panel-title">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Score and feedback{% else %}Score panel{% endif %}</p>
-                <span class="tag tag-neutral">0 to 100</span>
+        <section class="panel jury-score-panel">
+            <div class="panel-header score-panel-head">
+                <div>
+                    <p class="panel-title">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Score and feedback{% else %}Jury scorecard{% endif %}</p>
+                    <p class="card-meta">Submission #{{ photo.id }}</p>
+                </div>
+                <span class="tag tag-neutral">0-100</span>
             </div>
 
-            <form method="POST" class="form-grid panel-padded">
+            <form method="POST" class="form-grid panel-padded score-form">
                 {% csrf_token %}
 
                 {% if rubric %}
                     {% for criterion in rubric %}
-                        <div class="score-card">
-                            <div class="card-top" style="margin-bottom: 0;">
+                        <div class="score-card premium-score-card">
+                            <div class="criterion-head">
                                 <label for="criterion_{{ criterion.id }}">{{ criterion.name }}</label>
                                 <span class="tag tag-neutral">Weight {{ criterion.weight }}</span>
                             </div>
                             {% if criterion.description %}
                                 <p class="muted" style="margin: 0;">{{ criterion.description }}</p>
                             {% endif %}
-                            <input type="number" step="0.5" min="0" max="100" name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" required>
+                            <div class="score-input-row">
+                                <input type="number" step="0.5" min="0" max="100" name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" required>
+                                <span class="score-scale">/ 100</span>
+                            </div>
                         </div>
                     {% endfor %}
                 {% else %}
@@ -77,12 +295,12 @@
                     </div>
                 {% endif %}
 
-                <div class="field">
+                <div class="field feedback-field">
                     <label for="comment">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback{% else %}Critique notes{% endif %}</label>
                     <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Write useful feedback for the photographer...{% else %}Write concise feedback for the organizer or entrant...{% endif %}"></textarea>
                 </div>
 
-                <button type="submit" class="button button-primary" {% if not rubric %}disabled{% endif %}>Save and Continue</button>
+                <button type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>Submit Evaluation</button>
             </form>
         </section>
     </div>
