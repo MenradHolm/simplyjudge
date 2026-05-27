@@ -202,6 +202,8 @@ class PhotoStatusWorkflowTests(TestCase):
         response = self.client.get(reverse('home_hub'))
 
         self.assertContains(response, self.competition.name)
+        self.assertContains(response, 'Your events')
+        self.assertContains(response, 'Your judging events, organized.')
         self.assertNotContains(response, other_competition.name)
 
         direct_response = self.client.get(reverse('upload_spreadsheet', args=[other_competition.slug]))

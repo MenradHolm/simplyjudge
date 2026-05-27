@@ -36,11 +36,23 @@
 
     <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
-            <p class="eyebrow">Competition operations, simplified</p>
-            <h2 id="hero-title" class="hero-title">Photo judging without the spreadsheet chaos.</h2>
+            <p class="eyebrow">{% if user.is_authenticated %}Your event workspace{% else %}Judging operations, simplified{% endif %}</p>
+            <h2 id="hero-title" class="hero-title">
+                {% if user.is_authenticated %}
+                    Your judging events, organized.
+                {% else %}
+                    Photo judging without the spreadsheet chaos.
+                {% endif %}
+            </h2>
             <p class="lead">
-                Run active competitions, route judges to their next image, collect weighted scores,
-                and publish results from one focused workspace.
+                {% if user.is_superuser %}
+                    Manage client events, assign roles, and keep every judging workflow moving from one platform.
+                {% elif user.is_authenticated %}
+                    Open your assigned events, continue judging or reviewing, and pick up exactly where you left off.
+                {% else %}
+                    Run active events, route judges to their next image, collect weighted scores,
+                    and publish results from one focused workspace.
+                {% endif %}
             </p>
             <div class="hero-actions">
                 {% if user.is_authenticated %}
@@ -48,12 +60,12 @@
                         <a class="button button-primary" href="/admin/">Manage Platform</a>
                     {% endif %}
                     {% if competitions %}
-                        <a class="button button-secondary" href="#competitions">Open Active Competition</a>
+                        <a class="button button-secondary" href="#competitions">Open Your Events</a>
                     {% endif %}
                 {% else %}
                     <a class="button button-primary" href="{% url 'login' %}">Judge Log In</a>
                     <a class="button button-secondary" href="{% url 'register' %}">Create Account</a>
-                    <a class="button button-secondary" href="#competitions">View Open Competitions</a>
+                    <a class="button button-secondary" href="#competitions">View Open Events</a>
                 {% endif %}
             </div>
         </div>
@@ -66,7 +78,7 @@
             <div class="metric-grid">
                 <div class="metric">
                     <span class="metric-value">{{ competitions|length }}</span>
-                    <span class="metric-label">Active competition{{ competitions|length|pluralize }}</span>
+                    <span class="metric-label">{% if user.is_authenticated %}Your active event{{ competitions|length|pluralize }}{% else %}Active event{{ competitions|length|pluralize }}{% endif %}</span>
                 </div>
                 <div class="metric">
                     <span class="metric-value">{% if user.is_superuser %}Admin{% elif user.is_authenticated %}Member{% else %}Guest{% endif %}</span>
@@ -75,11 +87,11 @@
             </div>
             <div class="panel-footer">
                 {% if user.is_superuser %}
-                    Create competitions, assign organizers and judges, and keep the platform governed.
+                    Create client events, assign organizers and judges, and keep the platform governed.
                 {% elif user.is_authenticated %}
-                    Pick your assigned competition below to continue your work.
+                    Pick one of your assigned events below to continue your work.
                 {% else %}
-                    Sign in with your assigned competition account to begin.
+                    Sign in with your assigned event account to begin.
                 {% endif %}
             </div>
         </aside>
@@ -88,10 +100,10 @@
     <section id="competitions" aria-labelledby="competitions-title">
         <div class="section-head">
             <div>
-                <p class="eyebrow">Active workspace</p>
-                <h3 id="competitions-title">Open competitions</h3>
+                <p class="eyebrow">{% if user.is_authenticated %}Assigned workspace{% else %}Active workspace{% endif %}</p>
+                <h3 id="competitions-title">{% if user.is_authenticated %}Your events{% else %}Open events{% endif %}</h3>
             </div>
-            <p class="section-note">Choose where you want to work next.</p>
+            <p class="section-note">{% if user.is_authenticated %}Choose which event you want to work on next.{% else %}Choose where you want to work next.{% endif %}</p>
         </div>
 
         {% if competitions %}
@@ -177,8 +189,8 @@
             </div>
         {% else %}
             <div class="empty-state">
-                <strong>No active competitions yet.</strong>
-                <p>Once an organizer creates and activates a competition, it will appear here for judges and staff.</p>
+                <strong>{% if user.is_authenticated %}No events assigned yet.{% else %}No active events yet.{% endif %}</strong>
+                <p>{% if user.is_authenticated %}Once a platform admin assigns you to an event, it will appear here.{% else %}Once an organizer creates and activates an event, it will appear here for judges and staff.{% endif %}</p>
             </div>
         {% endif %}
     </section>
