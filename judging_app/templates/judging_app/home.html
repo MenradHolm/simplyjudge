@@ -164,6 +164,8 @@
                                             <span aria-hidden="true">&gt;</span>
                                         </button>
                                     </form>
+                                {% endif %}
+                                {% if competition.can_manage %}
                                     <a class="action-link" href="{% url 'upload_spreadsheet' competition.slug %}">
                                         Upload data
                                         <span aria-hidden="true">&gt;</span>

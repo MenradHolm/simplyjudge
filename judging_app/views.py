@@ -136,7 +136,7 @@ def home_hub(request):
         competition.can_review = is_full_competition(competition) and is_internal_reviewer(request.user, competition)
         competition.can_judge = is_approved_judge(request.user, competition)
         competition.can_finalize = is_full_competition(competition) and competition.can_manage
-        competition.start_label = 'Start feedback review' if is_feedback_portal(competition) else 'Start judging'
+        competition.start_label = 'Review photos' if is_feedback_portal(competition) else 'Start judging'
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
 
 def internal_review_panel_count(competition):

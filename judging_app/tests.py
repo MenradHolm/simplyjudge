@@ -275,7 +275,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.guest_judge)
         home_response = self.client.get(reverse('home_hub'))
         self.assertContains(home_response, 'Feedback portal')
-        self.assertContains(home_response, 'Start feedback review')
+        self.assertContains(home_response, 'Review photos')
         self.assertNotContains(home_response, 'Triage review')
 
         self.client.force_login(self.internal_judge)
@@ -284,6 +284,28 @@ class PhotoStatusWorkflowTests(TestCase):
 
         judge_response = self.client.get(reverse('judge_router', args=[feedback_competition.slug]))
         self.assertEqual(judge_response.status_code, 200)
+
+    def test_feedback_portal_organizer_can_upload_data_without_finalize_action(self):
+        shutter_organizer = User.objects.create_user(username='shutter-organizer', password='test-pass')
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        CompetitionMembership.objects.create(
+            competition=feedback_competition,
+            user=shutter_organizer,
+            role=CompetitionMembership.Role.ORGANIZER,
+        )
+
+        self.client.force_login(shutter_organizer)
+        response = self.client.get(reverse('home_hub'))
+
+        self.assertContains(response, 'Upload data')
+        self.assertNotContains(response, 'Finalize shortlist')
+
+        upload_response = self.client.get(reverse('upload_spreadsheet', args=[feedback_competition.slug]))
+        self.assertEqual(upload_response.status_code, 200)
 
 
 class AuthNavigationTests(TestCase):

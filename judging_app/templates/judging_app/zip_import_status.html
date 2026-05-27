@@ -67,7 +67,7 @@
     <div class="actions" style="margin-top: 1rem;">
         {% if job.status == 'completed' %}
             {% if can_start_feedback_review %}
-                <a href="{% url 'judge_router' competition.slug %}" class="button button-primary">Start Feedback Review</a>
+                <a href="{% url 'judge_router' competition.slug %}" class="button button-primary">Review Photos</a>
             {% elif can_start_triage %}
                 <a href="{% url 'elimination_mode' competition.slug %}" class="button button-primary">Start Triage Review</a>
             {% else %}
