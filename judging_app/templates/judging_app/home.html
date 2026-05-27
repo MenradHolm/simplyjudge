@@ -102,6 +102,7 @@
                             <div>
                                 <h4 class="competition-name">{{ competition.name }}</h4>
                                 <p class="card-meta">Created {{ competition.created_at|date:"M j, Y" }}</p>
+                                <p class="card-meta">{{ competition.get_workflow_display }}</p>
                                 {% if competition.user_role %}
                                     <p class="card-meta">{{ competition.user_role }}</p>
                                 {% endif %}
@@ -112,7 +113,7 @@
                             {% if competition.slug %}
                                 {% if competition.can_judge %}
                                     <a class="action-link primary" href="{% url 'judge_router' competition.slug %}">
-                                        Start judging
+                                        {{ competition.start_label }}
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
                                 {% endif %}
@@ -138,7 +139,7 @@
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
                                 {% endif %}
-                                {% if competition.can_manage %}
+                                {% if competition.can_finalize %}
                                     <form method="POST" action="{% url 'finalize_shortlist' competition.slug %}">
                                         {% csrf_token %}
                                         <button class="action-link" type="submit">

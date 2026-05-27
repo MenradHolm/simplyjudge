@@ -14,8 +14,13 @@ def competition_photo_upload_path(instance, filename):
     return f'competition_photos/{folder_name}/{filename}'
 
 class Competition(models.Model):
+    class Workflow(models.TextChoices):
+        FULL_COMPETITION = 'FULL_COMPETITION', 'Full competition funnel'
+        FEEDBACK_PORTAL = 'FEEDBACK_PORTAL', 'Feedback portal'
+
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True, null=True, blank=True, help_text="Clean URL text (e.g., 'youth-poty' or 'shutter-society')")
+    workflow = models.CharField(max_length=30, choices=Workflow.choices, default=Workflow.FULL_COMPETITION)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     judges = models.ManyToManyField(User, blank=True)

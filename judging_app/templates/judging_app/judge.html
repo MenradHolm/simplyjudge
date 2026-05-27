@@ -6,7 +6,7 @@
 <main class="shell shell-wide">
     <div class="page-head">
         <div>
-            <p class="eyebrow">Evaluating event</p>
+            <p class="eyebrow">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback review{% else %}Evaluating event{% endif %}</p>
             <h2 class="page-title">{{ competition.name }}</h2>
         </div>
         <span class="tag tag-neutral">Progress {{ progress }}</span>
@@ -51,7 +51,7 @@
 
         <section class="panel">
             <div class="panel-header">
-                <p class="panel-title">Score panel</p>
+                <p class="panel-title">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Score and feedback{% else %}Score panel{% endif %}</p>
                 <span class="tag tag-neutral">0 to 100</span>
             </div>
 
@@ -78,11 +78,11 @@
                 {% endif %}
 
                 <div class="field">
-                    <label for="comment">Critique notes</label>
-                    <textarea name="comment" id="comment" rows="4" placeholder="Write concise feedback for the organizer or entrant..."></textarea>
+                    <label for="comment">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback{% else %}Critique notes{% endif %}</label>
+                    <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Write useful feedback for the photographer...{% else %}Write concise feedback for the organizer or entrant...{% endif %}"></textarea>
                 </div>
 
-                <button type="submit" class="button button-primary" {% if not rubric %}disabled{% endif %}>Save Score and Continue</button>
+                <button type="submit" class="button button-primary" {% if not rubric %}disabled{% endif %}>Save and Continue</button>
             </form>
         </section>
     </div>

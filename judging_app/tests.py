@@ -68,6 +68,39 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_feedback_portal_judge_receives_pending_photos(self):
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        CompetitionMembership.objects.create(
+            competition=feedback_competition,
+            user=self.guest_judge,
+            role=CompetitionMembership.Role.VIP_JUDGE,
+        )
+        pending = Photo.objects.create(
+            competition=feedback_competition,
+            title='Member image',
+            photographer_name='Club Member',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.PENDING,
+        )
+
+        self.client.force_login(self.guest_judge)
+        response = self.client.get(reverse('judge_router', args=[feedback_competition.slug]))
+
+        self.assertRedirects(
+            response,
+            reverse('judge_photo', args=[feedback_competition.slug, pending.id]),
+            fetch_redirect_response=False,
+        )
+
+        direct_response = self.client.get(reverse('judge_photo', args=[feedback_competition.slug, pending.id]))
+        self.assertEqual(direct_response.status_code, 200)
+        self.assertContains(direct_response, 'Member feedback review')
+
     def test_single_internal_reviewer_vote_finalizes_photo_status(self):
         photo = self.create_photo('Pending image', Photo.Status.PENDING)
 
@@ -180,6 +213,36 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertRedirects(upload_response, reverse('home_hub'))
         self.assertRedirects(finalize_response, reverse('home_hub'))
+
+    def test_feedback_portal_hides_funnel_actions(self):
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        CompetitionMembership.objects.create(
+            competition=feedback_competition,
+            user=self.guest_judge,
+            role=CompetitionMembership.Role.VIP_JUDGE,
+        )
+        CompetitionMembership.objects.create(
+            competition=feedback_competition,
+            user=self.internal_judge,
+            role=CompetitionMembership.Role.INTERNAL_JUDGE,
+        )
+
+        self.client.force_login(self.guest_judge)
+        home_response = self.client.get(reverse('home_hub'))
+        self.assertContains(home_response, 'Feedback portal')
+        self.assertContains(home_response, 'Start feedback review')
+        self.assertNotContains(home_response, 'Triage review')
+
+        self.client.force_login(self.internal_judge)
+        elimination_response = self.client.get(reverse('elimination_mode', args=[feedback_competition.slug]))
+        self.assertRedirects(elimination_response, reverse('home_hub'))
+
+        judge_response = self.client.get(reverse('judge_router', args=[feedback_competition.slug]))
+        self.assertEqual(judge_response.status_code, 200)
 
 
 class CsvEncodingTests(TestCase):

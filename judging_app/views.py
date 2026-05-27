@@ -75,6 +75,11 @@ def is_internal_reviewer(user, competition):
 def is_approved_judge(user, competition):
     if has_competition_role(user, competition, VIP_JUDGE_ROLES):
         return True
+    if (
+        competition.workflow == Competition.Workflow.FEEDBACK_PORTAL
+        and has_competition_role(user, competition, INTERNAL_REVIEW_ROLES)
+    ):
+        return True
     if not user.is_authenticated:
         return False
     if user.is_superuser:
@@ -91,6 +96,18 @@ def competition_role_for_user(user, competition):
     ).order_by('role').first()
     return membership.get_role_display() if membership else ''
 
+def is_full_competition(competition):
+    return competition.workflow == Competition.Workflow.FULL_COMPETITION
+
+def is_feedback_portal(competition):
+    return competition.workflow == Competition.Workflow.FEEDBACK_PORTAL
+
+def judging_photo_queryset(competition, user):
+    queryset = Photo.objects.filter(competition=competition)
+    if user.is_superuser or is_feedback_portal(competition):
+        return queryset
+    return queryset.filter(status=Photo.Status.SHORTLISTED)
+
 def home_hub(request):
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
     if request.user.is_authenticated and not request.user.is_superuser:
@@ -101,8 +118,10 @@ def home_hub(request):
     for competition in active_competitions:
         competition.user_role = competition_role_for_user(request.user, competition) if request.user.is_authenticated else ''
         competition.can_manage = is_competition_organizer(request.user, competition)
-        competition.can_review = is_internal_reviewer(request.user, competition)
+        competition.can_review = is_full_competition(competition) and is_internal_reviewer(request.user, competition)
         competition.can_judge = is_approved_judge(request.user, competition)
+        competition.can_finalize = is_full_competition(competition) and competition.can_manage
+        competition.start_label = 'Start feedback review' if is_feedback_portal(competition) else 'Start judging'
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
 
 def internal_review_panel_count(competition):
@@ -141,9 +160,7 @@ def judge_router(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
-    photo_queue = Photo.objects.filter(competition=competition)
-    if not request.user.is_superuser:
-        photo_queue = photo_queue.filter(status=Photo.Status.SHORTLISTED)
+    photo_queue = judging_photo_queryset(competition, request.user)
     next_photo = photo_queue.exclude(score__judge=request.user).first()
     if next_photo:
         return redirect('judge_photo', comp_slug=competition.slug, photo_id=next_photo.id)
@@ -152,6 +169,8 @@ def judge_router(request, comp_slug):
 @login_required(login_url='/accounts/login/')
 def elimination_mode(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_full_competition(competition):
+        return redirect('home_hub')
     if not is_internal_reviewer(request.user, competition):
         return redirect('home_hub')
 
@@ -218,6 +237,8 @@ def elimination_mode(request, comp_slug):
 @login_required(login_url='/accounts/login/')
 def round_1_review(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_full_competition(competition):
+        return redirect('home_hub')
     if not is_internal_reviewer(request.user, competition):
         return redirect('home_hub')
 
@@ -273,6 +294,8 @@ def finalize_shortlist(request, comp_slug):
         return redirect('home_hub')
 
     competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_full_competition(competition):
+        return redirect('home_hub')
     if not is_competition_organizer(request.user, competition):
         return redirect('home_hub')
     scored_round_1 = list(
@@ -298,17 +321,13 @@ def judge_photo(request, comp_slug, photo_id):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
-    photo_queryset = Photo.objects.filter(id=photo_id, competition=competition)
-    if not request.user.is_superuser:
-        photo_queryset = photo_queryset.filter(status=Photo.Status.SHORTLISTED)
+    photo_queryset = judging_photo_queryset(competition, request.user).filter(id=photo_id)
     photo = get_object_or_404(photo_queryset)
     rubric = RubricCriterion.objects.filter(competition=competition)
-    visible_photos = Photo.objects.filter(competition=competition)
-    if not request.user.is_superuser:
-        visible_photos = visible_photos.filter(status=Photo.Status.SHORTLISTED)
+    visible_photos = judging_photo_queryset(competition, request.user)
     total_photos = visible_photos.count()
     scored_query = Score.objects.filter(photo__competition=competition, judge=request.user)
-    if not request.user.is_superuser:
+    if not request.user.is_superuser and is_full_competition(competition):
         scored_query = scored_query.filter(photo__status=Photo.Status.SHORTLISTED)
     scored_photos = scored_query.count()
     

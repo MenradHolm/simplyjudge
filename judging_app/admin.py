@@ -19,7 +19,8 @@ class CompetitionMembershipInline(admin.TabularInline):
 
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'slug', 'is_active', 'created_at')
+    list_display = ('id', 'name', 'slug', 'workflow', 'is_active', 'created_at')
+    list_filter = ('workflow', 'is_active')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     exclude = ('judges',)
