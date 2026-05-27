@@ -40,7 +40,9 @@
                 <span class="metric-label">Images matched</span>
             </div>
             <div class="metric">
-                <span class="metric-value">{{ job.created_at|date:"H:i" }}</span>
+                <time class="metric-value" data-local-datetime="{{ job.created_at|date:'c' }}" data-local-format="time">
+                    {{ job.created_at|date:"H:i" }}
+                </time>
                 <span class="metric-label">Started</span>
             </div>
         </div>

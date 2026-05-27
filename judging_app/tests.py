@@ -1,11 +1,13 @@
 import io
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 from types import SimpleNamespace
 
 from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, competition_photo_upload_path
+from .middleware import UserTimezoneMiddleware
 from .views import decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
 
@@ -258,6 +260,20 @@ class AuthNavigationTests(TestCase):
 
         self.assertRedirects(logout_response, reverse('home_hub'))
         self.assertNotIn('_auth_user_id', self.client.session)
+
+
+class UserTimezoneMiddlewareTests(TestCase):
+    def test_timezone_cookie_activates_user_local_timezone(self):
+        request = RequestFactory().get('/')
+        request.COOKIES['simplyjudge_timezone'] = 'America/New_York'
+        middleware = UserTimezoneMiddleware(lambda current_request: current_request)
+
+        try:
+            middleware(request)
+
+            self.assertEqual(timezone.get_current_timezone_name(), 'America/New_York')
+        finally:
+            timezone.deactivate()
 
 
 class CsvEncodingTests(TestCase):

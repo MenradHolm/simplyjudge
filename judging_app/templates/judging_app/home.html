@@ -101,7 +101,12 @@
                         <div class="card-top">
                             <div>
                                 <h4 class="competition-name">{{ competition.name }}</h4>
-                                <p class="card-meta">Created {{ competition.created_at|date:"M j, Y" }}</p>
+                                <p class="card-meta">
+                                    Created
+                                    <time data-local-datetime="{{ competition.created_at|date:'c' }}" data-local-format="date">
+                                        {{ competition.created_at|date:"M j, Y" }}
+                                    </time>
+                                </p>
                                 <p class="card-meta">{{ competition.get_workflow_display }}</p>
                                 {% if competition.user_role %}
                                     <p class="card-meta">{{ competition.user_role }}</p>
