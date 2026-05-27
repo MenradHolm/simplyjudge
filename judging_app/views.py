@@ -102,6 +102,21 @@ def is_full_competition(competition):
 def is_feedback_portal(competition):
     return competition.workflow == Competition.Workflow.FEEDBACK_PORTAL
 
+def is_youth_poty_competition(competition):
+    identity = normalize_match_key(f'{competition.slug or ""} {competition.name or ""}')
+    return any(
+        marker in identity
+        for marker in ('youthpoty', 'ypoty', 'youthphotographeroftheyear')
+    )
+
+def should_run_youth_poty_rule_review(competition):
+    return is_full_competition(competition) and is_youth_poty_competition(competition)
+
+def collect_photo_rule_flags(competition, image_bytes):
+    if not should_run_youth_poty_rule_review(competition):
+        return []
+    return audit_photo_metadata(image_bytes)['flags']
+
 def judging_photo_queryset(competition, user):
     queryset = Photo.objects.filter(competition=competition)
     if user.is_superuser or is_feedback_portal(competition):
@@ -949,12 +964,11 @@ def process_entry_zip_job(job_id):
                     }
 
                     if image_payload:
-                        audit = audit_photo_metadata(image_payload['bytes'])
                         storage_image = prepare_image_for_cloudinary(
                             image_payload['bytes'],
                             image_payload['filename'],
                         )
-                        flags = audit['flags'][:]
+                        flags = collect_photo_rule_flags(job.competition, image_payload['bytes'])
                         if storage_image['compressed']:
                             flags.append(
                                 'Image optimized for Cloudinary upload limit '

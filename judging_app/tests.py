@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
-from .views import decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
+from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -341,3 +341,29 @@ class CloudinaryCompressionTests(TestCase):
         self.assertTrue(result['compressed'])
         self.assertLessEqual(len(result['bytes']), 90_000)
         self.assertEqual(result['filename'], 'large-original.jpg')
+
+
+class CompetitionRuleReviewTests(TestCase):
+    def no_exif_image_bytes(self):
+        image = Image.new('RGB', (20, 20), color='white')
+        output = io.BytesIO()
+        image.save(output, format='JPEG')
+        return output.getvalue()
+
+    def test_youth_poty_runs_exif_rule_review(self):
+        competition = Competition.objects.create(name='Youth POTY', slug='youth-poty')
+
+        flags = collect_photo_rule_flags(competition, self.no_exif_image_bytes())
+
+        self.assertIn('No EXIF data found', ' '.join(flags))
+
+    def test_non_youth_poty_skips_exif_rule_review(self):
+        competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+
+        flags = collect_photo_rule_flags(competition, self.no_exif_image_bytes())
+
+        self.assertEqual(flags, [])
