@@ -98,7 +98,9 @@
                         <div class="card" style="box-shadow: none;">
                             <div class="card-top" style="margin-bottom: 0.75rem;">
                                 <strong>Organizer notes</strong>
-                                <a href="/admin/judging_app/photo/{{ photo.id }}/change/" class="tag tag-neutral no-print">Edit</a>
+                                {% if can_edit_notes %}
+                                    <a href="/admin/judging_app/photo/{{ photo.id }}/change/" class="tag tag-neutral no-print">Edit</a>
+                                {% endif %}
                             </div>
                             {% if photo.organizer_notes %}
                                 <p class="page-copy">{{ photo.organizer_notes }}</p>

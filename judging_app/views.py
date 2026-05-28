@@ -375,11 +375,8 @@ def judge_photo(request, comp_slug, photo_id):
     }
     return render(request, 'judging_app/judge.html', context)
 
-@login_required(login_url='/accounts/login/')
 def leaderboard(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
-    if not is_competition_member(request.user, competition):
-        return redirect('home_hub')
     tie_criterion = competition.tie_breaker_criterion
     photos_query = Photo.objects.filter(competition=competition).annotate(average_score=Avg('score__total_score'))
     if tie_criterion:
@@ -411,16 +408,27 @@ def submit_photo(request, comp_slug):
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
     return render(request, 'judging_app/submit.html', {'competition': competition, 'error_message': error_message})
 
-@login_required(login_url='/accounts/login/')
-def feedback_report(request, comp_slug):
-    competition = get_object_or_404(Competition, slug=comp_slug)
-    if not is_competition_organizer(request.user, competition):
-        return redirect('home_hub')
+def feedback_report_context(competition, can_edit_notes=False):
     photos = list(Photo.objects.filter(competition=competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
-    return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
+    return {
+        'competition': competition,
+        'photos': photos,
+        'can_edit_notes': can_edit_notes,
+    }
+
+def feedback_report(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    can_edit_notes = is_competition_organizer(request.user, competition)
+    if not is_feedback_portal(competition) and not can_edit_notes:
+        return redirect('home_hub')
+    return render(
+        request,
+        'judging_app/feedback_report.html',
+        feedback_report_context(competition, can_edit_notes=can_edit_notes),
+    )
 
 @login_required(login_url='/accounts/login/')
 def upload_spreadsheet(request, comp_slug):
@@ -627,11 +635,7 @@ def zip_import_status(request, comp_slug, job_id):
 
 def public_results(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
-    photos = list(Photo.objects.filter(competition=competition))
-    all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
-    for photo in photos:
-        photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
-    return render(request, 'judging_app/feedback_report.html', {'competition': competition, 'photos': photos})
+    return render(request, 'judging_app/feedback_report.html', feedback_report_context(competition))
 
 def save_uploaded_zip_to_temp_file(uploaded_file, job_id):
     temp_dir = os.path.join(tempfile.gettempdir(), 'simplyjudge_zip_imports')

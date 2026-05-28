@@ -6,7 +6,7 @@ from django.utils import timezone
 from PIL import Image
 from types import SimpleNamespace
 
-from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, ZipImportJob, competition_photo_upload_path
+from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
@@ -306,6 +306,52 @@ class PhotoStatusWorkflowTests(TestCase):
 
         upload_response = self.client.get(reverse('upload_spreadsheet', args=[feedback_competition.slug]))
         self.assertEqual(upload_response.status_code, 200)
+
+    def test_leaderboard_is_public(self):
+        photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=87.5)
+
+        response = self.client.get(reverse('leaderboard', args=[self.competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Live leaderboard')
+        self.assertContains(response, '87.5')
+
+    def test_feedback_portal_report_is_public_without_admin_edit_controls(self):
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        photo = Photo.objects.create(
+            competition=feedback_competition,
+            title='Member image',
+            photographer_name='Club Member',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.PENDING,
+            organizer_notes='Private organizer context',
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=self.guest_judge,
+            criteria_scores={},
+            total_score=91,
+            comment='Strong composition and clear intent.',
+        )
+
+        response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Strong composition and clear intent.')
+        self.assertContains(response, 'Private organizer context')
+        self.assertNotContains(response, '/admin/judging_app/photo/')
+        self.assertNotContains(response, '>Edit<')
+
+    def test_full_competition_feedback_report_is_not_public(self):
+        response = self.client.get(reverse('feedback_report', args=[self.competition.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
 
 
 class AuthNavigationTests(TestCase):
