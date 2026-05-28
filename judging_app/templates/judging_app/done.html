@@ -13,6 +13,7 @@
         </p>
         <div class="actions" style="justify-content: center; margin-top: 1.25rem;">
             {% if competition.slug %}
+                <a href="{% url 'judge_review' competition.slug %}" class="button button-primary">Review My Scores</a>
                 <a href="{% url 'leaderboard' competition.slug %}" class="button button-primary">View Leaderboard</a>
             {% endif %}
             <a href="{% url 'home_hub' %}" class="button button-secondary">Return Home</a>

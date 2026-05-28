@@ -22,6 +22,13 @@
         margin-bottom: 0.65rem;
     }
 
+    .jury-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.65rem;
+    }
+
     .jury-title {
         max-width: 20ch;
     }
@@ -218,9 +225,12 @@
             </div>
             <h2 class="page-title jury-title">{{ competition.name }}</h2>
         </div>
-        <div class="progress-badge" aria-label="Judging progress">
-            <span class="metric-label">Progress</span>
-            <strong>{{ current_index }} / {{ total_photos }}</strong>
+        <div class="jury-actions">
+            <a class="button button-secondary" href="{% url 'judge_review' competition.slug %}">My Submitted Scores</a>
+            <div class="progress-badge" aria-label="Judging progress">
+                <span class="metric-label">{% if existing_score %}Revising{% else %}Progress{% endif %}</span>
+                <strong>{{ current_index }} / {{ total_photos }}</strong>
+            </div>
         </div>
     </div>
 
@@ -272,6 +282,9 @@
 
             <form method="POST" class="form-grid panel-padded score-form">
                 {% csrf_token %}
+                {% if return_to %}
+                    <input type="hidden" name="return_to" value="{{ return_to }}">
+                {% endif %}
 
                 {% if rubric %}
                     {% for criterion in rubric %}
@@ -284,7 +297,7 @@
                                 <p class="muted" style="margin: 0;">{{ criterion.description }}</p>
                             {% endif %}
                             <div class="score-input-row">
-                                <input type="number" step="0.5" min="0" max="100" name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" required>
+                                <input type="number" step="0.5" min="0" max="100" name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" value="{{ criterion.saved_score }}" required>
                                 <span class="score-scale">/ 100</span>
                             </div>
                         </div>
@@ -297,10 +310,10 @@
 
                 <div class="field feedback-field">
                     <label for="comment">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback{% else %}Critique notes{% endif %}</label>
-                    <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Write useful feedback for the photographer...{% else %}Write concise feedback for the organizer or entrant...{% endif %}"></textarea>
+                    <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Write useful feedback for the photographer...{% else %}Write concise feedback for the organizer or entrant...{% endif %}">{% if existing_score.comment %}{{ existing_score.comment }}{% endif %}</textarea>
                 </div>
 
-                <button type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>Submit Evaluation</button>
+                <button type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>{% if existing_score %}Update Evaluation{% else %}Submit Evaluation{% endif %}</button>
             </form>
         </section>
     </div>

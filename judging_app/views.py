@@ -182,6 +182,30 @@ def judge_router(request, comp_slug):
     return render(request, 'judging_app/done.html', {'competition': competition})
 
 @login_required(login_url='/accounts/login/')
+def judge_review(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_approved_judge(request.user, competition):
+        return render(request, 'judging_app/pending.html')
+
+    visible_photos = judging_photo_queryset(competition, request.user)
+    submitted_scores = (
+        Score.objects
+        .filter(judge=request.user, photo__in=visible_photos)
+        .select_related('photo')
+        .order_by('photo__id')
+    )
+    remaining_count = visible_photos.exclude(score__judge=request.user).count()
+    return render(
+        request,
+        'judging_app/judge_review.html',
+        {
+            'competition': competition,
+            'scores': submitted_scores,
+            'remaining_count': remaining_count,
+        },
+    )
+
+@login_required(login_url='/accounts/login/')
 def elimination_mode(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_full_competition(competition):
@@ -336,15 +360,20 @@ def judge_photo(request, comp_slug, photo_id):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_approved_judge(request.user, competition):
         return render(request, 'judging_app/pending.html')
+    return_to = request.POST.get('return_to') or request.GET.get('return')
     photo_queryset = judging_photo_queryset(competition, request.user).filter(id=photo_id)
     photo = get_object_or_404(photo_queryset)
-    rubric = RubricCriterion.objects.filter(competition=competition)
+    rubric = list(RubricCriterion.objects.filter(competition=competition))
     visible_photos = judging_photo_queryset(competition, request.user)
     total_photos = visible_photos.count()
     scored_query = Score.objects.filter(photo__competition=competition, judge=request.user)
     if not request.user.is_superuser and is_full_competition(competition):
         scored_query = scored_query.filter(photo__status=Photo.Status.SHORTLISTED)
     scored_photos = scored_query.count()
+    existing_score = Score.objects.filter(photo=photo, judge=request.user).first()
+    existing_criteria_scores = existing_score.criteria_scores if existing_score else {}
+    for criterion in rubric:
+        criterion.saved_score = existing_criteria_scores.get(str(criterion.id), '')
     
     if request.method == "POST":
         criteria_scores = {}
@@ -363,15 +392,21 @@ def judge_photo(request, comp_slug, photo_id):
             judge=request.user,
             defaults={'criteria_scores': criteria_scores, 'total_score': total_score, 'comment': comment}
         )
+        if return_to == 'review':
+            return redirect('judge_review', comp_slug=competition.slug)
         return redirect('judge_router', comp_slug=competition.slug)
 
+    current_index = scored_photos if existing_score else scored_photos + 1
+    current_index = min(max(current_index, 1), total_photos or 1)
     context = {
         'competition': competition,
         'photo': photo,
         'rubric': rubric,
-        'progress': f"{scored_photos + 1} / {total_photos}",
-        'current_index': scored_photos + 1,
+        'progress': f"{current_index} / {total_photos}",
+        'current_index': current_index,
         'total_photos': total_photos,
+        'existing_score': existing_score,
+        'return_to': return_to,
     }
     return render(request, 'judging_app/judge.html', context)
 

@@ -133,6 +133,10 @@
                                         {{ competition.start_label }}
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
+                                    <a class="action-link" href="{% url 'judge_review' competition.slug %}">
+                                        My submitted scores
+                                        <span aria-hidden="true">&gt;</span>
+                                    </a>
                                 {% endif %}
                                 {% if user.is_superuser or competition.user_role %}
                                     <a class="action-link" href="{% url 'leaderboard' competition.slug %}">

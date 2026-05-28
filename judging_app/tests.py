@@ -6,7 +6,7 @@ from django.utils import timezone
 from PIL import Image
 from types import SimpleNamespace
 
-from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, Score, ZipImportJob, competition_photo_upload_path
+from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
 
@@ -69,6 +69,52 @@ class PhotoStatusWorkflowTests(TestCase):
         response = self.client.get(reverse('judge_photo', args=[self.competition.slug, pending.id]))
 
         self.assertEqual(response.status_code, 404)
+
+    def test_judge_can_review_and_update_submitted_scores(self):
+        criterion = RubricCriterion.objects.create(
+            competition=self.competition,
+            name='Composition',
+            description='Visual strength',
+            weight=1.0,
+        )
+        photo = self.create_photo('Shortlisted image', Photo.Status.SHORTLISTED)
+        Score.objects.create(
+            photo=photo,
+            judge=self.guest_judge,
+            criteria_scores={str(criterion.id): 72.5},
+            total_score=72.5,
+            comment='Initial calibration note.',
+        )
+
+        self.client.force_login(self.guest_judge)
+        review_response = self.client.get(reverse('judge_review', args=[self.competition.slug]))
+
+        self.assertContains(review_response, 'My submitted scores')
+        self.assertContains(review_response, 'Submission #')
+        self.assertContains(review_response, 'Edit Score')
+
+        edit_response = self.client.get(
+            f"{reverse('judge_photo', args=[self.competition.slug, photo.id])}?return=review"
+        )
+
+        self.assertContains(edit_response, 'value="72.5"')
+        self.assertContains(edit_response, 'Initial calibration note.')
+        self.assertContains(edit_response, 'Update Evaluation')
+
+        post_response = self.client.post(
+            f"{reverse('judge_photo', args=[self.competition.slug, photo.id])}?return=review",
+            {
+                f'criterion_{criterion.id}': '88',
+                'comment': 'Adjusted after seeing the full field.',
+                'return_to': 'review',
+            },
+        )
+
+        self.assertRedirects(post_response, reverse('judge_review', args=[self.competition.slug]))
+        score = Score.objects.get(photo=photo, judge=self.guest_judge)
+        self.assertEqual(score.total_score, 88)
+        self.assertEqual(score.criteria_scores[str(criterion.id)], 88.0)
+        self.assertEqual(score.comment, 'Adjusted after seeing the full field.')
 
     def test_feedback_portal_judge_receives_pending_photos(self):
         feedback_competition = Competition.objects.create(
@@ -276,6 +322,7 @@ class PhotoStatusWorkflowTests(TestCase):
         home_response = self.client.get(reverse('home_hub'))
         self.assertContains(home_response, 'Feedback portal')
         self.assertContains(home_response, 'Review photos')
+        self.assertContains(home_response, 'My submitted scores')
         self.assertNotContains(home_response, 'Triage review')
 
         self.client.force_login(self.internal_judge)
