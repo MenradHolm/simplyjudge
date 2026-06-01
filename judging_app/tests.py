@@ -477,7 +477,7 @@ class PhotoStatusWorkflowTests(TestCase):
             photo=photo,
             judge=judge_one,
             criteria_scores={str(criterion_one.id): 4, str(criterion_two.id): 8},
-            total_score=12,
+            total_score=80,
             comment='Good structure.',
         )
         Score.objects.create(
