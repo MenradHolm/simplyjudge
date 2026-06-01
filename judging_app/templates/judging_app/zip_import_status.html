@@ -49,6 +49,11 @@
         <div class="panel-footer">
             {% if job.status == 'completed' %}
                 Import completed successfully. The entries and matched photos are now in this competition workspace.
+                {% if unmatched_images_count %}
+                    <div class="alert alert-error" style="margin-top: 0.85rem;">
+                        {{ unmatched_images_count }} entr{{ unmatched_images_count|pluralize:"y,ies" }} did not match an image file. Those entries are not shown in triage until the matching photos are uploaded or attached.
+                    </div>
+                {% endif %}
                 {% if is_feedback_portal %}
                     Assigned reviewers can now score every photo and leave member feedback.
                 {% else %}

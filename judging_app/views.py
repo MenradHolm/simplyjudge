@@ -127,6 +127,17 @@ def judging_photo_queryset(competition, user):
 def photo_report_queryset(competition):
     return Photo.objects.filter(competition=competition).order_by('entry_code', 'id')
 
+def photos_missing_imported_image_queryset(competition):
+    return Photo.objects.filter(
+        competition=competition,
+        rule_flags__icontains='No matching image file found',
+    )
+
+def triage_photo_queryset(competition):
+    return Photo.objects.filter(competition=competition).exclude(
+        rule_flags__icontains='No matching image file found',
+    )
+
 def rubric_max_score(rubric):
     return sum(float(criterion.score_out_of) * float(criterion.weight) for criterion in rubric)
 
@@ -268,9 +279,8 @@ def elimination_mode(request, comp_slug):
 
         with transaction.atomic():
             photo = get_object_or_404(
-                Photo.objects.select_for_update(),
+                triage_photo_queryset(competition).select_for_update(),
                 id=int(photo_id),
-                competition=competition,
                 status=Photo.Status.PENDING,
             )
             vote_decision = (
@@ -286,19 +296,17 @@ def elimination_mode(request, comp_slug):
             apply_status_vote_majority(photo)
         return redirect('elimination_mode', comp_slug=competition.slug)
 
-    current_photo = Photo.objects.filter(
-        competition=competition,
+    pending_triage_photos = triage_photo_queryset(competition).filter(
         status=Photo.Status.PENDING,
-    ).exclude(status_votes__voter=request.user).order_by('id').first()
+    )
+    current_photo = pending_triage_photos.exclude(status_votes__voter=request.user).order_by('id').first()
     counts = {
-        'pending': Photo.objects.filter(competition=competition, status=Photo.Status.PENDING).count(),
+        'pending': pending_triage_photos.count(),
         'round_1': Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1).count(),
         'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
         'rejected': Photo.objects.filter(competition=competition, status=Photo.Status.REJECTED).count(),
-        'for_you': Photo.objects.filter(
-            competition=competition,
-            status=Photo.Status.PENDING,
-        ).exclude(status_votes__voter=request.user).count(),
+        'for_you': pending_triage_photos.exclude(status_votes__voter=request.user).count(),
+        'missing_images': photos_missing_imported_image_queryset(competition).filter(status=Photo.Status.PENDING).count(),
     }
     vote_summary = None
     if current_photo:
@@ -804,6 +812,7 @@ def zip_import_status(request, comp_slug, job_id):
         'can_start_triage': is_full_competition(competition) and is_internal_reviewer(request.user, competition),
         'can_start_feedback_review': is_feedback_portal(competition) and is_approved_judge(request.user, competition),
         'is_feedback_portal': is_feedback_portal(competition),
+        'unmatched_images_count': max(job.processed_rows - job.matched_images, 0),
     }
     return render(request, 'judging_app/zip_import_status.html', context)
 

@@ -190,6 +190,9 @@
             <span class="stat-pill">{{ counts.round_1 }} round 1</span>
             <span class="stat-pill">{{ counts.shortlisted }} shortlisted</span>
             <span class="stat-pill">{{ counts.rejected }} rejected</span>
+            {% if counts.missing_images %}
+                <span class="stat-pill">{{ counts.missing_images }} missing images</span>
+            {% endif %}
         </div>
     </header>
 
@@ -209,7 +212,11 @@
             <div class="elimination-empty-panel">
                 <p class="eyebrow">Queue clear</p>
                 <h2>No pending photos left for you.</h2>
-                <p>Photos waiting on other in-house votes will move into Round 1 automatically once a staff majority is reached.</p>
+                {% if counts.missing_images %}
+                    <p>{{ counts.missing_images }} pending entr{{ counts.missing_images|pluralize:"y,ies" }} are not in triage because no image matched during import. Re-upload those entries with matching filenames or attach the images before triage.</p>
+                {% else %}
+                    <p>Photos waiting on other in-house votes will move into Round 1 automatically once a staff majority is reached.</p>
+                {% endif %}
                 <div class="hero-actions">
                     <a class="button button-primary" href="{% url 'feedback_report' competition.slug %}">Review report</a>
                     <a class="button button-secondary" href="{% url 'home_hub' %}">Home</a>

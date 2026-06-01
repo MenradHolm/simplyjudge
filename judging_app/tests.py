@@ -231,6 +231,40 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertContains(response, 'No pending photos left for you.')
 
+    def test_internal_triage_skips_entries_without_matched_images(self):
+        missing = self.create_photo(
+            'Missing image row',
+            Photo.Status.PENDING,
+            rule_flags='No matching image file found in uploaded ZIP package.',
+        )
+        ready = self.create_photo('Ready image row', Photo.Status.PENDING)
+
+        self.client.force_login(self.internal_judge)
+        response = self.client.get(reverse('elimination_mode', args=[self.competition.slug]))
+
+        self.assertContains(response, f'SimplyJudge ID: #{ready.id}')
+        self.assertContains(response, '1 for you')
+        self.assertContains(response, '1 pending')
+        self.assertContains(response, '1 missing images')
+        self.assertNotContains(response, f'SimplyJudge ID: #{missing.id}')
+
+    def test_completed_zip_status_warns_when_rows_have_no_matching_images(self):
+        job = ZipImportJob.objects.create(
+            competition=self.competition,
+            uploaded_by=self.organizer,
+            source_name='late-entries.zip',
+            status=ZipImportJob.Status.COMPLETED,
+            total_rows=137,
+            processed_rows=137,
+            matched_images=15,
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('zip_import_status', args=[self.competition.slug, job.id]))
+
+        self.assertContains(response, '122 entries did not match an image file')
+        self.assertContains(response, 'not shown in triage')
+
     def test_internal_round_1_review_displays_full_context_and_records_score(self):
         photo = self.create_photo(
             'Context image',
