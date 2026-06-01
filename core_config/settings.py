@@ -145,14 +145,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
-# --- ADD THESE TWO LINES ---
-# This tells Django where to gather all the admin CSS files
 STATIC_ROOT = BASE_DIR / 'staticfiles' 
 
-# This tells WhiteNoise to compress and serve them
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Render should run collectstatic, but WhiteNoise finders keep admin usable if
+# the staticfiles directory is absent during an urgent production deploy.
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+WHITENOISE_USE_FINDERS = env_bool('WHITENOISE_USE_FINDERS', True)
 
 # Media files (Cloudinary Setup)
 if 'CLOUDINARY_URL' in os.environ:
