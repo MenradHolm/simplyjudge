@@ -92,7 +92,7 @@ class PhotoStatusWorkflowTests(TestCase):
         review_response = self.client.get(reverse('judge_review', args=[self.competition.slug]))
 
         self.assertContains(review_response, 'My submitted scores')
-        self.assertContains(review_response, 'Submission #')
+        self.assertContains(review_response, 'SimplyJudge ID: #')
         self.assertContains(review_response, 'Edit Score')
 
         edit_response = self.client.get(
@@ -428,7 +428,7 @@ class PhotoStatusWorkflowTests(TestCase):
         )
 
         report_response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
-        self.assertContains(report_response, 'Reference SS001')
+        self.assertContains(report_response, 'Photo reference: SS001')
 
     def test_leaderboard_is_public(self):
         photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)

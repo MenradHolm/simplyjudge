@@ -242,8 +242,11 @@
             <div class="jury-context">
                 <div class="jury-meta-row">
                     <div>
-                        <p class="eyebrow" style="margin-bottom: 0.35rem;">Submission #{{ photo.id }}</p>
+                        <p class="eyebrow" style="margin-bottom: 0.35rem;">SimplyJudge ID: #{{ photo.id }}</p>
                         <h3 class="competition-name">Anonymous entry</h3>
+                        {% if photo.entry_code %}
+                            <p class="card-meta">Photo reference: {{ photo.entry_code }}</p>
+                        {% endif %}
                         <p class="card-meta">Identity hidden for judging</p>
                     </div>
                     <span class="tag tag-neutral">{{ photo.category }}</span>
@@ -275,7 +278,10 @@
             <div class="panel-header score-panel-head">
                 <div>
                     <p class="panel-title">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Score and feedback{% else %}Jury scorecard{% endif %}</p>
-                    <p class="card-meta">Submission #{{ photo.id }}</p>
+                    <p class="card-meta">
+                        SimplyJudge ID: #{{ photo.id }}
+                        {% if photo.entry_code %}&middot; Photo reference: {{ photo.entry_code }}{% endif %}
+                    </p>
                 </div>
                 <span class="tag tag-neutral">Rubric scale</span>
             </div>
