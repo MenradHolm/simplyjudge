@@ -1,4 +1,6 @@
 import io
+import tempfile
+import zipfile
 from django.contrib.auth.models import User
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -8,7 +10,7 @@ from types import SimpleNamespace
 
 from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
-from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary
+from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -353,6 +355,51 @@ class PhotoStatusWorkflowTests(TestCase):
 
         upload_response = self.client.get(reverse('upload_spreadsheet', args=[feedback_competition.slug]))
         self.assertEqual(upload_response.status_code, 200)
+
+    def test_photos_only_zip_creates_entries_from_sorted_filename_codes(self):
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        image = Image.new('RGB', (20, 20), color='white')
+        image_payload = io.BytesIO()
+        image.save(image_payload, format='JPEG')
+        image_bytes = image_payload.getvalue()
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+            temp_path = temp_zip.name
+
+        with zipfile.ZipFile(temp_path, 'w') as package:
+            package.writestr('photos/SS010.jpg', image_bytes)
+            package.writestr('photos/SS001.jpg', image_bytes)
+            package.writestr('photos/SS002.jpg', image_bytes)
+
+        job = ZipImportJob.objects.create(
+            competition=feedback_competition,
+            uploaded_by=self.organizer,
+            source_name='photos-only.zip',
+            temp_path=temp_path,
+        )
+
+        process_photos_only_zip_job(job.id)
+        job.refresh_from_db()
+
+        self.assertEqual(job.status, ZipImportJob.Status.COMPLETED)
+        self.assertEqual(job.total_rows, 3)
+        self.assertEqual(job.processed_rows, 3)
+        self.assertEqual(job.matched_images, 3)
+        self.assertEqual(
+            list(Photo.objects.filter(competition=feedback_competition).order_by('entry_code').values_list('entry_code', flat=True)),
+            ['SS001', 'SS002', 'SS010'],
+        )
+        self.assertEqual(
+            list(Photo.objects.filter(competition=feedback_competition).order_by('entry_code').values_list('title', flat=True)),
+            ['SS001', 'SS002', 'SS010'],
+        )
+
+        report_response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
+        self.assertContains(report_response, 'Reference SS001')
 
     def test_leaderboard_is_public(self):
         photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)

@@ -118,10 +118,13 @@ def collect_photo_rule_flags(competition, image_bytes):
     return audit_photo_metadata(image_bytes)['flags']
 
 def judging_photo_queryset(competition, user):
-    queryset = Photo.objects.filter(competition=competition)
+    queryset = Photo.objects.filter(competition=competition).order_by('entry_code', 'id')
     if user.is_superuser or is_feedback_portal(competition):
         return queryset
     return queryset.filter(status=Photo.Status.SHORTLISTED)
+
+def photo_report_queryset(competition):
+    return Photo.objects.filter(competition=competition).order_by('entry_code', 'id')
 
 def home_hub(request):
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
@@ -444,7 +447,7 @@ def submit_photo(request, comp_slug):
     return render(request, 'judging_app/submit.html', {'competition': competition, 'error_message': error_message})
 
 def feedback_report_context(competition, can_edit_notes=False):
-    photos = list(Photo.objects.filter(competition=competition))
+    photos = list(photo_report_queryset(competition))
     all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
     for photo in photos:
         photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
@@ -520,7 +523,7 @@ def upload_spreadsheet(request, comp_slug):
 
                     Photo.objects.create(
                         id=int(custom_code.strip()), competition=competition, title=title,
-                        photographer_name=photographer, category=category,
+                        entry_code=custom_code.strip(), photographer_name=photographer, category=category,
                         image='competition_photos/placeholder.jpg', description=desc, camera_settings=cam_settings
                     )
                     import_count += 1
@@ -591,6 +594,56 @@ def upload_photos_zip(request, comp_slug):
         )
         return redirect('zip_import_status', comp_slug=competition.slug, job_id=job.id)
     return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+@login_required(login_url='/accounts/login/')
+def upload_photos_only_zip(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
+
+    zip_file = request.FILES.get('photos_zip_file')
+    zip_url = request.POST.get('photos_zip_url', '').strip()
+
+    if request.method != 'POST':
+        return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+    if zip_url:
+        parsed_url = urlparse(zip_url)
+        if parsed_url.scheme not in {'http', 'https'}:
+            messages.error(request, 'Please provide a direct http(s) download link to the photos ZIP.')
+            return redirect('upload_spreadsheet', comp_slug=competition.slug)
+        job = ZipImportJob.objects.create(
+            competition=competition,
+            uploaded_by=request.user,
+            source_name=os.path.basename(parsed_url.path) or 'photos-only-package.zip',
+            source_url=zip_url,
+        )
+    elif zip_file:
+        if not zip_file.name.lower().endswith('.zip'):
+            messages.error(request, 'Please upload a .zip package containing photo files.')
+            return redirect('upload_spreadsheet', comp_slug=competition.slug)
+        job = ZipImportJob.objects.create(
+            competition=competition,
+            uploaded_by=request.user,
+            source_name=zip_file.name,
+        )
+        job.temp_path = save_uploaded_zip_to_temp_file(zip_file, job.id)
+        job.save(update_fields=['temp_path', 'updated_at'])
+    else:
+        messages.error(request, 'Choose a photos ZIP file or paste a direct photos ZIP download link.')
+        return redirect('upload_spreadsheet', comp_slug=competition.slug)
+
+    worker = threading.Thread(
+        target=process_photos_only_zip_job,
+        args=(job.id,),
+        daemon=True,
+    )
+    worker.start()
+    messages.success(
+        request,
+        'Photo-only import started. SimplyJudge will create entries from the sorted filenames.',
+    )
+    return redirect('zip_import_status', comp_slug=competition.slug, job_id=job.id)
 
 @login_required(login_url='/accounts/login/')
 def upload_zip_chunk(request, comp_slug):
@@ -945,6 +998,23 @@ def collect_zip_image_index(zip_file):
         images[normalize_match_key(stem)] = info
     return images
 
+def natural_sort_key(value):
+    return [
+        int(part) if part.isdigit() else part.lower()
+        for part in re.split(r'(\d+)', str(value))
+    ]
+
+def collect_zip_image_members(zip_file):
+    image_members = []
+    for info in zip_file.infolist():
+        filename = os.path.basename(info.filename)
+        if info.is_dir() or not filename or filename.startswith('.'):
+            continue
+        _, ext = os.path.splitext(filename)
+        if ext.lower() in IMAGE_EXTENSIONS:
+            image_members.append(info)
+    return sorted(image_members, key=lambda info: natural_sort_key(os.path.basename(info.filename)))
+
 def parse_entry_rows(csv_bytes):
     text = decode_csv_bytes(csv_bytes)
     reader = csv.DictReader(io.StringIO(text))
@@ -1004,6 +1074,7 @@ def process_entry_zip_job(job_id):
 
                     defaults = {
                         'competition': job.competition,
+                        'entry_code': truncate_text(entry_code, 120) if entry_code else '',
                         'title': title,
                         'photographer_name': photographer,
                         'category': category,
@@ -1066,6 +1137,87 @@ def process_entry_zip_job(job_id):
             job.finished_at = timezone.now()
             job.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
         print(f'SimplyJudge ZIP sync failed for job {job_id}: {exc}')
+    finally:
+        if job is not None and job.temp_path and os.path.exists(job.temp_path):
+            try:
+                os.remove(job.temp_path)
+            except OSError:
+                pass
+        close_old_connections()
+
+def process_photos_only_zip_job(job_id):
+    close_old_connections()
+    job = None
+    try:
+        job = ZipImportJob.objects.select_related('competition').get(id=job_id)
+        job.status = ZipImportJob.Status.PROCESSING
+        job.error_message = ''
+        job.save(update_fields=['status', 'error_message', 'updated_at'])
+
+        if job.source_url and not job.temp_path:
+            job.temp_path = download_zip_url_to_temp_file(job.source_url, job.id)
+            job.save(update_fields=['temp_path', 'updated_at'])
+
+        with zipfile.ZipFile(job.temp_path) as package:
+            image_members = collect_zip_image_members(package)
+            if not image_members:
+                raise ValueError('No photo files found in the ZIP package.')
+
+            entry_codes = [
+                truncate_text(os.path.splitext(os.path.basename(info.filename))[0], 120)
+                for info in image_members
+            ]
+            duplicate_codes = sorted({code for code in entry_codes if entry_codes.count(code) > 1})
+            if duplicate_codes:
+                raise ValueError(f'Duplicate photo filename code(s) found: {", ".join(duplicate_codes[:5])}.')
+
+            job.total_rows = len(image_members)
+            job.save(update_fields=['total_rows', 'updated_at'])
+
+            with transaction.atomic():
+                imported = 0
+                for info, entry_code in zip(image_members, entry_codes):
+                    image_bytes = package.read(info.filename)
+                    storage_image = prepare_image_for_cloudinary(
+                        image_bytes,
+                        truncate_filename(info.filename),
+                    )
+                    flags = collect_photo_rule_flags(job.competition, image_bytes)
+                    if storage_image['compressed']:
+                        flags.append(
+                            'Image optimized for Cloudinary upload limit '
+                            f"({storage_image['original_size']} bytes -> {storage_image['size']} bytes)."
+                        )
+
+                    defaults = {
+                        'title': entry_code,
+                        'photographer_name': 'Unknown',
+                        'category': 'General',
+                        'description': '',
+                        'camera_settings': '',
+                        'rule_flags': ' | '.join(flags) if flags else '',
+                        'image': ContentFile(storage_image['bytes'], name=storage_image['filename']),
+                    }
+                    Photo.objects.update_or_create(
+                        competition=job.competition,
+                        entry_code=entry_code,
+                        defaults=defaults,
+                    )
+                    imported += 1
+
+        job.status = ZipImportJob.Status.COMPLETED
+        job.processed_rows = imported
+        job.matched_images = imported
+        job.finished_at = timezone.now()
+        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'finished_at', 'updated_at'])
+        print(f'SimplyJudge photo-only sync completed for {job.source_name}: {imported} photos imported.')
+    except Exception as exc:
+        if job is not None:
+            job.status = ZipImportJob.Status.FAILED
+            job.error_message = str(exc)
+            job.finished_at = timezone.now()
+            job.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+        print(f'SimplyJudge photo-only sync failed for job {job_id}: {exc}')
     finally:
         if job is not None and job.temp_path and os.path.exists(job.temp_path):
             try:

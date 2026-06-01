@@ -59,6 +59,7 @@ You can upload:
 - A rubric CSV.
 - A CSV with entry rows only.
 - A ZIP package containing `EntryForm.csv` and all photo files.
+- A photo-only ZIP when every photo filename is already the unique reference code.
 - A direct ZIP download link from Dropbox, Google Drive, WeTransfer, or similar services, if the link downloads the ZIP directly.
 
 For most events, use the ZIP package sync because it imports the spreadsheet and matches the image files in one process.
@@ -152,7 +153,33 @@ Recommended photo file types:
 - `.tif`
 - `.tiff`
 
-## 8. Large ZIP Uploads
+## 8. Photo-Only Uploads
+
+Use this when the photos have already been renamed to their unique IDs.
+
+Example ZIP:
+
+```text
+shutter-society-photos.zip
+  SS001.jpg
+  SS002.jpg
+  SS010.jpg
+```
+
+No `EntryForm.csv` is required.
+
+SimplyJudge will:
+
+- Sort the photos by filename.
+- Create one entry per photo.
+- Use the filename without the extension as the entry reference code.
+- Show that reference code in the feedback report.
+
+For example, `SS001.jpg` becomes an entry with reference code `SS001`.
+
+The filename code must be unique inside the ZIP.
+
+## 9. Large ZIP Uploads
 
 Use **Chunked ZIP package sync** for local uploads. This sends the ZIP in smaller pieces and avoids browser timeout problems.
 
@@ -166,12 +193,12 @@ dl=1
 
 Avoid links that open a preview page instead of downloading the ZIP directly.
 
-## 9. After Sync Finishes
+## 10. After Sync Finishes
 
 The import status page shows:
 
-- Rows discovered
-- Rows committed
+- Entries discovered
+- Entries committed
 - Images matched
 - Job status
 
@@ -184,7 +211,7 @@ If the job succeeds, choose the next step:
 
 If the job fails, no partial import should remain. Fix the spreadsheet or ZIP and upload again.
 
-## 10. Public Outputs
+## 11. Public Outputs
 
 Leaderboards are public to anyone with the link.
 
@@ -192,16 +219,18 @@ Feedback portal reports are public to anyone with the link.
 
 Full competition feedback ledgers are not public by default. They are visible to organisers.
 
-## 11. Common Mistakes
+## 12. Common Mistakes
 
 - Uploading XLSX instead of CSV.
 - Forgetting to include `EntryForm.csv` in the ZIP.
+- Using a spreadsheet ZIP when you meant to use photo-only import.
+- Reusing the same filename code twice in a photo-only ZIP.
 - Using a Dropbox/Drive link that opens a preview page instead of downloading the ZIP.
 - Reusing entry codes from another event.
 - Naming image files in a way that does not match the CSV.
 - Uploading photos without a rubric configured.
 
-## 12. Quick Checklist Before Uploading
+## 13. Quick Checklist Before Uploading
 
 - Event workflow is correct.
 - Organisers and judges are assigned.
@@ -209,5 +238,6 @@ Full competition feedback ledgers are not public by default. They are visible to
 - Entry CSV is named `EntryForm.csv` if uploading a ZIP.
 - Each entry has a unique code or clear image filename.
 - Photo files are inside the ZIP.
+- For photo-only imports, every filename stem is the reference code.
 - Remote links are direct ZIP download links.
-- After upload, check rows committed and images matched.
+- After upload, check entries committed and images matched.

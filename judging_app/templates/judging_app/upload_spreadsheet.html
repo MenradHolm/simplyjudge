@@ -65,6 +65,28 @@
         </article>
 
         <article class="panel panel-padded">
+            <p class="eyebrow">Photos only</p>
+            <h3 class="competition-name">Filename-code import</h3>
+            <p class="page-copy">
+                Use this when every photo file is already renamed to its unique reference code. SimplyJudge creates one entry per image, sorted by filename, and shows that code in the feedback report.
+            </p>
+
+            <form method="POST" action="{% url 'upload_photos_only_zip' competition.slug %}" enctype="multipart/form-data" class="form-grid">
+                {% csrf_token %}
+                <div class="field">
+                    <label for="photos_zip_file">Photos ZIP</label>
+                    <span class="help-text">No EntryForm.csv required. Example filenames: SS001.jpg, SS002.jpg, SS003.jpg.</span>
+                    <input type="file" name="photos_zip_file" id="photos_zip_file" accept=".zip">
+                </div>
+                <div class="field">
+                    <label for="photos_zip_url">Or direct photos ZIP URL</label>
+                    <input type="url" name="photos_zip_url" id="photos_zip_url" placeholder="https://example.com/shutter-society-photos.zip">
+                </div>
+                <button type="submit" class="button button-secondary">Import Photos by Filename</button>
+            </form>
+        </article>
+
+        <article class="panel panel-padded">
             <p class="eyebrow">CSV only</p>
             <h3 class="competition-name">Rubric or row import</h3>
             <p class="page-copy">
@@ -91,6 +113,10 @@
         <div class="card">
             <span class="tag tag-neutral">ZIP format</span>
             <p class="page-copy">Place <strong>EntryForm.csv</strong> anywhere in the ZIP. Images can be in folders; matching uses the filename stem, entry code, or file reference column.</p>
+        </div>
+        <div class="card">
+            <span class="tag tag-neutral">Photos-only format</span>
+            <p class="page-copy">For photo-only imports, each filename stem becomes the entry reference code. Files are imported in filename order.</p>
         </div>
         <div class="card">
             <span class="tag tag-neutral">Safety</span>

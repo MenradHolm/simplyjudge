@@ -64,6 +64,9 @@
                         <div>
                             <span class="tag tag-neutral">#{{ photo.id }}</span>
                             <h3 class="competition-name" style="margin-top: 0.55rem;">{{ photo.title }}</h3>
+                            {% if photo.entry_code %}
+                                <p class="card-meta">Reference {{ photo.entry_code }}</p>
+                            {% endif %}
                             <p class="card-meta">{{ photo.category }}</p>
                             <p class="card-meta">{{ photo.judge_scores|length }} score{{ photo.judge_scores|length|pluralize }}</p>
                             {% if photo.rule_flags %}

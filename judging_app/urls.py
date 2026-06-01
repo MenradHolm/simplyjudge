@@ -23,6 +23,7 @@ urlpatterns = [
     # Upload Data Routes (Using Slugs)
     path('competition/<slug:comp_slug>/upload-csv/', views.upload_spreadsheet, name='upload_spreadsheet'),
     path('competition/<slug:comp_slug>/upload-zip/', views.upload_photos_zip, name='upload_photos_zip'),
+    path('competition/<slug:comp_slug>/upload-photos-only/', views.upload_photos_only_zip, name='upload_photos_only_zip'),
     path('competition/<slug:comp_slug>/upload-zip-chunk/', views.upload_zip_chunk, name='upload_zip_chunk'),
     path('competition/<slug:comp_slug>/zip-import/<int:job_id>/', views.zip_import_status, name='zip_import_status'),
     

@@ -71,6 +71,7 @@ class Photo(models.Model):
         SHORTLISTED = 'SHORTLISTED', 'Shortlisted'
 
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE)
+    entry_code = models.CharField(max_length=120, blank=True)
     title = models.CharField(max_length=200)
     photographer_name = models.CharField(max_length=200)
     category = models.CharField(max_length=100)
