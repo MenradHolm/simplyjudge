@@ -28,6 +28,20 @@
         border-bottom: 0;
     }
 
+    .print-only {
+        display: none;
+    }
+
+    @media print {
+        .judge-identity-internal {
+            display: none !important;
+        }
+
+        .print-only {
+            display: inline !important;
+        }
+    }
+
     @media (max-width: 980px) {
         .ledger-row {
             grid-template-columns: 1fr;
@@ -80,7 +94,10 @@
                             {% for score in photo.judge_scores %}
                                 <div class="judge-score">
                                     <div>
-                                        <strong>{{ score.judge.username }}</strong>
+                                        {% if can_edit_notes %}
+                                            <strong class="judge-identity-internal no-print">{{ score.judge.username }}</strong>
+                                        {% endif %}
+                                        <strong class="{% if can_edit_notes %}print-only{% endif %}">Reviewer feedback</strong>
                                         <span class="metric-label">Score {{ score.total_score|floatformat:1 }}</span>
                                     </div>
                                     <div class="muted">

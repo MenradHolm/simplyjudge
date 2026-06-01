@@ -434,16 +434,19 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(report_response, 'Photo reference: SS001')
 
     def test_leaderboard_is_public(self):
+        private_judge = User.objects.create_user(username='private_reviewer_name')
         photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)
-        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=87.5)
+        Score.objects.create(photo=photo, judge=private_judge, criteria_scores={}, total_score=87.5)
 
         response = self.client.get(reverse('leaderboard', args=[self.competition.slug]))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Live leaderboard')
         self.assertContains(response, '87.5')
+        self.assertNotContains(response, private_judge.username)
 
     def test_feedback_portal_report_is_public_without_admin_edit_controls(self):
+        private_judge = User.objects.create_user(username='private_feedback_reviewer')
         feedback_competition = Competition.objects.create(
             name='Shutter Society',
             slug='shutter-society',
@@ -460,7 +463,7 @@ class PhotoStatusWorkflowTests(TestCase):
         )
         Score.objects.create(
             photo=photo,
-            judge=self.guest_judge,
+            judge=private_judge,
             criteria_scores={},
             total_score=91,
             comment='Strong composition and clear intent.',
@@ -470,9 +473,45 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Strong composition and clear intent.')
+        self.assertContains(response, 'Reviewer feedback')
         self.assertContains(response, 'Private organizer context')
+        self.assertNotContains(response, private_judge.username)
         self.assertNotContains(response, '/admin/judging_app/photo/')
         self.assertNotContains(response, '>Edit<')
+
+    def test_organizer_report_shows_judge_names_on_screen_but_hides_them_from_print(self):
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society-internal',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        CompetitionMembership.objects.create(
+            competition=feedback_competition,
+            user=self.organizer,
+            role=CompetitionMembership.Role.ORGANIZER,
+        )
+        photo = Photo.objects.create(
+            competition=feedback_competition,
+            title='Member image',
+            photographer_name='Club Member',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.PENDING,
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=self.guest_judge,
+            criteria_scores={},
+            total_score=91,
+            comment='Strong composition and clear intent.',
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
+
+        self.assertContains(response, self.guest_judge.username)
+        self.assertContains(response, 'judge-identity-internal no-print')
+        self.assertContains(response, 'Reviewer feedback')
 
     def test_full_competition_feedback_report_is_not_public(self):
         response = self.client.get(reverse('feedback_report', args=[self.competition.slug]))
