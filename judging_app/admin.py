@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Competition, CompetitionMembership, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
+from .models import Competition, CompetitionMembership, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
 
 # --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
 admin.site.site_header = "SimplyJudge Admin Engine"
@@ -19,7 +19,7 @@ class CompetitionMembershipInline(admin.TabularInline):
 
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'slug', 'workflow', 'is_active', 'created_at')
+    list_display = ('id', 'name', 'slug', 'workflow', 'entry_fee', 'is_active', 'created_at')
     list_filter = ('workflow', 'is_active')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
@@ -31,6 +31,13 @@ class CompetitionMembershipAdmin(admin.ModelAdmin):
     list_display = ('id', 'competition', 'user', 'role', 'is_active', 'created_at')
     list_filter = ('role', 'is_active', 'competition')
     search_fields = ('competition__name', 'user__username', 'user__email')
+
+@admin.register(EntryOrder)
+class EntryOrderAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'competition', 'amount_paid', 'is_paid', 'stripe_checkout_id', 'created_at')
+    list_filter = ('is_paid', 'competition')
+    search_fields = ('user__username', 'user__email', 'competition__name', 'stripe_checkout_id')
+    readonly_fields = ('created_at',)
 
 @admin.register(RubricCriterion)
 class RubricCriterionAdmin(admin.ModelAdmin):

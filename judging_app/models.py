@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -21,6 +23,7 @@ class Competition(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True, null=True, blank=True, help_text="Clean URL text (e.g., 'youth-poty' or 'shutter-society')")
     workflow = models.CharField(max_length=30, choices=Workflow.choices, default=Workflow.FULL_COMPETITION)
+    entry_fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     judges = models.ManyToManyField(User, blank=True)
@@ -53,6 +56,21 @@ class CompetitionMembership(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.competition} - {self.get_role_display()}"
+
+class EntryOrder(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='entry_orders')
+    competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='entry_orders')
+    stripe_checkout_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    is_paid = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        status = 'paid' if self.is_paid else 'pending'
+        return f"{self.user} - {self.competition} - {status}"
 
 class RubricCriterion(models.Model):
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='rubrics')
