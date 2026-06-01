@@ -30,9 +30,6 @@
                     <img class="thumb" src="{{ photo.image.url }}" alt="Anonymous ranked submission">
                     <div>
                         <h3 class="competition-name">SimplyJudge ID: #{{ photo.id }}</h3>
-                        {% if photo.entry_code %}
-                            <p class="card-meta">Photo reference: {{ photo.entry_code }}</p>
-                        {% endif %}
                         <p class="card-meta">Entrant identity hidden</p>
                         <span class="tag tag-neutral" style="margin-top: 0.55rem;">{{ photo.category }}</span>
                     </div>

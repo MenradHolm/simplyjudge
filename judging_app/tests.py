@@ -79,7 +79,7 @@ class PhotoStatusWorkflowTests(TestCase):
             description='Visual strength',
             weight=1.0,
         )
-        photo = self.create_photo('Shortlisted image', Photo.Status.SHORTLISTED)
+        photo = self.create_photo('Shortlisted image', Photo.Status.SHORTLISTED, entry_code='PRIVATE-FILE-001')
         Score.objects.create(
             photo=photo,
             judge=self.guest_judge,
@@ -94,6 +94,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(review_response, 'My submitted scores')
         self.assertContains(review_response, 'SimplyJudge ID: #')
         self.assertContains(review_response, 'Edit Score')
+        self.assertNotContains(review_response, 'PRIVATE-FILE-001')
 
         edit_response = self.client.get(
             f"{reverse('judge_photo', args=[self.competition.slug, photo.id])}?return=review"
@@ -102,6 +103,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(edit_response, 'value="72.5"')
         self.assertContains(edit_response, 'Initial calibration note.')
         self.assertContains(edit_response, 'Update Evaluation')
+        self.assertNotContains(edit_response, 'PRIVATE-FILE-001')
 
         post_response = self.client.post(
             f"{reverse('judge_photo', args=[self.competition.slug, photo.id])}?return=review",
