@@ -101,19 +101,13 @@
     }
 
     .zoom-toolbar {
-        position: absolute;
-        z-index: 2;
-        top: 0.85rem;
-        right: 0.85rem;
         display: flex;
         align-items: center;
+        justify-content: flex-end;
         gap: 0.35rem;
-        padding: 0.35rem;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 0.5rem;
-        background: rgba(8, 13, 23, 0.82);
-        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
-        backdrop-filter: blur(10px);
+        padding: 0.55rem clamp(0.8rem, 2vw, 1.4rem);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: #111827;
     }
 
     .zoom-button {
@@ -124,16 +118,17 @@
         border: 1px solid rgba(255, 255, 255, 0.14);
         border-radius: 0.45rem;
         color: #f8fafc;
-        background: rgba(255, 255, 255, 0.08);
+        background: transparent;
         font: inherit;
         font-weight: 850;
         line-height: 1;
         cursor: pointer;
+        box-shadow: none;
     }
 
     .zoom-button:hover,
     .zoom-button:focus {
-        background: rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.08);
         outline: none;
     }
 
@@ -298,13 +293,13 @@
 
     <div class="jury-layout">
         <section class="panel jury-photo-panel">
+            <div class="zoom-toolbar" id="photo-zoom-toolbar" aria-label="Image zoom controls">
+                <button class="zoom-button" type="button" data-zoom-action="out" aria-label="Zoom out">-</button>
+                <span class="zoom-level" id="zoom-level">100%</span>
+                <button class="zoom-button" type="button" data-zoom-action="in" aria-label="Zoom in">+</button>
+                <button class="zoom-button" type="button" data-zoom-action="reset" aria-label="Reset zoom">1:1</button>
+            </div>
             <div class="jury-photo-stage" id="photo-zoom-stage">
-                <div class="zoom-toolbar" aria-label="Image zoom controls">
-                    <button class="zoom-button" type="button" data-zoom-action="out" aria-label="Zoom out">-</button>
-                    <span class="zoom-level" id="zoom-level">100%</span>
-                    <button class="zoom-button" type="button" data-zoom-action="in" aria-label="Zoom in">+</button>
-                    <button class="zoom-button" type="button" data-zoom-action="reset" aria-label="Reset zoom">1:1</button>
-                </div>
                 <img id="judge-photo" src="{{ photo.image.url }}" alt="Anonymous competition submission" draggable="false">
             </div>
             <div class="jury-context">
@@ -389,9 +384,10 @@
 <script>
     (function () {
         const stage = document.getElementById('photo-zoom-stage');
+        const toolbar = document.getElementById('photo-zoom-toolbar');
         const image = document.getElementById('judge-photo');
         const level = document.getElementById('zoom-level');
-        if (!stage || !image || !level) {
+        if (!stage || !toolbar || !image || !level) {
             return;
         }
 
@@ -444,7 +440,7 @@
             render();
         }
 
-        stage.addEventListener('click', function (event) {
+        toolbar.addEventListener('click', function (event) {
             const button = event.target.closest('[data-zoom-action]');
             if (!button) {
                 return;
