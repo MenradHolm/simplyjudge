@@ -11,15 +11,36 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 import dj_database_url
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+IS_TESTING = 'test' in sys.argv
+
+def env_bool(name, default=False):
+    return os.environ.get(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+def env_list(name, default):
+    value = os.environ.get(name, '')
+    if not value:
+        return default
+    return [item.strip() for item in value.split(',') if item.strip()]
 
 # In production, we pull these from the server's environment variables
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vpsob8!!#9=bt3dt3o%es@q+7^(y6s257!szokecb#q15iwiu1')
-DEBUG = True
-ALLOWED_HOSTS = ['*'] # Allows Render to host it
+DEBUG = env_bool('DEBUG', False)
+ALLOWED_HOSTS = env_list(
+    'ALLOWED_HOSTS',
+    ['simplyjudge.onrender.com', '.onrender.com', 'localhost', '127.0.0.1', 'testserver'],
+)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG and not IS_TESTING)
+SESSION_COOKIE_SECURE = not DEBUG and not IS_TESTING
+CSRF_COOKIE_SECURE = not DEBUG and not IS_TESTING
+SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
 
 
 # Application definition
