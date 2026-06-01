@@ -103,6 +103,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(edit_response, 'value="72.5"')
         self.assertContains(edit_response, 'Initial calibration note.')
         self.assertContains(edit_response, 'Update Evaluation')
+        self.assertContains(edit_response, 'Image zoom controls')
         self.assertNotContains(edit_response, 'PRIVATE-FILE-001')
 
         post_response = self.client.post(

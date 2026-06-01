@@ -65,13 +65,17 @@
     }
 
     .jury-photo-stage {
+        position: relative;
         display: grid;
         place-items: center;
         min-height: min(72vh, 52rem);
         padding: clamp(0.8rem, 2vw, 1.4rem);
+        overflow: hidden;
         background:
             linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 18rem),
             #0c111b;
+        touch-action: none;
+        user-select: none;
     }
 
     .jury-photo-stage img {
@@ -81,6 +85,64 @@
         object-fit: contain;
         border-radius: 0.35rem;
         box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+        cursor: zoom-in;
+        transform: translate3d(var(--zoom-x, 0px), var(--zoom-y, 0px), 0) scale(var(--zoom-scale, 1));
+        transition: transform 120ms ease;
+        will-change: transform;
+    }
+
+    .jury-photo-stage.is-zoomed img {
+        cursor: grab;
+    }
+
+    .jury-photo-stage.is-dragging img {
+        cursor: grabbing;
+        transition: none;
+    }
+
+    .zoom-toolbar {
+        position: absolute;
+        z-index: 2;
+        top: 0.85rem;
+        right: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 0.5rem;
+        background: rgba(8, 13, 23, 0.82);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(10px);
+    }
+
+    .zoom-button {
+        display: inline-grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 0.45rem;
+        color: #f8fafc;
+        background: rgba(255, 255, 255, 0.08);
+        font: inherit;
+        font-weight: 850;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .zoom-button:hover,
+    .zoom-button:focus {
+        background: rgba(255, 255, 255, 0.16);
+        outline: none;
+    }
+
+    .zoom-level {
+        min-width: 3.45rem;
+        color: #dbe4f0;
+        font-size: 0.78rem;
+        font-weight: 850;
+        text-align: center;
     }
 
     .jury-context {
@@ -236,8 +298,14 @@
 
     <div class="jury-layout">
         <section class="panel jury-photo-panel">
-            <div class="jury-photo-stage">
-                <img src="{{ photo.image.url }}" alt="Anonymous competition submission">
+            <div class="jury-photo-stage" id="photo-zoom-stage">
+                <div class="zoom-toolbar" aria-label="Image zoom controls">
+                    <button class="zoom-button" type="button" data-zoom-action="out" aria-label="Zoom out">-</button>
+                    <span class="zoom-level" id="zoom-level">100%</span>
+                    <button class="zoom-button" type="button" data-zoom-action="in" aria-label="Zoom in">+</button>
+                    <button class="zoom-button" type="button" data-zoom-action="reset" aria-label="Reset zoom">1:1</button>
+                </div>
+                <img id="judge-photo" src="{{ photo.image.url }}" alt="Anonymous competition submission" draggable="false">
             </div>
             <div class="jury-context">
                 <div class="jury-meta-row">
@@ -318,4 +386,128 @@
         </section>
     </div>
 </main>
+<script>
+    (function () {
+        const stage = document.getElementById('photo-zoom-stage');
+        const image = document.getElementById('judge-photo');
+        const level = document.getElementById('zoom-level');
+        if (!stage || !image || !level) {
+            return;
+        }
+
+        const minScale = 1;
+        const maxScale = 4;
+        const step = 0.25;
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let dragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startOffsetX = 0;
+        let startOffsetY = 0;
+
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function clampOffsets() {
+            if (scale <= minScale) {
+                offsetX = 0;
+                offsetY = 0;
+                return;
+            }
+
+            const rect = stage.getBoundingClientRect();
+            const maxX = (rect.width * (scale - 1)) / 2;
+            const maxY = (rect.height * (scale - 1)) / 2;
+            offsetX = clamp(offsetX, -maxX, maxX);
+            offsetY = clamp(offsetY, -maxY, maxY);
+        }
+
+        function render() {
+            clampOffsets();
+            image.style.setProperty('--zoom-scale', scale.toFixed(2));
+            image.style.setProperty('--zoom-x', `${offsetX}px`);
+            image.style.setProperty('--zoom-y', `${offsetY}px`);
+            level.textContent = `${Math.round(scale * 100)}%`;
+            stage.classList.toggle('is-zoomed', scale > minScale);
+        }
+
+        function setScale(nextScale) {
+            const previousScale = scale;
+            scale = clamp(nextScale, minScale, maxScale);
+            if (scale === minScale || previousScale === minScale) {
+                offsetX = 0;
+                offsetY = 0;
+            }
+            render();
+        }
+
+        stage.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-zoom-action]');
+            if (!button) {
+                return;
+            }
+
+            const action = button.dataset.zoomAction;
+            if (action === 'in') {
+                setScale(scale + step);
+            } else if (action === 'out') {
+                setScale(scale - step);
+            } else {
+                scale = 1;
+                offsetX = 0;
+                offsetY = 0;
+                render();
+            }
+        });
+
+        stage.addEventListener('wheel', function (event) {
+            event.preventDefault();
+            setScale(scale + (event.deltaY < 0 ? step : -step));
+        }, { passive: false });
+
+        image.addEventListener('dblclick', function () {
+            setScale(scale === minScale ? 2 : minScale);
+        });
+
+        image.addEventListener('pointerdown', function (event) {
+            if (scale <= minScale) {
+                return;
+            }
+
+            dragging = true;
+            startX = event.clientX;
+            startY = event.clientY;
+            startOffsetX = offsetX;
+            startOffsetY = offsetY;
+            stage.classList.add('is-dragging');
+            image.setPointerCapture(event.pointerId);
+        });
+
+        image.addEventListener('pointermove', function (event) {
+            if (!dragging) {
+                return;
+            }
+
+            offsetX = startOffsetX + event.clientX - startX;
+            offsetY = startOffsetY + event.clientY - startY;
+            render();
+        });
+
+        function stopDragging(event) {
+            dragging = false;
+            stage.classList.remove('is-dragging');
+            if (event && image.hasPointerCapture(event.pointerId)) {
+                image.releasePointerCapture(event.pointerId);
+            }
+        }
+
+        image.addEventListener('pointerup', stopDragging);
+        image.addEventListener('pointercancel', stopDragging);
+        window.addEventListener('resize', render);
+        render();
+    }());
+</script>
 {% endblock %}
