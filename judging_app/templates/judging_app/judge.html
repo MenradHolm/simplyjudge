@@ -372,8 +372,8 @@
                 {% endif %}
 
                 <div class="field feedback-field">
-                    <label for="comment">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback{% else %}Critique notes{% endif %}</label>
-                    <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Write useful feedback for the photographer...{% else %}Write concise feedback for the organizer or entrant...{% endif %}">{% if existing_score.comment %}{{ existing_score.comment }}{% endif %}</textarea>
+                    <label for="comment">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Member feedback (optional){% else %}Critique notes (optional){% endif %}</label>
+                    <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Optional: write useful feedback for the photographer...{% else %}Optional: write concise feedback for the organizer or entrant...{% endif %}">{% if existing_score.comment %}{{ existing_score.comment }}{% endif %}</textarea>
                 </div>
 
                 <button type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>{% if existing_score %}Update Evaluation{% else %}Submit Evaluation{% endif %}</button>
