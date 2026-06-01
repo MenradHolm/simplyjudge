@@ -1,4 +1,5 @@
 import csv
+import gc
 import math
 import os
 import re
@@ -29,6 +30,7 @@ from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
 CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024
 CLOUDINARY_SAFE_UPLOAD_TARGET_BYTES = int(CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES * 0.92)
+MAX_IMAGE_PROCESSING_DIMENSION = 2400
 
 def register_user(request):
     if request.method == 'POST':
@@ -1057,82 +1059,90 @@ def process_entry_zip_job(job_id):
                 imported = 0
                 matched = 0
                 for row_number, row in enumerate(rows, start=2):
-                    title = truncate_text(clean_cell(row, 'Title', 'title', default='Untitled'), 200)
-                    photographer = truncate_text(clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown'), 200)
-                    category = truncate_text(clean_cell(row, 'Category', 'category', default='General'), 100)
-                    entry_code = clean_cell(row, 'Code', 'ID', 'Number', 'Entry ID', 'Entry Code', 'id')
-                    image_references = [
-                        clean_cell(row, 'Image'),
-                        clean_cell(row, 'Image File'),
-                        clean_cell(row, 'Filename'),
-                        clean_cell(row, 'File Name'),
-                        clean_cell(row, 'Photo File'),
-                        clean_cell(row, 'Photo Filename'),
-                        clean_cell(row, 'Asset'),
-                    ]
-                    description = clean_cell(row, 'Description', 'description', 'Story', 'story')
-                    camera_settings = clean_cell(row, 'Camera Settings', 'camera settings', 'Settings', 'settings')
-
-                    match_candidates = [*image_references, entry_code, title]
-                    image_info = find_matching_image(images, match_candidates, photographer=photographer)
                     image_payload = None
-                    if image_info:
-                        image_payload = {
-                            'filename': truncate_filename(image_info.filename),
-                            'bytes': package.read(image_info.filename),
+                    storage_image = None
+                    defaults = None
+                    try:
+                        title = truncate_text(clean_cell(row, 'Title', 'title', default='Untitled'), 200)
+                        photographer = truncate_text(clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown'), 200)
+                        category = truncate_text(clean_cell(row, 'Category', 'category', default='General'), 100)
+                        entry_code = clean_cell(row, 'Code', 'ID', 'Number', 'Entry ID', 'Entry Code', 'id')
+                        image_references = [
+                            clean_cell(row, 'Image'),
+                            clean_cell(row, 'Image File'),
+                            clean_cell(row, 'Filename'),
+                            clean_cell(row, 'File Name'),
+                            clean_cell(row, 'Photo File'),
+                            clean_cell(row, 'Photo Filename'),
+                            clean_cell(row, 'Asset'),
+                        ]
+                        description = clean_cell(row, 'Description', 'description', 'Story', 'story')
+                        camera_settings = clean_cell(row, 'Camera Settings', 'camera settings', 'Settings', 'settings')
+
+                        match_candidates = [*image_references, entry_code, title]
+                        image_info = find_matching_image(images, match_candidates, photographer=photographer)
+                        if image_info:
+                            image_payload = {
+                                'filename': truncate_filename(image_info.filename),
+                                'bytes': package.read(image_info.filename),
+                            }
+
+                        defaults = {
+                            'competition': job.competition,
+                            'entry_code': truncate_text(entry_code, 120) if entry_code else '',
+                            'title': title,
+                            'photographer_name': photographer,
+                            'category': category,
+                            'description': description,
+                            'camera_settings': camera_settings,
                         }
 
-                    defaults = {
-                        'competition': job.competition,
-                        'entry_code': truncate_text(entry_code, 120) if entry_code else '',
-                        'title': title,
-                        'photographer_name': photographer,
-                        'category': category,
-                        'description': description,
-                        'camera_settings': camera_settings,
-                    }
-
-                    if image_payload:
-                        storage_image = prepare_image_for_cloudinary(
-                            image_payload['bytes'],
-                            image_payload['filename'],
-                        )
-                        flags = collect_photo_rule_flags(job.competition, image_payload['bytes'])
-                        if storage_image['compressed']:
-                            flags.append(
-                                'Image optimized for Cloudinary upload limit '
-                                f"({storage_image['original_size']} bytes -> {storage_image['size']} bytes)."
+                        if image_payload:
+                            storage_image = prepare_image_for_cloudinary(
+                                image_payload['bytes'],
+                                image_payload['filename'],
                             )
-                        defaults['rule_flags'] = ' | '.join(flags) if flags else ''
-                        defaults['image'] = ContentFile(storage_image['bytes'], name=storage_image['filename'])
-                        matched += 1
-                    else:
-                        defaults['image'] = 'competition_photos/placeholder.jpg'
-                        defaults['rule_flags'] = 'No matching image file found in uploaded ZIP package.'
+                            flags = collect_photo_rule_flags(job.competition, image_payload['bytes'])
+                            if storage_image['compressed']:
+                                flags.append(
+                                    'Image optimized for Cloudinary upload limit '
+                                    f"({storage_image['original_size']} bytes -> {storage_image['size']} bytes)."
+                                )
+                            defaults['rule_flags'] = ' | '.join(flags) if flags else ''
+                            defaults['image'] = ContentFile(storage_image['bytes'], name=storage_image['filename'])
+                            matched += 1
+                        else:
+                            defaults['image'] = 'competition_photos/placeholder.jpg'
+                            defaults['rule_flags'] = 'No matching image file found in uploaded ZIP package.'
 
-                    if entry_code:
-                        try:
-                            photo_id = int(entry_code.strip())
-                        except ValueError:
+                        if entry_code:
+                            try:
+                                photo_id = int(entry_code.strip())
+                            except ValueError:
+                                photo_id = None
+                        else:
                             photo_id = None
-                    else:
-                        photo_id = None
 
-                    if photo_id is not None:
-                        existing = Photo.objects.filter(id=photo_id).first()
-                        if existing and existing.competition_id != job.competition_id:
-                            raise ValueError(f'CSV row {row_number}: entry code {photo_id} already belongs to another competition.')
-                        if existing and not image_payload:
-                            defaults.pop('image', None)
-                        Photo.objects.update_or_create(id=photo_id, defaults=defaults)
-                    else:
-                        Photo.objects.update_or_create(
-                            competition=job.competition,
-                            title=title,
-                            photographer_name=photographer,
-                            defaults=defaults,
-                        )
-                    imported += 1
+                        if photo_id is not None:
+                            existing = Photo.objects.filter(id=photo_id).first()
+                            if existing and existing.competition_id != job.competition_id:
+                                raise ValueError(f'CSV row {row_number}: entry code {photo_id} already belongs to another competition.')
+                            if existing and not image_payload:
+                                defaults.pop('image', None)
+                            Photo.objects.update_or_create(id=photo_id, defaults=defaults)
+                        else:
+                            Photo.objects.update_or_create(
+                                competition=job.competition,
+                                title=title,
+                                photographer_name=photographer,
+                                defaults=defaults,
+                            )
+                        imported += 1
+                    finally:
+                        del image_payload
+                        del storage_image
+                        del defaults
+                        gc.collect()
 
         job.status = ZipImportJob.Status.COMPLETED
         job.processed_rows = imported
@@ -1187,33 +1197,42 @@ def process_photos_only_zip_job(job_id):
             with transaction.atomic():
                 imported = 0
                 for info, entry_code in zip(image_members, entry_codes):
-                    image_bytes = package.read(info.filename)
-                    storage_image = prepare_image_for_cloudinary(
-                        image_bytes,
-                        truncate_filename(info.filename),
-                    )
-                    flags = collect_photo_rule_flags(job.competition, image_bytes)
-                    if storage_image['compressed']:
-                        flags.append(
-                            'Image optimized for Cloudinary upload limit '
-                            f"({storage_image['original_size']} bytes -> {storage_image['size']} bytes)."
+                    image_bytes = None
+                    storage_image = None
+                    defaults = None
+                    try:
+                        image_bytes = package.read(info.filename)
+                        storage_image = prepare_image_for_cloudinary(
+                            image_bytes,
+                            truncate_filename(info.filename),
                         )
+                        flags = collect_photo_rule_flags(job.competition, image_bytes)
+                        if storage_image['compressed']:
+                            flags.append(
+                                'Image optimized for Cloudinary upload limit '
+                                f"({storage_image['original_size']} bytes -> {storage_image['size']} bytes)."
+                            )
 
-                    defaults = {
-                        'title': entry_code,
-                        'photographer_name': 'Unknown',
-                        'category': 'General',
-                        'description': '',
-                        'camera_settings': '',
-                        'rule_flags': ' | '.join(flags) if flags else '',
-                        'image': ContentFile(storage_image['bytes'], name=storage_image['filename']),
-                    }
-                    Photo.objects.update_or_create(
-                        competition=job.competition,
-                        entry_code=entry_code,
-                        defaults=defaults,
-                    )
-                    imported += 1
+                        defaults = {
+                            'title': entry_code,
+                            'photographer_name': 'Unknown',
+                            'category': 'General',
+                            'description': '',
+                            'camera_settings': '',
+                            'rule_flags': ' | '.join(flags) if flags else '',
+                            'image': ContentFile(storage_image['bytes'], name=storage_image['filename']),
+                        }
+                        Photo.objects.update_or_create(
+                            competition=job.competition,
+                            entry_code=entry_code,
+                            defaults=defaults,
+                        )
+                        imported += 1
+                    finally:
+                        del image_bytes
+                        del storage_image
+                        del defaults
+                        gc.collect()
 
         job.status = ZipImportJob.Status.COMPLETED
         job.processed_rows = imported
@@ -1238,27 +1257,27 @@ def process_photos_only_zip_job(job_id):
 
 def audit_photo_metadata(file_bytes):
     try:
-        img = Image.open(io.BytesIO(file_bytes))
-        exif_raw = img.getexif()
-        audit_results = {'date_valid': False, 'has_gps': False, 'flags': []}
-        if not exif_raw:
-            audit_results['flags'].append("No EXIF data found (Likely stripped by editing software/Wix).")
+        with Image.open(io.BytesIO(file_bytes)) as img:
+            exif_raw = img.getexif()
+            audit_results = {'date_valid': False, 'has_gps': False, 'flags': []}
+            if not exif_raw:
+                audit_results['flags'].append("No EXIF data found (Likely stripped by editing software/Wix).")
+                return audit_results
+            for tag_id, value in exif_raw.items():
+                tag = TAGS.get(tag_id, tag_id)
+                if tag == 'DateTimeOriginal':
+                    year = str(value).split(':')[0]
+                    if year in ['2025', '2026']:
+                        audit_results['date_valid'] = True
+                    else:
+                        audit_results['flags'].append(f"Taken outside valid date range: {year}")
+                    break
+            gps_info = exif_raw.get_ifd(0x8825)
+            if gps_info:
+                audit_results['has_gps'] = True
+            else:
+                audit_results['flags'].append("No GPS location data found (Privacy filter applied).")
             return audit_results
-        for tag_id, value in exif_raw.items():
-            tag = TAGS.get(tag_id, tag_id)
-            if tag == 'DateTimeOriginal':
-                year = str(value).split(':')[0]
-                if year in ['2025', '2026']:
-                    audit_results['date_valid'] = True
-                else:
-                    audit_results['flags'].append(f"Taken outside valid date range: {year}")
-                break
-        gps_info = exif_raw.get_ifd(0x8825)
-        if gps_info:
-            audit_results['has_gps'] = True
-        else:
-            audit_results['flags'].append("No GPS location data found (Privacy filter applied).")
-        return audit_results
     except Exception as e:
         return {'date_valid': False, 'has_gps': False, 'flags': ["Corrupted file or unable to read metadata."]}
 
@@ -1273,50 +1292,74 @@ def prepare_image_for_cloudinary(file_bytes, filename, max_bytes=CLOUDINARY_FREE
         }
 
     target_bytes = min(CLOUDINARY_SAFE_UPLOAD_TARGET_BYTES, int(max_bytes * 0.92))
-    image = Image.open(io.BytesIO(file_bytes))
-    image = ImageOps.exif_transpose(image)
-
-    if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
-        background = Image.new('RGB', image.size, (255, 255, 255))
-        alpha = image.convert('RGBA').getchannel('A')
-        background.paste(image.convert('RGBA'), mask=alpha)
-        image = background
-    elif image.mode != 'RGB':
-        image = image.convert('RGB')
-
     stem, _ = os.path.splitext(os.path.basename(filename))
     output_filename = truncate_filename(f'{stem or "photo"}.jpg')
+    image = None
+    working = None
 
-    working = image
-    min_quality = 62
-    max_dimension = max(working.size)
+    try:
+        with Image.open(io.BytesIO(file_bytes)) as source:
+            source.draft('RGB', (MAX_IMAGE_PROCESSING_DIMENSION, MAX_IMAGE_PROCESSING_DIMENSION))
+            source.load()
+            image = ImageOps.exif_transpose(source)
 
-    while max_dimension >= 320:
-        best_payload = None
-        for quality in range(88, min_quality - 1, -4):
-            output = io.BytesIO()
-            working.save(output, format='JPEG', quality=quality, optimize=True, progressive=True)
-            payload = output.getvalue()
-            if len(payload) <= target_bytes:
-                best_payload = payload
-                break
+        if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
+            rgba = image.convert('RGBA')
+            background = Image.new('RGB', rgba.size, (255, 255, 255))
+            background.paste(rgba, mask=rgba.getchannel('A'))
+            rgba.close()
+            if image is not background:
+                image.close()
+            image = background
+        elif image.mode != 'RGB':
+            converted = image.convert('RGB')
+            image.close()
+            image = converted
 
-        if best_payload is not None:
-            return {
-                'bytes': best_payload,
-                'filename': output_filename,
-                'compressed': True,
-                'original_size': len(file_bytes),
-                'size': len(best_payload),
-            }
-
-        max_dimension = int(max_dimension * 0.85)
-        ratio = max_dimension / max(working.size)
-        next_size = (
-            max(1, int(working.size[0] * ratio)),
-            max(1, int(working.size[1] * ratio)),
+        image.thumbnail(
+            (MAX_IMAGE_PROCESSING_DIMENSION, MAX_IMAGE_PROCESSING_DIMENSION),
+            Image.Resampling.LANCZOS,
         )
-        working = working.resize(next_size, Image.Resampling.LANCZOS)
+        working = image
+        min_quality = 62
+        max_dimension = max(working.size)
+
+        while max_dimension >= 320:
+            best_payload = None
+            for quality in range(88, min_quality - 1, -4):
+                output = io.BytesIO()
+                working.save(output, format='JPEG', quality=quality, optimize=True, progressive=True)
+                payload = output.getvalue()
+                output.close()
+                if len(payload) <= target_bytes:
+                    best_payload = payload
+                    break
+
+            if best_payload is not None:
+                return {
+                    'bytes': best_payload,
+                    'filename': output_filename,
+                    'compressed': True,
+                    'original_size': len(file_bytes),
+                    'size': len(best_payload),
+                }
+
+            max_dimension = int(max_dimension * 0.82)
+            ratio = max_dimension / max(working.size)
+            next_size = (
+                max(1, int(working.size[0] * ratio)),
+                max(1, int(working.size[1] * ratio)),
+            )
+            resized = working.resize(next_size, Image.Resampling.LANCZOS)
+            if working is not image:
+                working.close()
+            working = resized
+    finally:
+        if working is not None and working is not image:
+            working.close()
+        if image is not None:
+            image.close()
+        gc.collect()
 
     raise ValueError(
         f'Image {filename} could not be compressed below the Cloudinary upload limit '
