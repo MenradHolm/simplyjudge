@@ -35,9 +35,13 @@ ALLOWED_HOSTS = env_list(
     ['simplyjudge.onrender.com', '.onrender.com', 'localhost', '127.0.0.1', 'testserver'],
 )
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG and not IS_TESTING)
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', False)
 SESSION_COOKIE_SECURE = not DEBUG and not IS_TESTING
 CSRF_COOKIE_SECURE = not DEBUG and not IS_TESTING
+CSRF_TRUSTED_ORIGINS = env_list(
+    'CSRF_TRUSTED_ORIGINS',
+    ['https://simplyjudge.onrender.com', 'https://*.onrender.com'],
+)
 SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
 SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
