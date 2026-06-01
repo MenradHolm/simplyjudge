@@ -3,12 +3,52 @@
 {% block title %}Upload Data - SimplyJudge{% endblock %}
 
 {% block content %}
+<style>
+    .import-mode-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+        gap: 0.75rem;
+    }
+
+    .import-mode-option {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: start;
+        gap: 0.65rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        padding: 0.85rem;
+        background: #fff;
+    }
+
+    .import-mode-option input {
+        width: auto;
+        min-height: auto;
+        margin-top: 0.18rem;
+    }
+
+    .import-mode-option strong {
+        display: block;
+        color: var(--ink);
+        font-size: 0.9rem;
+        line-height: 1.25;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    .import-mode-option span {
+        display: block;
+        margin-top: 0.2rem;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+</style>
 <main class="shell">
     <div class="page-head">
         <div>
             <p class="eyebrow">Data ingestion</p>
             <h2 class="page-title">Upload event data.</h2>
-            <p class="page-copy">Import rubrics from CSV, upload a ZIP in chunks, or start a server-side sync from a direct ZIP download link.</p>
+            <p class="page-copy">Import rubrics from CSV, upload a ZIP in chunks, or start a server-side sync from a direct ZIP download link. Choose whether the ZIP has a spreadsheet or whether the filenames are already the reference codes.</p>
         </div>
         <span class="tag">{{ competition.name }}</span>
     </div>
@@ -28,14 +68,33 @@
             <p class="eyebrow">Recommended</p>
             <h3 class="competition-name">Chunked ZIP package sync</h3>
             <p class="page-copy">
-                Upload a ZIP containing <strong>EntryForm.csv</strong> and the photo files. The browser sends it in small chunks so large local packages do not sit in one timeout-prone request.
+                Upload a ZIP from your computer. The browser sends it in small chunks so large local packages do not sit in one timeout-prone request.
             </p>
 
             <form method="POST" action="{% url 'upload_spreadsheet' competition.slug %}" data-chunk-url="{% url 'upload_zip_chunk' competition.slug %}" enctype="multipart/form-data" class="form-grid" id="zip-upload-form">
                 {% csrf_token %}
                 <div class="field">
+                    <span class="field-label">ZIP import method</span>
+                    <div class="import-mode-group">
+                        <label class="import-mode-option">
+                            <input type="radio" name="zip_import_mode" value="spreadsheet_package" checked>
+                            <span>
+                                <strong>Spreadsheet package</strong>
+                                <span class="help-text">The ZIP includes EntryForm.csv plus matching photo files.</span>
+                            </span>
+                        </label>
+                        <label class="import-mode-option">
+                            <input type="radio" name="zip_import_mode" value="filename_codes">
+                            <span>
+                                <strong>Filenames are reference codes</strong>
+                                <span class="help-text">No CSV lookup. Each filename stem becomes the entry reference code.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                <div class="field">
                     <label for="zip_file">ZIP package</label>
-                    <span class="help-text">The ZIP should include EntryForm.csv plus image files named with the same entry codes or filenames referenced in the CSV.</span>
+                    <span class="help-text">Use EntryForm.csv for a spreadsheet package, or use already-renamed image files for filename-code import.</span>
                     <input type="file" name="zip_file" id="zip_file" accept=".zip" required>
                 </div>
                 <div id="zip-upload-progress" class="alert" style="display: none;">Preparing upload...</div>
@@ -56,33 +115,30 @@
             <form method="POST" action="{% url 'upload_photos_zip' competition.slug %}" class="form-grid">
                 {% csrf_token %}
                 <div class="field">
+                    <span class="field-label">ZIP import method</span>
+                    <div class="import-mode-group">
+                        <label class="import-mode-option">
+                            <input type="radio" name="zip_import_mode" value="spreadsheet_package" checked>
+                            <span>
+                                <strong>Spreadsheet package</strong>
+                                <span class="help-text">The ZIP includes EntryForm.csv plus matching photo files.</span>
+                            </span>
+                        </label>
+                        <label class="import-mode-option">
+                            <input type="radio" name="zip_import_mode" value="filename_codes">
+                            <span>
+                                <strong>Filenames are reference codes</strong>
+                                <span class="help-text">No CSV lookup. Each filename stem becomes the entry reference code.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                <div class="field">
                     <label for="zip_url">Direct ZIP download URL</label>
                     <span class="help-text">Use a link that downloads the .zip directly, not a preview page.</span>
                     <input type="url" name="zip_url" id="zip_url" placeholder="https://example.com/youth-poty-package.zip" required>
                 </div>
                 <button type="submit" class="button button-secondary">Start Remote ZIP Sync</button>
-            </form>
-        </article>
-
-        <article class="panel panel-padded">
-            <p class="eyebrow">Photos only</p>
-            <h3 class="competition-name">Filename-code import</h3>
-            <p class="page-copy">
-                Use this when every photo file is already renamed to its unique reference code. SimplyJudge creates one entry per image, sorted by filename, and shows that code in the feedback report.
-            </p>
-
-            <form method="POST" action="{% url 'upload_photos_only_zip' competition.slug %}" enctype="multipart/form-data" class="form-grid">
-                {% csrf_token %}
-                <div class="field">
-                    <label for="photos_zip_file">Photos ZIP</label>
-                    <span class="help-text">No EntryForm.csv required. Example filenames: SS001.jpg, SS002.jpg, SS003.jpg.</span>
-                    <input type="file" name="photos_zip_file" id="photos_zip_file" accept=".zip">
-                </div>
-                <div class="field">
-                    <label for="photos_zip_url">Or direct photos ZIP URL</label>
-                    <input type="url" name="photos_zip_url" id="photos_zip_url" placeholder="https://example.com/shutter-society-photos.zip">
-                </div>
-                <button type="submit" class="button button-secondary">Import Photos by Filename</button>
             </form>
         </article>
 
@@ -169,6 +225,7 @@
         const chunkSize = 4 * 1024 * 1024;
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uploadId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const importMode = zipForm.querySelector('input[name="zip_import_mode"]:checked').value;
 
         uploadButton.disabled = true;
         setProgress(`Uploading ${file.name} in ${totalChunks} chunks...`);
@@ -182,6 +239,7 @@
                 formData.append('filename', file.name);
                 formData.append('chunk_index', String(index));
                 formData.append('total_chunks', String(totalChunks));
+                formData.append('zip_import_mode', importMode);
                 formData.append('chunk', file.slice(start, end), `${file.name}.part${index}`);
 
                 const response = await fetch(zipForm.dataset.chunkUrl, {

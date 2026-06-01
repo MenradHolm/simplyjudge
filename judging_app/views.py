@@ -543,6 +543,11 @@ def upload_photos_zip(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_competition_organizer(request.user, competition):
         return redirect('home_hub')
+
+    import_mode = request.POST.get('zip_import_mode', 'spreadsheet_package')
+    process_target = process_photos_only_zip_job if import_mode == 'filename_codes' else process_entry_zip_job
+    photo_only_message = 'Photo-only import started. SimplyJudge will create entries from the sorted filenames.'
+
     if request.method == 'POST' and request.POST.get('zip_url'):
         zip_url = request.POST.get('zip_url', '').strip()
         parsed_url = urlparse(zip_url)
@@ -557,14 +562,16 @@ def upload_photos_zip(request, comp_slug):
             source_url=zip_url,
         )
         worker = threading.Thread(
-            target=process_entry_zip_job,
+            target=process_target,
             args=(job.id,),
             daemon=True,
         )
         worker.start()
         messages.success(
             request,
-            'Remote ZIP sync job created. SimplyJudge will download and import it in the background.',
+            photo_only_message
+            if import_mode == 'filename_codes'
+            else 'Remote ZIP sync job created. SimplyJudge will download and import it in the background.',
         )
         return redirect('zip_import_status', comp_slug=competition.slug, job_id=job.id)
 
@@ -583,14 +590,16 @@ def upload_photos_zip(request, comp_slug):
         job.save(update_fields=['temp_path', 'updated_at'])
 
         worker = threading.Thread(
-            target=process_entry_zip_job,
+            target=process_target,
             args=(job.id,),
             daemon=True,
         )
         worker.start()
         messages.success(
             request,
-            'ZIP sync job created. SimplyJudge is matching images and importing entries in the background.',
+            photo_only_message
+            if import_mode == 'filename_codes'
+            else 'ZIP sync job created. SimplyJudge is matching images and importing entries in the background.',
         )
         return redirect('zip_import_status', comp_slug=competition.slug, job_id=job.id)
     return redirect('upload_spreadsheet', comp_slug=competition.slug)
@@ -656,6 +665,7 @@ def upload_zip_chunk(request, comp_slug):
     chunk = request.FILES.get('chunk')
     upload_id = request.POST.get('upload_id', '')
     filename = request.POST.get('filename', 'upload.zip')
+    import_mode = request.POST.get('zip_import_mode', 'spreadsheet_package')
 
     try:
         chunk_index = int(request.POST.get('chunk_index', '0'))
@@ -692,7 +702,7 @@ def upload_zip_chunk(request, comp_slug):
     job.save(update_fields=['temp_path', 'updated_at'])
 
     worker = threading.Thread(
-        target=process_entry_zip_job,
+        target=process_photos_only_zip_job if import_mode == 'filename_codes' else process_entry_zip_job,
         args=(job.id,),
         daemon=True,
     )

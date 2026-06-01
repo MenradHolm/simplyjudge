@@ -157,6 +157,8 @@ Recommended photo file types:
 
 Use this when the photos have already been renamed to their unique IDs.
 
+On the upload screen, choose **Filenames are reference codes** before starting the chunked ZIP upload or remote ZIP sync. This tells SimplyJudge not to look for `EntryForm.csv`.
+
 Example ZIP:
 
 ```text
