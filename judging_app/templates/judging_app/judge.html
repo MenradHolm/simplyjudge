@@ -277,7 +277,7 @@
                     <p class="panel-title">{% if competition.workflow == 'FEEDBACK_PORTAL' %}Score and feedback{% else %}Jury scorecard{% endif %}</p>
                     <p class="card-meta">Submission #{{ photo.id }}</p>
                 </div>
-                <span class="tag tag-neutral">0-100</span>
+                <span class="tag tag-neutral">Rubric scale</span>
             </div>
 
             <form method="POST" class="form-grid panel-padded score-form">
@@ -291,14 +291,14 @@
                         <div class="score-card premium-score-card">
                             <div class="criterion-head">
                                 <label for="criterion_{{ criterion.id }}">{{ criterion.name }}</label>
-                                <span class="tag tag-neutral">Weight {{ criterion.weight }}</span>
+                                <span class="tag tag-neutral">Out of {{ criterion.score_out_of }} &middot; Weight {{ criterion.weight }}</span>
                             </div>
                             {% if criterion.description %}
                                 <p class="muted" style="margin: 0;">{{ criterion.description }}</p>
                             {% endif %}
                             <div class="score-input-row">
-                                <input type="number" step="0.5" min="0" max="100" name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" value="{{ criterion.saved_score }}" required>
-                                <span class="score-scale">/ 100</span>
+                                <input type="number" step="0.5" min="0" max="{{ criterion.score_out_of }}" name="criterion_{{ criterion.id }}" id="criterion_{{ criterion.id }}" placeholder="0.0" value="{{ criterion.saved_score }}" required>
+                                <span class="score-scale">/ {{ criterion.score_out_of }}</span>
                             </div>
                         </div>
                     {% endfor %}

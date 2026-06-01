@@ -118,6 +118,35 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(score.criteria_scores[str(criterion.id)], 88.0)
         self.assertEqual(score.comment, 'Adjusted after seeing the full field.')
 
+    def test_rubric_score_out_of_controls_judge_scale_and_normalized_total(self):
+        criterion = RubricCriterion.objects.create(
+            competition=self.competition,
+            name='Impact',
+            description='Immediate visual impact',
+            weight=1.0,
+            score_out_of=10,
+        )
+        photo = self.create_photo('Shortlisted image', Photo.Status.SHORTLISTED)
+
+        self.client.force_login(self.guest_judge)
+        response = self.client.get(reverse('judge_photo', args=[self.competition.slug, photo.id]))
+
+        self.assertContains(response, 'Out of 10')
+        self.assertContains(response, 'max="10"')
+        self.assertContains(response, '/ 10')
+
+        self.client.post(
+            reverse('judge_photo', args=[self.competition.slug, photo.id]),
+            {
+                f'criterion_{criterion.id}': '8',
+                'comment': 'Strong image.',
+            },
+        )
+
+        score = Score.objects.get(photo=photo, judge=self.guest_judge)
+        self.assertEqual(score.criteria_scores[str(criterion.id)], 8.0)
+        self.assertEqual(score.total_score, 80.0)
+
     def test_feedback_portal_judge_receives_pending_photos(self):
         feedback_competition = Competition.objects.create(
             name='Shutter Society',

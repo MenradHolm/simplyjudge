@@ -59,6 +59,7 @@ class RubricCriterion(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     weight = models.FloatField(default=1.0)
+    score_out_of = models.PositiveIntegerField(default=100, validators=[MinValueValidator(1)])
 
     def __str__(self):
         return f"{self.name} ({self.competition.name})"

@@ -71,22 +71,26 @@ Upload as a `.csv` file.
 Required columns:
 
 ```csv
-Criterion Name,Description,Weight
-Composition,Strength of framing and visual structure,1.0
-Originality,Freshness of idea and execution,1.0
-Technical Quality,"Focus, exposure, and post-processing quality",1.0
+Criterion Name,Description,Score Out Of,Weight
+Composition,Strength of framing and visual structure,10,1.0
+Originality,Freshness of idea and execution,10,1.0
+Technical Quality,"Focus, exposure, and post-processing quality",100,1.0
 ```
 
 Accepted column names:
 
 - `Criterion Name` or `Criterion`
 - `Description`
+- `Score Out Of`, `Max Score`, or `Out Of`
 - `Weight`
 
 Notes:
 
+- Score Out Of controls the maximum score judges can enter for that criterion.
+- If Score Out Of is omitted, SimplyJudge uses 100.
 - Weight can be `1.0` for normal weighting.
 - Higher weights make a criterion count more heavily.
+- Scores are normalized before weighting, so 8/10 and 80/100 carry the same base value.
 - Keep criterion names short and judge-friendly.
 
 ## 6. Entry Spreadsheet Format

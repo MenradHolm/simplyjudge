@@ -389,8 +389,10 @@ def judge_photo(request, comp_slug, photo_id):
                 score_val = float(val)
             except ValueError:
                 score_val = 0.0
+            score_val = max(0.0, min(score_val, float(criterion.score_out_of)))
             criteria_scores[str(criterion.id)] = score_val
-            total_score += (score_val * criterion.weight)
+            normalized_score = (score_val / criterion.score_out_of) * 100
+            total_score += (normalized_score * criterion.weight)
         comment = request.POST.get('comment', '')
         Score.objects.update_or_create(
             photo=photo,
@@ -493,6 +495,12 @@ def upload_spreadsheet(request, comp_slug):
                     name = row.get('Criterion Name') or row.get('criterion name') or row.get('Criterion') or row.get('criterion')
                     desc = row.get('Description') or row.get('description') or ''
                     weight_val = row.get('Weight') or row.get('weight') or '1.0'
+                    score_out_of_val = (
+                        row.get('Score Out Of') or row.get('score out of') or
+                        row.get('Max Score') or row.get('max score') or
+                        row.get('Out Of') or row.get('out of') or
+                        '100'
+                    )
                     
                     if not name:
                         continue
@@ -501,7 +509,8 @@ def upload_spreadsheet(request, comp_slug):
                         competition=competition,
                         name=name.strip(),
                         description=desc.strip(),
-                        weight=float(weight_val.strip())
+                        weight=float(weight_val.strip()),
+                        score_out_of=max(1, int(float(str(score_out_of_val).strip()))),
                     )
                     rubric_count += 1
                 

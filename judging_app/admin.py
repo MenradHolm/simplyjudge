@@ -34,7 +34,7 @@ class CompetitionMembershipAdmin(admin.ModelAdmin):
 
 @admin.register(RubricCriterion)
 class RubricCriterionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'competition', 'weight')
+    list_display = ('id', 'name', 'competition', 'score_out_of', 'weight')
     list_filter = ('competition',)
     search_fields = ('name',)
 
