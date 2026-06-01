@@ -121,7 +121,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(score.criteria_scores[str(criterion.id)], 88.0)
         self.assertEqual(score.comment, 'Adjusted after seeing the full field.')
 
-    def test_rubric_score_out_of_controls_judge_scale_and_normalized_total(self):
+    def test_rubric_score_out_of_controls_judge_scale_and_raw_total(self):
         criterion = RubricCriterion.objects.create(
             competition=self.competition,
             name='Impact',
@@ -148,7 +148,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         score = Score.objects.get(photo=photo, judge=self.guest_judge)
         self.assertEqual(score.criteria_scores[str(criterion.id)], 8.0)
-        self.assertEqual(score.total_score, 80.0)
+        self.assertEqual(score.total_score, 8.0)
 
     def test_feedback_portal_judge_receives_pending_photos(self):
         feedback_competition = Competition.objects.create(
@@ -444,6 +444,62 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Live leaderboard')
         self.assertContains(response, '87.5')
         self.assertNotContains(response, private_judge.username)
+
+    def test_reports_show_average_score_out_of_rubric_total_and_percentage(self):
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society-rubric-total',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        criterion_one = RubricCriterion.objects.create(
+            competition=feedback_competition,
+            name='Impact',
+            score_out_of=5,
+            weight=1,
+        )
+        criterion_two = RubricCriterion.objects.create(
+            competition=feedback_competition,
+            name='Craft',
+            score_out_of=10,
+            weight=1,
+        )
+        judge_one = User.objects.create_user(username='private_first_reviewer')
+        judge_two = User.objects.create_user(username='private_second_reviewer')
+        photo = Photo.objects.create(
+            competition=feedback_competition,
+            title='Member image',
+            photographer_name='Club Member',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.PENDING,
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=judge_one,
+            criteria_scores={str(criterion_one.id): 4, str(criterion_two.id): 8},
+            total_score=12,
+            comment='Good structure.',
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=judge_two,
+            criteria_scores={str(criterion_one.id): 5, str(criterion_two.id): 10},
+            total_score=15,
+            comment='Excellent.',
+        )
+
+        leaderboard_response = self.client.get(reverse('leaderboard', args=[feedback_competition.slug]))
+        report_response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
+
+        self.assertContains(leaderboard_response, '13.5 / 15')
+        self.assertContains(leaderboard_response, '90.0%')
+        self.assertContains(report_response, 'Average 13.5 / 15 (90.0%)')
+        self.assertContains(report_response, 'Score 12.0 / 15 (80.0%)')
+        self.assertContains(report_response, 'Score 15.0 / 15 (100.0%)')
+        self.assertNotContains(leaderboard_response, judge_one.username)
+        self.assertNotContains(report_response, judge_one.username)
+        self.assertNotContains(leaderboard_response, judge_two.username)
+        self.assertNotContains(report_response, judge_two.username)
 
     def test_feedback_portal_report_is_public_without_admin_edit_controls(self):
         private_judge = User.objects.create_user(username='private_feedback_reviewer')

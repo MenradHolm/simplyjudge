@@ -35,7 +35,12 @@
                     </div>
                     <div class="leaderboard-score">
                         <span class="metric-label">Avg score</span>
-                        <span class="score-value">{{ photo.average_score|floatformat:1 }}</span>
+                        {% if photo.max_score %}
+                            <span class="score-value">{{ photo.average_score|floatformat:1 }} / {{ photo.max_score|floatformat:"-2" }}</span>
+                            <span class="metric-label">{{ photo.average_percentage|floatformat:1 }}%</span>
+                        {% else %}
+                            <span class="score-value">{{ photo.average_score|floatformat:1 }}</span>
+                        {% endif %}
                     </div>
                 </article>
             {% endfor %}

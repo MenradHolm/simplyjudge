@@ -21,8 +21,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.db import close_old_connections, transaction
-from django.db.models import Avg, FloatField
-from django.db.models.functions import Cast
+from django.db.models import Avg
 from django.utils import timezone
 
 from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
@@ -127,6 +126,49 @@ def judging_photo_queryset(competition, user):
 
 def photo_report_queryset(competition):
     return Photo.objects.filter(competition=competition).order_by('entry_code', 'id')
+
+def rubric_max_score(rubric):
+    return sum(float(criterion.score_out_of) * float(criterion.weight) for criterion in rubric)
+
+def score_raw_total(score, rubric_by_id):
+    if not rubric_by_id or not score.criteria_scores:
+        return float(score.total_score or 0)
+
+    raw_total = 0.0
+    for criterion_id, raw_value in score.criteria_scores.items():
+        criterion = rubric_by_id.get(str(criterion_id))
+        if criterion is None:
+            continue
+        try:
+            score_value = float(raw_value)
+        except (TypeError, ValueError):
+            score_value = 0.0
+        score_value = max(0.0, min(score_value, float(criterion.score_out_of)))
+        raw_total += score_value * float(criterion.weight)
+    return raw_total
+
+def attach_score_display_values(scores, rubric, max_score):
+    rubric_by_id = {str(criterion.id): criterion for criterion in rubric}
+    for score in scores:
+        score.display_total = score_raw_total(score, rubric_by_id)
+        score.display_percentage = (score.display_total / max_score * 100) if max_score else None
+    return scores
+
+def attach_photo_average_values(photos, scores, max_score):
+    scores_by_photo = {}
+    for score in scores:
+        scores_by_photo.setdefault(score.photo_id, []).append(score)
+
+    for photo in photos:
+        photo.judge_scores = scores_by_photo.get(photo.id, [])
+        if photo.judge_scores:
+            photo.average_score = sum(score.display_total for score in photo.judge_scores) / len(photo.judge_scores)
+            photo.average_percentage = (photo.average_score / max_score * 100) if max_score else None
+        else:
+            photo.average_score = None
+            photo.average_percentage = None
+        photo.max_score = max_score
+    return photos
 
 def home_hub(request):
     active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
@@ -391,8 +433,7 @@ def judge_photo(request, comp_slug, photo_id):
                 score_val = 0.0
             score_val = max(0.0, min(score_val, float(criterion.score_out_of)))
             criteria_scores[str(criterion.id)] = score_val
-            normalized_score = (score_val / criterion.score_out_of) * 100
-            total_score += (normalized_score * criterion.weight)
+            total_score += (score_val * criterion.weight)
         comment = request.POST.get('comment', '')
         Score.objects.update_or_create(
             photo=photo,
@@ -420,14 +461,35 @@ def judge_photo(request, comp_slug, photo_id):
 def leaderboard(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     tie_criterion = competition.tie_breaker_criterion
-    photos_query = Photo.objects.filter(competition=competition).annotate(average_score=Avg('score__total_score'))
+    rubric = list(RubricCriterion.objects.filter(competition=competition))
+    max_score = rubric_max_score(rubric)
+    scores = list(Score.objects.filter(photo__competition=competition).select_related('judge'))
+    attach_score_display_values(scores, rubric, max_score)
+    photos = list(Photo.objects.filter(competition=competition))
+    attach_photo_average_values(photos, scores, max_score)
+    ranked_photos = [photo for photo in photos if photo.average_score is not None]
     if tie_criterion:
-        ranked_photos = photos_query.annotate(
-            tie_breaker_score=Avg(Cast(f'score__criteria_scores__{tie_criterion.id}', FloatField()))
-        ).filter(average_score__isnull=False).order_by('-average_score', '-tie_breaker_score')
+        for photo in ranked_photos:
+            tie_scores = []
+            for score in photo.judge_scores:
+                try:
+                    tie_scores.append(float(score.criteria_scores.get(str(tie_criterion.id), 0)))
+                except (TypeError, ValueError):
+                    tie_scores.append(0.0)
+            photo.tie_breaker_score = sum(tie_scores) / len(tie_scores) if tie_scores else 0.0
+        ranked_photos.sort(key=lambda photo: (photo.average_score, photo.tie_breaker_score), reverse=True)
     else:
-        ranked_photos = photos_query.filter(average_score__isnull=False).order_by('-average_score')
-    return render(request, 'judging_app/leaderboard.html', {'competition': competition, 'photos': ranked_photos, 'tie_criterion': tie_criterion})
+        ranked_photos.sort(key=lambda photo: photo.average_score, reverse=True)
+    return render(
+        request,
+        'judging_app/leaderboard.html',
+        {
+            'competition': competition,
+            'photos': ranked_photos,
+            'tie_criterion': tie_criterion,
+            'max_score': max_score,
+        },
+    )
 
 def submit_photo(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
@@ -452,13 +514,16 @@ def submit_photo(request, comp_slug):
 
 def feedback_report_context(competition, can_edit_notes=False):
     photos = list(photo_report_queryset(competition))
-    all_scores = Score.objects.filter(photo__competition=competition).select_related('judge')
-    for photo in photos:
-        photo.judge_scores = [s for s in all_scores if s.photo_id == photo.id]
+    rubric = list(RubricCriterion.objects.filter(competition=competition))
+    max_score = rubric_max_score(rubric)
+    all_scores = list(Score.objects.filter(photo__competition=competition).select_related('judge'))
+    attach_score_display_values(all_scores, rubric, max_score)
+    attach_photo_average_values(photos, all_scores, max_score)
     return {
         'competition': competition,
         'photos': photos,
         'can_edit_notes': can_edit_notes,
+        'max_score': max_score,
     }
 
 def feedback_report(request, comp_slug):

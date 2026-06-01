@@ -83,6 +83,13 @@
                             {% endif %}
                             <p class="card-meta">{{ photo.category }}</p>
                             <p class="card-meta">{{ photo.judge_scores|length }} score{{ photo.judge_scores|length|pluralize }}</p>
+                            {% if photo.average_score != None %}
+                                {% if photo.max_score %}
+                                    <p class="card-meta">Average {{ photo.average_score|floatformat:1 }} / {{ photo.max_score|floatformat:"-2" }} ({{ photo.average_percentage|floatformat:1 }}%)</p>
+                                {% else %}
+                                    <p class="card-meta">Average {{ photo.average_score|floatformat:1 }}</p>
+                                {% endif %}
+                            {% endif %}
                             {% if photo.rule_flags %}
                                 <div class="alert alert-error no-print" style="margin-top: 0.75rem;">{{ photo.rule_flags }}</div>
                             {% endif %}
@@ -98,7 +105,11 @@
                                             <strong class="judge-identity-internal no-print">{{ score.judge.username }}</strong>
                                         {% endif %}
                                         <strong class="{% if can_edit_notes %}print-only{% endif %}">Reviewer feedback</strong>
-                                        <span class="metric-label">Score {{ score.total_score|floatformat:1 }}</span>
+                                        {% if max_score %}
+                                            <span class="metric-label">Score {{ score.display_total|floatformat:1 }} / {{ max_score|floatformat:"-2" }} ({{ score.display_percentage|floatformat:1 }}%)</span>
+                                        {% else %}
+                                            <span class="metric-label">Score {{ score.display_total|floatformat:1 }}</span>
+                                        {% endif %}
                                     </div>
                                     <div class="muted">
                                         {% if score.comment %}
