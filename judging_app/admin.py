@@ -104,9 +104,9 @@ class RoundOneScoreInline(admin.TabularInline):
 
 @admin.register(Photo)
 class PhotoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'entry_code', 'title', 'competition', 'photographer_name', 'photographer_email', 'category', 'status')
-    list_filter = ('competition', 'category', 'status')
-    search_fields = ('entry_code', 'title', 'photographer_name', 'photographer_email', 'rule_flags')
+    list_display = ('id', 'entry_code', 'title', 'competition', 'photographer_name', 'photographer_email', 'category', 'status', 'is_raw_verified')
+    list_filter = ('competition', 'category', 'status', 'is_raw_verified')
+    search_fields = ('entry_code', 'title', 'photographer_name', 'photographer_email', 'rule_flags', 'exif_warning_flag')
     inlines = (PhotoStatusVoteInline, RoundOneScoreInline)
 
 @admin.register(PhotoStatusVote)

@@ -18,6 +18,7 @@ from PIL import ImageOps
 
 from django.contrib import messages
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -589,6 +590,39 @@ def submit_photo(request, comp_slug):
                 )
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
     return render(request, 'judging_app/submit.html', {'competition': competition, 'error_message': error_message})
+
+def user_owns_photo_submission(user, photo):
+    user_email = (getattr(user, 'email', '') or '').strip().lower()
+    photographer_email = (photo.photographer_email or '').strip().lower()
+    return bool(user.is_authenticated and user_email and photographer_email and user_email == photographer_email)
+
+@login_required(login_url='/accounts/login/')
+def upload_raw_file(request, comp_slug, photo_id):
+    photo = get_object_or_404(Photo.objects.select_related('competition'), id=photo_id, competition__slug=comp_slug)
+
+    if photo.status != Photo.Status.SHORTLISTED:
+        raise PermissionDenied('RAW verification is only available for shortlisted finalist photos.')
+
+    if not photo.competition.results_published:
+        raise PermissionDenied('RAW verification is only available after results have been published.')
+
+    if not user_owns_photo_submission(request.user, photo):
+        raise PermissionDenied('You do not have permission to upload a RAW file for this photo.')
+
+    if request.method == 'POST':
+        raw_upload = request.FILES.get('raw_file')
+        if not raw_upload:
+            messages.error(request, 'Please choose a RAW file to upload.')
+            return render(request, 'judging_app/upload_raw_file.html', {'photo': photo, 'competition': photo.competition})
+
+        photo.raw_file = raw_upload
+        photo.is_raw_verified = False
+        photo.exif_warning_flag = ''
+        photo.save(update_fields=['raw_file', 'is_raw_verified', 'exif_warning_flag'])
+        messages.success(request, 'RAW file uploaded. Verification is pending.')
+        return redirect('upload_raw_file', comp_slug=photo.competition.slug, photo_id=photo.id)
+
+    return render(request, 'judging_app/upload_raw_file.html', {'photo': photo, 'competition': photo.competition})
 
 @login_required(login_url='/accounts/login/')
 def create_checkout_session(request, comp_slug):

@@ -15,6 +15,15 @@ def competition_photo_upload_path(instance, filename):
         folder_name = 'uncategorized'
     return f'competition_photos/{folder_name}/{filename}'
 
+def competition_raw_upload_path(instance, filename):
+    competition = getattr(instance, 'competition', None)
+    folder_name = ''
+    if competition is not None:
+        folder_name = slugify(competition.name or competition.slug or '')
+    if not folder_name:
+        folder_name = 'uncategorized'
+    return f'competition_raw_files/{folder_name}/{filename}'
+
 class Competition(models.Model):
     class Workflow(models.TextChoices):
         FULL_COMPETITION = 'FULL_COMPETITION', 'Full competition funnel'
@@ -100,6 +109,9 @@ class Photo(models.Model):
     category = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     image = models.ImageField(upload_to=competition_photo_upload_path, max_length=255)
+    raw_file = models.FileField(upload_to=competition_raw_upload_path, max_length=255, null=True, blank=True)
+    is_raw_verified = models.BooleanField(default=False)
+    exif_warning_flag = models.TextField(blank=True, null=True)
     rule_flags = models.TextField(blank=True, null=True)
     organizer_notes = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True) 

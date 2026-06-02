@@ -1,0 +1,55 @@
+{% extends "judging_app/base.html" %}
+
+{% block title %}Upload RAW File - SimplyJudge{% endblock %}
+
+{% block content %}
+<main class="shell">
+    <div class="page-head">
+        <div>
+            <p class="eyebrow">Finalist verification</p>
+            <h2 class="page-title">Upload RAW file.</h2>
+            <p class="page-copy">Submit the original RAW file for verification of your shortlisted image.</p>
+        </div>
+        <span class="tag">{{ competition.name }}</span>
+    </div>
+
+    {% if messages %}
+        <div class="form-grid" style="margin-bottom: 1rem;">
+            {% for message in messages %}
+                <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="panel panel-padded">
+        <form method="POST" enctype="multipart/form-data" class="form-grid">
+            {% csrf_token %}
+            <div class="field">
+                <label>SimplyJudge ID</label>
+                <input type="text" value="#{{ photo.id }}" readonly>
+            </div>
+
+            <div class="field">
+                <label for="raw_file">RAW File</label>
+                <span class="help-text">Upload the original camera RAW file for this shortlisted image.</span>
+                <input type="file" name="raw_file" id="raw_file" required>
+            </div>
+
+            {% if photo.raw_file %}
+                <div class="alert alert-success">
+                    A RAW file has already been uploaded. Uploading again will replace it and reset verification.
+                </div>
+            {% endif %}
+
+            <div class="actions">
+                {% if photo.status == 'SHORTLISTED' and photo.competition.results_published %}
+                    <button type="submit" class="button button-primary">Upload RAW File</button>
+                {% endif %}
+                <a href="{% url 'home_hub' %}" class="button button-secondary">Cancel</a>
+            </div>
+        </form>
+    </section>
+</main>
+{% endblock %}

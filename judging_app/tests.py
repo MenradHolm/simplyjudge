@@ -5,6 +5,7 @@ import zipfile
 from decimal import Decimal
 from django.contrib import admin as django_admin
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -15,7 +16,7 @@ from unittest.mock import Mock, patch
 from .admin import CompetitionAdmin
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
-from .utils import calculate_judge_calibration, send_automated_email
+from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
 from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job
 
 
@@ -984,6 +985,195 @@ class PhotoUploadPathTests(TestCase):
             competition_photo_upload_path(photo, 'Rising Tide.jpg'),
             'competition_photos/youth-poty-2026/Rising Tide.jpg',
         )
+
+    def test_raw_verification_fields_are_optional_by_default(self):
+        competition = Competition.objects.create(name='RAW Check Event', slug='raw-check-event')
+        photo = Photo.objects.create(
+            competition=competition,
+            title='Finalist image',
+            photographer_name='Finalist',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+        )
+
+        self.assertFalse(photo.raw_file)
+        self.assertFalse(photo.is_raw_verified)
+        self.assertIsNone(photo.exif_warning_flag)
+
+
+class RawFileUploadViewTests(TestCase):
+    def setUp(self):
+        self.competition = Competition.objects.create(
+            name='RAW Verification Event',
+            slug='raw-verification-event',
+            results_published=True,
+        )
+        self.photographer = User.objects.create_user(
+            username='finalist',
+            email='finalist@example.com',
+            password='test-pass',
+        )
+        self.other_user = User.objects.create_user(
+            username='other-finalist',
+            email='other@example.com',
+            password='test-pass',
+        )
+
+    def create_photo(self, status=Photo.Status.SHORTLISTED):
+        return Photo.objects.create(
+            competition=self.competition,
+            title='Finalist image',
+            photographer_name='Finalist',
+            photographer_email='finalist@example.com',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=status,
+        )
+
+    def test_matching_photographer_can_upload_raw_file_for_shortlisted_photo(self):
+        photo = self.create_photo()
+        self.client.force_login(self.photographer)
+        raw_file = SimpleUploadedFile(
+            'finalist.CR2',
+            b'raw file bytes',
+            content_type='application/octet-stream',
+        )
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root):
+                response = self.client.post(
+                    reverse('upload_raw_file', args=[self.competition.slug, photo.id]),
+                    {'raw_file': raw_file},
+                )
+
+                self.assertRedirects(
+                    response,
+                    reverse('upload_raw_file', args=[self.competition.slug, photo.id]),
+                )
+                photo.refresh_from_db()
+                self.assertTrue(photo.raw_file)
+                self.assertIn('competition_raw_files/raw-verification-event', photo.raw_file.name)
+                self.assertFalse(photo.is_raw_verified)
+                self.assertEqual(photo.exif_warning_flag, '')
+
+    def test_non_owner_cannot_upload_raw_file(self):
+        photo = self.create_photo()
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse('upload_raw_file', args=[self.competition.slug, photo.id]),
+            {'raw_file': SimpleUploadedFile('finalist.CR2', b'raw')},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        photo.refresh_from_db()
+        self.assertFalse(photo.raw_file)
+
+    def test_owner_cannot_upload_raw_file_before_shortlisted(self):
+        photo = self.create_photo(status=Photo.Status.PENDING)
+        self.client.force_login(self.photographer)
+
+        response = self.client.post(
+            reverse('upload_raw_file', args=[self.competition.slug, photo.id]),
+            {'raw_file': SimpleUploadedFile('finalist.CR2', b'raw')},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        photo.refresh_from_db()
+        self.assertFalse(photo.raw_file)
+
+    def test_owner_cannot_upload_raw_file_before_results_are_published(self):
+        self.competition.results_published = False
+        self.competition.save(update_fields=['results_published'])
+        photo = self.create_photo(status=Photo.Status.SHORTLISTED)
+        self.client.force_login(self.photographer)
+
+        response = self.client.post(
+            reverse('upload_raw_file', args=[self.competition.slug, photo.id]),
+            {'raw_file': SimpleUploadedFile('finalist.CR2', b'raw')},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        photo.refresh_from_db()
+        self.assertFalse(photo.raw_file)
+
+
+class RawExifComparisonTests(TestCase):
+    def create_photo(self):
+        competition = Competition.objects.create(name='RAW EXIF Event', slug='raw-exif-event')
+        photo = Photo.objects.create(
+            competition=competition,
+            title='Finalist image',
+            photographer_name='Finalist',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            raw_file='competition_raw_files/raw-exif-event/finalist.CR2',
+        )
+        return photo
+
+    def test_compare_exif_data_verifies_matching_metadata(self):
+        photo = self.create_photo()
+        metadata = {
+            'camera_model': 'Canon EOS R5',
+            'original_datetime': '2026:05:01 18:30:00',
+            'focal_length': '85/1',
+            'exposure_time': '1/500',
+        }
+
+        with patch('judging_app.utils.read_file_field_bytes', side_effect=[b'jpeg', b'raw']):
+            with patch('judging_app.utils.extract_exif_metadata', side_effect=[(metadata, ''), (metadata, '')]):
+                result = compare_exif_data(photo)
+
+        photo.refresh_from_db()
+        self.assertTrue(result)
+        self.assertTrue(photo.is_raw_verified)
+        self.assertEqual(photo.exif_warning_flag, '')
+
+    def test_compare_exif_data_logs_metadata_mismatch(self):
+        photo = self.create_photo()
+        original_metadata = {
+            'camera_model': 'Canon EOS R5',
+            'original_datetime': '2026:05:01 18:30:00',
+            'focal_length': '85/1',
+            'exposure_time': '1/500',
+        }
+        raw_metadata = {
+            'camera_model': 'Canon EOS R5',
+            'original_datetime': '2026:05:01 18:30:00',
+            'focal_length': '50/1',
+            'exposure_time': '1/500',
+        }
+
+        with patch('judging_app.utils.read_file_field_bytes', side_effect=[b'jpeg', b'raw']):
+            with patch('judging_app.utils.extract_exif_metadata', side_effect=[(original_metadata, ''), (raw_metadata, '')]):
+                result = compare_exif_data(photo)
+
+        photo.refresh_from_db()
+        self.assertFalse(result)
+        self.assertFalse(photo.is_raw_verified)
+        self.assertIn('focal length mismatch', photo.exif_warning_flag)
+
+    def test_compare_exif_data_logs_missing_raw_file(self):
+        photo = self.create_photo()
+        photo.raw_file = ''
+        photo.save(update_fields=['raw_file'])
+
+        with patch('judging_app.utils.read_file_field_bytes', return_value=b'jpeg'):
+            with patch('judging_app.utils.extract_exif_metadata', return_value=(
+                {
+                    'camera_model': 'Canon EOS R5',
+                    'original_datetime': '2026:05:01 18:30:00',
+                    'focal_length': '85/1',
+                    'exposure_time': '1/500',
+                },
+                '',
+            )):
+                result = compare_exif_data(photo)
+
+        photo.refresh_from_db()
+        self.assertFalse(result)
+        self.assertFalse(photo.is_raw_verified)
+        self.assertIn('RAW file is missing', photo.exif_warning_flag)
 
 
 class ZipImageMatchingTests(TestCase):

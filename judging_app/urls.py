@@ -20,6 +20,7 @@ urlpatterns = [
     path('competition/<slug:comp_slug>/judge/<int:photo_id>/autosave/', views.autosave_judge_score, name='autosave_judge_score'),
     path('competition/<slug:comp_slug>/leaderboard/', views.leaderboard, name='leaderboard'),
     path('competition/<slug:comp_slug>/submit/', views.submit_photo, name='submit_photo'),
+    path('competition/<slug:comp_slug>/photo/<int:photo_id>/upload-raw/', views.upload_raw_file, name='upload_raw_file'),
     path('competition/<slug:comp_slug>/checkout/', views.create_checkout_session, name='create_checkout_session'),
     path('competition/<slug:comp_slug>/ledger-report/', views.feedback_report, name='feedback_report'),
     
