@@ -259,6 +259,18 @@
         margin-top: 0.25rem;
     }
 
+    .autosave-status {
+        min-height: 1.1rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 850;
+        text-align: center;
+    }
+
+    .autosave-status.is-error {
+        color: #b91c1c;
+    }
+
     .zoom-inspector {
         position: fixed;
         inset: 0;
@@ -349,7 +361,17 @@
             <h2 class="page-title jury-title">{{ competition.name }}</h2>
         </div>
         <div class="jury-actions">
-            <a id="btn-previous" class="button button-secondary" href="{% url 'judge_review' competition.slug %}">My Submitted Scores</a>
+            {% if previous_photo_id %}
+                <a id="btn-previous" class="button button-secondary" href="{% url 'judge_photo' competition.slug previous_photo_id %}{% if return_to %}?return={{ return_to }}{% endif %}">Previous Photo</a>
+            {% else %}
+                <button id="btn-previous" class="button button-secondary" type="button" disabled>Previous Photo</button>
+            {% endif %}
+            {% if next_photo_id %}
+                <a id="btn-next" class="button button-secondary" href="{% url 'judge_photo' competition.slug next_photo_id %}{% if return_to %}?return={{ return_to }}{% endif %}">Next Photo</a>
+            {% else %}
+                <button id="btn-next" class="button button-secondary" type="button" disabled>Next Photo</button>
+            {% endif %}
+            <a class="button button-secondary" href="{% url 'judge_review' competition.slug %}">My Submitted Scores</a>
             <div class="progress-badge" aria-label="Judging progress">
                 <span class="metric-label">{% if existing_score %}Revising{% else %}Progress{% endif %}</span>
                 <strong>{{ current_index }} / {{ total_photos }}</strong>
@@ -409,7 +431,7 @@
                 <span class="tag tag-neutral">Rubric scale</span>
             </div>
 
-            <form method="POST" class="form-grid panel-padded score-form">
+            <form method="POST" class="form-grid panel-padded score-form" id="score-form" data-autosave-url="{% url 'autosave_judge_score' competition.slug photo.id %}">
                 {% csrf_token %}
                 {% if return_to %}
                     <input type="hidden" name="return_to" value="{{ return_to }}">
@@ -442,7 +464,8 @@
                     <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Optional: write useful feedback for the photographer...{% else %}Optional: write concise feedback for the organizer or entrant...{% endif %}">{% if existing_score.comment %}{{ existing_score.comment }}{% endif %}</textarea>
                 </div>
 
-                <button id="btn-next" type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>{% if existing_score %}Update Evaluation{% else %}Submit Evaluation{% endif %}</button>
+                <button type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>{% if existing_score %}Update Evaluation{% else %}Submit Evaluation{% endif %}</button>
+                <div class="autosave-status" id="autosave-status" aria-live="polite">Autosave ready</div>
             </form>
         </section>
     </div>
@@ -750,6 +773,71 @@
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('score-form');
+        const status = document.getElementById('autosave-status');
+        if (!form || !status || !form.dataset.autosaveUrl) {
+            return;
+        }
+
+        let autosaveTimer = null;
+        let autosaveInFlight = null;
+
+        function setAutosaveStatus(message, isError) {
+            status.textContent = message;
+            status.classList.toggle('is-error', Boolean(isError));
+        }
+
+        function autosave() {
+            window.clearTimeout(autosaveTimer);
+            autosaveTimer = null;
+            const formData = new FormData(form);
+            setAutosaveStatus('Saving...', false);
+            autosaveInFlight = fetch(form.dataset.autosaveUrl, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error(`Autosave failed with status ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(function () {
+                    setAutosaveStatus('Saved', false);
+                })
+                .catch(function (error) {
+                    console.warn('SimplyJudge autosave failed.', error);
+                    setAutosaveStatus('Autosave failed', true);
+                })
+                .finally(function () {
+                    autosaveInFlight = null;
+                });
+            return autosaveInFlight;
+        }
+
+        function scheduleAutosave() {
+            setAutosaveStatus('Unsaved changes...', false);
+            window.clearTimeout(autosaveTimer);
+            autosaveTimer = window.setTimeout(autosave, 600);
+        }
+
+        form.querySelectorAll('input[name^="criterion_"], textarea[name="comment"]').forEach(function (field) {
+            field.addEventListener('input', scheduleAutosave);
+            field.addEventListener('change', autosave);
+            field.addEventListener('blur', autosave);
+        });
+
+        window.simplyJudgeAutosaveNow = function () {
+            if (autosaveTimer) {
+                return autosave();
+            }
+            return autosaveInFlight || Promise.resolve();
+        };
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
         document.addEventListener('keydown', function (event) {
             const activeElement = document.activeElement;
             if (activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName)) {
@@ -775,8 +863,21 @@
                 return;
             }
 
+            const href = button.getAttribute('href');
             event.preventDefault();
-            button.click();
+            if (href) {
+                const saveNow = window.simplyJudgeAutosaveNow || function () { return Promise.resolve(); };
+                saveNow().finally(function () {
+                    window.location.href = href;
+                });
+                return;
+            }
+
+            if (button.tagName === 'BUTTON' && button.type !== 'submit') {
+                button.click();
+            } else {
+                console.warn(`SimplyJudge keyboard navigation refused to trigger a form submit for ${event.key === 'ArrowLeft' ? '#btn-previous' : '#btn-next'}.`);
+            }
         });
     });
 </script>

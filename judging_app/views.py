@@ -431,6 +431,16 @@ def judge_photo(request, comp_slug, photo_id):
     rubric = list(RubricCriterion.objects.filter(competition=competition))
     visible_photos = judging_photo_queryset(competition, request.user)
     total_photos = visible_photos.count()
+    visible_photo_ids = list(visible_photos.values_list('id', flat=True))
+    try:
+        photo_position = visible_photo_ids.index(photo.id)
+    except ValueError:
+        photo_position = 0
+    previous_photo_id = None
+    next_photo_id = None
+    if len(visible_photo_ids) > 1:
+        previous_photo_id = visible_photo_ids[photo_position - 1]
+        next_photo_id = visible_photo_ids[(photo_position + 1) % len(visible_photo_ids)]
     scored_query = Score.objects.filter(photo__competition=competition, judge=request.user)
     if not request.user.is_superuser and is_full_competition(competition):
         scored_query = scored_query.filter(photo__status=Photo.Status.SHORTLISTED)
@@ -462,7 +472,7 @@ def judge_photo(request, comp_slug, photo_id):
             return redirect('judge_review', comp_slug=competition.slug)
         return redirect('judge_router', comp_slug=competition.slug)
 
-    current_index = scored_photos if existing_score else scored_photos + 1
+    current_index = photo_position + 1 if visible_photo_ids else 1
     current_index = min(max(current_index, 1), total_photos or 1)
     context = {
         'competition': competition,
@@ -471,10 +481,58 @@ def judge_photo(request, comp_slug, photo_id):
         'progress': f"{current_index} / {total_photos}",
         'current_index': current_index,
         'total_photos': total_photos,
+        'previous_photo_id': previous_photo_id,
+        'next_photo_id': next_photo_id,
         'existing_score': existing_score,
         'return_to': return_to,
     }
     return render(request, 'judging_app/judge.html', context)
+
+@login_required(login_url='/accounts/login/')
+def autosave_judge_score(request, comp_slug, photo_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Autosave requires POST.'}, status=405)
+
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_approved_judge(request.user, competition):
+        return JsonResponse({'error': 'Judging access required.'}, status=403)
+
+    photo_queryset = judging_photo_queryset(competition, request.user).filter(id=photo_id)
+    photo = get_object_or_404(photo_queryset)
+    rubric = list(RubricCriterion.objects.filter(competition=competition))
+    criteria_scores = {}
+    total_score = 0.0
+
+    for criterion in rubric:
+        raw_value = request.POST.get(f'criterion_{criterion.id}', '')
+        if raw_value in (None, ''):
+            continue
+        try:
+            score_val = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        score_val = max(0.0, min(score_val, float(criterion.score_out_of)))
+        criteria_scores[str(criterion.id)] = score_val
+        total_score += (score_val * criterion.weight)
+
+    comment = request.POST.get('comment', '')
+    score, _created = Score.objects.update_or_create(
+        photo=photo,
+        judge=request.user,
+        defaults={
+            'criteria_scores': criteria_scores,
+            'total_score': total_score,
+            'comment': comment,
+        },
+    )
+    return JsonResponse(
+        {
+            'ok': True,
+            'score_id': score.id,
+            'total_score': total_score,
+            'saved_at': timezone.now().isoformat(),
+        }
+    )
 
 def leaderboard(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)

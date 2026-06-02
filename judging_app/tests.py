@@ -156,6 +156,50 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_judge_photo_arrow_navigation_hooks_are_photo_links(self):
+        first_photo = self.create_photo('First shortlisted image', Photo.Status.SHORTLISTED)
+        current_photo = self.create_photo('Current shortlisted image', Photo.Status.SHORTLISTED)
+        next_photo = self.create_photo('Next shortlisted image', Photo.Status.SHORTLISTED)
+        RubricCriterion.objects.create(competition=self.competition, name='Impact', score_out_of=10)
+
+        self.client.force_login(self.guest_judge)
+        response = self.client.get(reverse('judge_photo', args=[self.competition.slug, current_photo.id]))
+
+        self.assertContains(
+            response,
+            f'id="btn-previous" class="button button-secondary" href="{reverse("judge_photo", args=[self.competition.slug, first_photo.id])}"',
+        )
+        self.assertContains(
+            response,
+            f'id="btn-next" class="button button-secondary" href="{reverse("judge_photo", args=[self.competition.slug, next_photo.id])}"',
+        )
+        self.assertNotContains(response, 'id="btn-next" type="submit"')
+
+    def test_autosave_judge_score_persists_scores_and_comment(self):
+        criterion = RubricCriterion.objects.create(
+            competition=self.competition,
+            name='Composition',
+            score_out_of=15,
+            weight=1.0,
+        )
+        photo = self.create_photo('Shortlisted image', Photo.Status.SHORTLISTED)
+
+        self.client.force_login(self.guest_judge)
+        response = self.client.post(
+            reverse('autosave_judge_score', args=[self.competition.slug, photo.id]),
+            {
+                f'criterion_{criterion.id}': '12.5',
+                'comment': 'Strong atmosphere, saved while typing.',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['ok'])
+        score = Score.objects.get(photo=photo, judge=self.guest_judge)
+        self.assertEqual(score.criteria_scores[str(criterion.id)], 12.5)
+        self.assertEqual(score.total_score, 12.5)
+        self.assertEqual(score.comment, 'Strong atmosphere, saved while typing.')
+
     def test_judge_can_review_and_update_submitted_scores(self):
         criterion = RubricCriterion.objects.create(
             competition=self.competition,
