@@ -349,7 +349,7 @@
             <h2 class="page-title jury-title">{{ competition.name }}</h2>
         </div>
         <div class="jury-actions">
-            <a class="button button-secondary" href="{% url 'judge_review' competition.slug %}">My Submitted Scores</a>
+            <a id="btn-previous" class="button button-secondary" href="{% url 'judge_review' competition.slug %}">My Submitted Scores</a>
             <div class="progress-badge" aria-label="Judging progress">
                 <span class="metric-label">{% if existing_score %}Revising{% else %}Progress{% endif %}</span>
                 <strong>{{ current_index }} / {{ total_photos }}</strong>
@@ -442,7 +442,7 @@
                     <textarea name="comment" id="comment" rows="4" placeholder="{% if competition.workflow == 'FEEDBACK_PORTAL' %}Optional: write useful feedback for the photographer...{% else %}Optional: write concise feedback for the organizer or entrant...{% endif %}">{% if existing_score.comment %}{{ existing_score.comment }}{% endif %}</textarea>
                 </div>
 
-                <button type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>{% if existing_score %}Update Evaluation{% else %}Submit Evaluation{% endif %}</button>
+                <button id="btn-next" type="submit" class="button button-primary submit-evaluation" {% if not rubric %}disabled{% endif %}>{% if existing_score %}Update Evaluation{% else %}Submit Evaluation{% endif %}</button>
             </form>
         </section>
     </div>
@@ -749,16 +749,10 @@
     }());
 </script>
 <script>
-    (function () {
-        function isTypingInEditableField(target) {
-            if (!target) {
-                return false;
-            }
-            return Boolean(target.closest('textarea, input, select, [contenteditable="true"]'));
-        }
-
+    document.addEventListener('DOMContentLoaded', function () {
         document.addEventListener('keydown', function (event) {
-            if (isTypingInEditableField(event.target)) {
+            const activeElement = document.activeElement;
+            if (activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName)) {
                 return;
             }
 
@@ -770,12 +764,20 @@
             }
 
             if (!button) {
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                    console.warn(`SimplyJudge keyboard navigation could not find ${event.key === 'ArrowLeft' ? '#btn-previous' : '#btn-next'}.`);
+                }
+                return;
+            }
+
+            if (button.disabled || button.getAttribute('aria-disabled') === 'true') {
+                console.warn(`SimplyJudge keyboard navigation found ${event.key === 'ArrowLeft' ? '#btn-previous' : '#btn-next'}, but it is disabled.`);
                 return;
             }
 
             event.preventDefault();
             button.click();
         });
-    }());
+    });
 </script>
 {% endblock %}
