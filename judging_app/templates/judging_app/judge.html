@@ -259,6 +259,72 @@
         margin-top: 0.25rem;
     }
 
+    .zoom-inspector {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: none;
+        background: #02040a;
+        color: #f8fafc;
+    }
+
+    .zoom-inspector.is-active {
+        display: block;
+    }
+
+    .zoom-inspector-viewport {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+    }
+
+    .zoom-inspector.is-dragging .zoom-inspector-viewport {
+        cursor: grabbing;
+    }
+
+    .zoom-inspector-image {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+        box-shadow: none;
+        transform: translate3d(var(--inspector-x, 0px), var(--inspector-y, 0px), 0);
+        will-change: transform;
+        cursor: inherit;
+    }
+
+    .zoom-inspector-close {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 2;
+        display: inline-grid;
+        place-items: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        border-radius: 999px;
+        color: #f8fafc;
+        background: rgba(2, 6, 23, 0.72);
+        font: inherit;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .zoom-inspector-close:hover,
+    .zoom-inspector-close:focus {
+        background: rgba(15, 23, 42, 0.96);
+        outline: none;
+    }
+
     @media (max-width: 1020px) {
         .jury-layout,
         .jury-details {
@@ -381,6 +447,12 @@
         </section>
     </div>
 </main>
+<div class="zoom-inspector" id="zoom-inspector" aria-hidden="true" role="dialog" aria-label="100% Zoom Inspector">
+    <button class="zoom-inspector-close" type="button" id="zoom-inspector-close" aria-label="Close 100% Zoom Inspector">&times;</button>
+    <div class="zoom-inspector-viewport" id="zoom-inspector-viewport">
+        <img class="zoom-inspector-image" id="zoom-inspector-image" src="{{ photo.image.url }}" alt="Anonymous competition submission at native resolution" draggable="false">
+    </div>
+</div>
 <script>
     (function () {
         const stage = document.getElementById('photo-zoom-stage');
@@ -504,6 +576,206 @@
         image.addEventListener('pointercancel', stopDragging);
         window.addEventListener('resize', render);
         render();
+    }());
+</script>
+<script>
+    (function () {
+        const triggerImage = document.getElementById('judge-photo');
+        const inspector = document.getElementById('zoom-inspector');
+        const viewport = document.getElementById('zoom-inspector-viewport');
+        const inspectorImage = document.getElementById('zoom-inspector-image');
+        const closeButton = document.getElementById('zoom-inspector-close');
+        if (!triggerImage || !inspector || !viewport || !inspectorImage || !closeButton) {
+            return;
+        }
+
+        let offsetX = 0;
+        let offsetY = 0;
+        let startX = 0;
+        let startY = 0;
+        let startOffsetX = 0;
+        let startOffsetY = 0;
+        let dragging = false;
+        let movedDuringDrag = false;
+        let suppressNextImageClick = false;
+        let previousBodyOverflow = '';
+        let openInspectorTimer = null;
+
+        function imageWidth() {
+            return inspectorImage.naturalWidth || inspectorImage.offsetWidth;
+        }
+
+        function imageHeight() {
+            return inspectorImage.naturalHeight || inspectorImage.offsetHeight;
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function clampOffsets() {
+            const viewportRect = viewport.getBoundingClientRect();
+            const nativeWidth = imageWidth();
+            const nativeHeight = imageHeight();
+
+            if (nativeWidth <= viewportRect.width) {
+                offsetX = (viewportRect.width - nativeWidth) / 2;
+            } else {
+                offsetX = clamp(offsetX, viewportRect.width - nativeWidth, 0);
+            }
+
+            if (nativeHeight <= viewportRect.height) {
+                offsetY = (viewportRect.height - nativeHeight) / 2;
+            } else {
+                offsetY = clamp(offsetY, viewportRect.height - nativeHeight, 0);
+            }
+        }
+
+        function renderInspector() {
+            clampOffsets();
+            inspectorImage.style.setProperty('--inspector-x', `${offsetX}px`);
+            inspectorImage.style.setProperty('--inspector-y', `${offsetY}px`);
+        }
+
+        function resetInspectorPosition() {
+            const viewportRect = viewport.getBoundingClientRect();
+            const nativeWidth = imageWidth();
+            const nativeHeight = imageHeight();
+            offsetX = (viewportRect.width - nativeWidth) / 2;
+            offsetY = (viewportRect.height - nativeHeight) / 2;
+            renderInspector();
+        }
+
+        function sizeNativeImage() {
+            if (!inspectorImage.naturalWidth || !inspectorImage.naturalHeight) {
+                return;
+            }
+            inspectorImage.style.width = `${inspectorImage.naturalWidth}px`;
+            inspectorImage.style.height = `${inspectorImage.naturalHeight}px`;
+        }
+
+        function openInspector() {
+            previousBodyOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            inspector.classList.add('is-active');
+            inspector.setAttribute('aria-hidden', 'false');
+            sizeNativeImage();
+
+            if (inspectorImage.complete) {
+                resetInspectorPosition();
+            } else {
+                inspectorImage.addEventListener('load', function handleLoad() {
+                    sizeNativeImage();
+                    resetInspectorPosition();
+                }, { once: true });
+            }
+        }
+
+        function closeInspector() {
+            dragging = false;
+            inspector.classList.remove('is-active', 'is-dragging');
+            inspector.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = previousBodyOverflow;
+        }
+
+        triggerImage.addEventListener('click', function () {
+            window.clearTimeout(openInspectorTimer);
+            openInspectorTimer = window.setTimeout(openInspector, 180);
+        });
+
+        triggerImage.addEventListener('dblclick', function () {
+            window.clearTimeout(openInspectorTimer);
+            openInspectorTimer = null;
+        });
+
+        closeButton.addEventListener('click', closeInspector);
+
+        inspectorImage.addEventListener('click', function () {
+            if (suppressNextImageClick) {
+                suppressNextImageClick = false;
+                return;
+            }
+            closeInspector();
+        });
+
+        viewport.addEventListener('pointerdown', function (event) {
+            if (!inspector.classList.contains('is-active')) {
+                return;
+            }
+            dragging = true;
+            movedDuringDrag = false;
+            startX = event.clientX;
+            startY = event.clientY;
+            startOffsetX = offsetX;
+            startOffsetY = offsetY;
+            inspector.classList.add('is-dragging');
+            viewport.setPointerCapture(event.pointerId);
+        });
+
+        viewport.addEventListener('pointermove', function (event) {
+            if (!dragging) {
+                return;
+            }
+
+            const deltaX = event.clientX - startX;
+            const deltaY = event.clientY - startY;
+            if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+                movedDuringDrag = true;
+            }
+            offsetX = startOffsetX + deltaX;
+            offsetY = startOffsetY + deltaY;
+            renderInspector();
+        });
+
+        function stopInspectorDrag(event) {
+            if (movedDuringDrag) {
+                suppressNextImageClick = true;
+            }
+            dragging = false;
+            inspector.classList.remove('is-dragging');
+            if (event && viewport.hasPointerCapture(event.pointerId)) {
+                viewport.releasePointerCapture(event.pointerId);
+            }
+        }
+
+        viewport.addEventListener('pointerup', stopInspectorDrag);
+        viewport.addEventListener('pointercancel', stopInspectorDrag);
+
+        window.addEventListener('resize', function () {
+            if (inspector.classList.contains('is-active')) {
+                renderInspector();
+            }
+        });
+    }());
+</script>
+<script>
+    (function () {
+        function isTypingInEditableField(target) {
+            if (!target) {
+                return false;
+            }
+            return Boolean(target.closest('textarea, input, select, [contenteditable="true"]'));
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (isTypingInEditableField(event.target)) {
+                return;
+            }
+
+            let button = null;
+            if (event.key === 'ArrowLeft') {
+                button = document.getElementById('btn-previous');
+            } else if (event.key === 'ArrowRight') {
+                button = document.getElementById('btn-next');
+            }
+
+            if (!button) {
+                return;
+            }
+
+            event.preventDefault();
+            button.click();
+        });
     }());
 </script>
 {% endblock %}

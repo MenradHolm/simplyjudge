@@ -24,6 +24,8 @@ class Competition(models.Model):
     slug = models.SlugField(max_length=200, unique=True, null=True, blank=True, help_text="Clean URL text (e.g., 'youth-poty' or 'shutter-society')")
     workflow = models.CharField(max_length=30, choices=Workflow.choices, default=Workflow.FULL_COMPETITION)
     entry_fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    emails_enabled = models.BooleanField(default=False)
+    results_published = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     judges = models.ManyToManyField(User, blank=True)
@@ -43,6 +45,7 @@ class CompetitionMembership(models.Model):
         ORGANIZER = 'ORGANIZER', 'Competition Organizer'
         INTERNAL_JUDGE = 'INTERNAL_JUDGE', 'Internal Reviewer'
         VIP_JUDGE = 'VIP_JUDGE', 'VIP Guest Judge'
+        ENTRANT = 'ENTRANT', 'Entrant'
 
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name='memberships')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='competition_memberships')
@@ -93,6 +96,7 @@ class Photo(models.Model):
     entry_code = models.CharField(max_length=120, blank=True)
     title = models.CharField(max_length=200)
     photographer_name = models.CharField(max_length=200)
+    photographer_email = models.EmailField(blank=True)
     category = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     image = models.ImageField(upload_to=competition_photo_upload_path, max_length=255)

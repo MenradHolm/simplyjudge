@@ -1,0 +1,8 @@
+Hello {{ user.get_full_name|default:user.username }},
+
+Thank you for your payment for {{ competition.name }}.
+
+Order reference: {{ order.stripe_checkout_id }}
+Amount paid: {{ order.amount_paid }}
+
+Your submission access is now active.

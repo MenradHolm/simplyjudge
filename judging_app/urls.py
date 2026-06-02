@@ -8,6 +8,7 @@ urlpatterns = [
     path('impressum/', TemplateView.as_view(template_name='judging_app/impressum.html'), name='impressum'),
     path('privacy/', TemplateView.as_view(template_name='judging_app/privacy.html'), name='privacy'),
     path('terms/', TemplateView.as_view(template_name='judging_app/terms.html'), name='terms'),
+    path('stripe/webhook/', views.stripe_webhook, name='stripe_webhook'),
     
     # Competition-Specific Routes (Using Slugs)
     path('competition/<slug:comp_slug>/', views.judge_router, name='judge_router'),
@@ -18,6 +19,7 @@ urlpatterns = [
     path('competition/<slug:comp_slug>/judge/<int:photo_id>/', views.judge_photo, name='judge_photo'),
     path('competition/<slug:comp_slug>/leaderboard/', views.leaderboard, name='leaderboard'),
     path('competition/<slug:comp_slug>/submit/', views.submit_photo, name='submit_photo'),
+    path('competition/<slug:comp_slug>/checkout/', views.create_checkout_session, name='create_checkout_session'),
     path('competition/<slug:comp_slug>/ledger-report/', views.feedback_report, name='feedback_report'),
     
     # Upload Data Routes (Using Slugs)

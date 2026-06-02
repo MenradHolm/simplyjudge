@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Competition, CompetitionMembership, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
+from .utils import send_automated_email
 
 # --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
 admin.site.site_header = "SimplyJudge Admin Engine"
@@ -19,12 +20,56 @@ class CompetitionMembershipInline(admin.TabularInline):
 
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'slug', 'workflow', 'entry_fee', 'is_active', 'created_at')
-    list_filter = ('workflow', 'is_active')
+    list_display = ('id', 'name', 'slug', 'workflow', 'entry_fee', 'emails_enabled', 'results_published', 'is_active', 'created_at')
+    list_filter = ('workflow', 'emails_enabled', 'results_published', 'is_active')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     exclude = ('judges',)
     inlines = (CompetitionMembershipInline,)
+    actions = ('publish_competition_results',)
+
+    @admin.action(description='Publish results and email shortlisted photographers')
+    def publish_competition_results(self, request, queryset):
+        total_shortlisted = 0
+        sent_count = 0
+        skipped_without_email = 0
+        suppressed_count = 0
+
+        for competition in queryset:
+            competition.results_published = True
+            competition.save(update_fields=['results_published'])
+
+            shortlisted_photos = Photo.objects.filter(
+                competition=competition,
+                status=Photo.Status.SHORTLISTED,
+            )
+            for photo in shortlisted_photos:
+                total_shortlisted += 1
+                if not photo.photographer_email:
+                    skipped_without_email += 1
+                    continue
+
+                result = send_automated_email(
+                    competition=competition,
+                    subject=f'Congratulations from {competition.name}',
+                    template_name='emails/congratulations.txt',
+                    context={'photo': photo},
+                    recipient_list=[photo.photographer_email],
+                )
+                if result:
+                    sent_count += 1
+                else:
+                    suppressed_count += 1
+
+        self.message_user(
+            request,
+            (
+                f'Results published. Shortlisted photos: {total_shortlisted}. '
+                f'Emails sent: {sent_count}. '
+                f'Suppressed by email safety switch: {suppressed_count}. '
+                f'Skipped without photographer email: {skipped_without_email}.'
+            ),
+        )
 
 @admin.register(CompetitionMembership)
 class CompetitionMembershipAdmin(admin.ModelAdmin):
@@ -59,9 +104,9 @@ class RoundOneScoreInline(admin.TabularInline):
 
 @admin.register(Photo)
 class PhotoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'entry_code', 'title', 'competition', 'photographer_name', 'category', 'status')
+    list_display = ('id', 'entry_code', 'title', 'competition', 'photographer_name', 'photographer_email', 'category', 'status')
     list_filter = ('competition', 'category', 'status')
-    search_fields = ('entry_code', 'title', 'photographer_name', 'rule_flags')
+    search_fields = ('entry_code', 'title', 'photographer_name', 'photographer_email', 'rule_flags')
     inlines = (PhotoStatusVoteInline, RoundOneScoreInline)
 
 @admin.register(PhotoStatusVote)

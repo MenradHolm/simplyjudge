@@ -1,5 +1,6 @@
 import csv
 import gc
+import json
 import math
 import os
 import re
@@ -8,6 +9,7 @@ import uuid
 import zipfile
 import io
 import threading
+from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from PIL import Image
@@ -15,16 +17,24 @@ from PIL.ExifTags import TAGS
 from PIL import ImageOps
 
 from django.contrib import messages
+from django.conf import settings
 from django.core.files.base import ContentFile
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.db import close_old_connections, transaction
 from django.db.models import Avg
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 
-from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
+from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
+
+try:
+    import stripe
+except ImportError:
+    stripe = None
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
 CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024
@@ -505,6 +515,7 @@ def submit_photo(request, comp_slug):
     if request.method == "POST":
         title = request.POST.get('title')
         photographer_name = request.POST.get('photographer_name')
+        photographer_email = request.POST.get('photographer_email', '')
         category = request.POST.get('category')
         image = request.FILES.get('image')
         description = request.POST.get('description', '')
@@ -515,10 +526,127 @@ def submit_photo(request, comp_slug):
             else:
                 Photo.objects.create(
                     competition=competition, title=title, photographer_name=photographer_name,
-                    category=category, image=image, description=description, camera_settings=camera_settings
+                    photographer_email=photographer_email, category=category, image=image,
+                    description=description, camera_settings=camera_settings
                 )
                 return render(request, 'judging_app/submit_success.html', {'competition': competition})
     return render(request, 'judging_app/submit.html', {'competition': competition, 'error_message': error_message})
+
+@login_required(login_url='/accounts/login/')
+def create_checkout_session(request, comp_slug):
+    if request.method != 'POST':
+        return redirect('submit_photo', comp_slug=comp_slug)
+
+    competition = get_object_or_404(Competition, slug=comp_slug, is_active=True)
+    entry_fee = competition.entry_fee or Decimal('0.00')
+
+    if entry_fee <= 0:
+        messages.info(request, 'This event does not require an entry payment.')
+        return redirect('submit_photo', comp_slug=competition.slug)
+
+    if stripe is None:
+        messages.error(request, 'Stripe payments are not available on this server yet.')
+        return redirect('submit_photo', comp_slug=competition.slug)
+
+    stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
+    if not stripe.api_key:
+        messages.error(request, 'Stripe payments are not configured yet.')
+        return redirect('submit_photo', comp_slug=competition.slug)
+
+    amount_in_cents = int((entry_fee * Decimal('100')).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    currency = getattr(settings, 'STRIPE_CURRENCY', 'usd')
+    submit_url = reverse('submit_photo', kwargs={'comp_slug': competition.slug})
+    success_url = request.build_absolute_uri(
+        f"{submit_url}?checkout=success&session_id={{CHECKOUT_SESSION_ID}}"
+    )
+    cancel_url = request.build_absolute_uri(f"{submit_url}?checkout=cancelled")
+
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            mode='payment',
+            payment_method_types=['card'],
+            line_items=[
+                {
+                    'price_data': {
+                        'currency': currency,
+                        'product_data': {
+                            'name': f"{competition.name} entry",
+                        },
+                        'unit_amount': amount_in_cents,
+                    },
+                    'quantity': 1,
+                }
+            ],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                'competition_id': str(competition.id),
+                'competition_slug': competition.slug or '',
+                'user_id': str(request.user.id),
+            },
+        )
+    except Exception:
+        messages.error(request, 'Could not start Stripe checkout. Please try again.')
+        return redirect('submit_photo', comp_slug=competition.slug)
+
+    EntryOrder.objects.create(
+        user=request.user,
+        competition=competition,
+        stripe_checkout_id=checkout_session.id,
+        amount_paid=entry_fee,
+        is_paid=False,
+    )
+    return redirect(checkout_session.url)
+
+@csrf_exempt
+def stripe_webhook(request):
+    if request.method != 'POST':
+        return HttpResponse(status=405)
+
+    payload = request.body
+    webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', '')
+
+    try:
+        if webhook_secret:
+            if stripe is None:
+                return HttpResponse(status=503)
+            signature = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+            event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
+        else:
+            event = json.loads(payload.decode('utf-8'))
+    except ValueError:
+        return HttpResponse(status=400)
+    except Exception as exc:
+        signature_error = getattr(getattr(stripe, 'error', None), 'SignatureVerificationError', None) if stripe else None
+        if signature_error and isinstance(exc, signature_error):
+            return HttpResponse(status=400)
+        raise
+
+    if event.get('type') == 'checkout.session.completed':
+        session = event.get('data', {}).get('object', {})
+        session_id = session.get('id')
+        if not session_id:
+            return HttpResponse(status=400)
+
+        with transaction.atomic():
+            order = (
+                EntryOrder.objects.select_for_update()
+                .select_related('user', 'competition')
+                .filter(stripe_checkout_id=session_id)
+                .first()
+            )
+            if order:
+                if not order.is_paid:
+                    order.is_paid = True
+                    order.save(update_fields=['is_paid'])
+                CompetitionMembership.objects.update_or_create(
+                    competition=order.competition,
+                    user=order.user,
+                    role=CompetitionMembership.Role.ENTRANT,
+                    defaults={'is_active': True},
+                )
+
+    return HttpResponse(status=200)
 
 def feedback_report_context(competition, can_edit_notes=False):
     photos = list(photo_report_queryset(competition))
@@ -595,6 +723,11 @@ def upload_spreadsheet(request, comp_slug):
                 for row in reader:
                     title = row.get('Title') or row.get('title') or 'Untitled'
                     photographer = row.get('Photographer') or row.get('photographer') or 'Unknown'
+                    photographer_email = (
+                        row.get('Photographer Email') or row.get('photographer_email') or
+                        row.get('Email') or row.get('email') or row.get('Email Address') or
+                        row.get('email_address') or ''
+                    )
                     category = row.get('Category') or row.get('category') or 'General'
                     custom_code = row.get('Code') or row.get('ID') or row.get('Number') or row.get('id')
                     desc = row.get('Description') or row.get('description') or row.get('Story') or row.get('story') or ''
@@ -607,7 +740,8 @@ def upload_spreadsheet(request, comp_slug):
 
                     Photo.objects.create(
                         id=int(custom_code.strip()), competition=competition, title=title,
-                        entry_code=custom_code.strip(), photographer_name=photographer, category=category,
+                        entry_code=custom_code.strip(), photographer_name=photographer,
+                        photographer_email=photographer_email, category=category,
                         image='competition_photos/placeholder.jpg', description=desc, camera_settings=cam_settings
                     )
                     import_count += 1
@@ -958,6 +1092,7 @@ def expand_participant_entry_row(row):
     first_name = clean_cell(row, 'First name', 'First Name')
     last_name = clean_cell(row, 'Last name', 'Last Name')
     photographer = ' '.join(part for part in [first_name, last_name] if part).strip() or 'Unknown'
+    photographer_email = clean_cell(row, 'Email', 'email', 'Email Address', 'email_address', 'Photographer Email')
     camera_settings = parse_camera_setting_blocks(clean_cell(row, 'Camera settings'))
     title_map, plain_titles = parse_numbered_short_lines(clean_cell(row, 'Picture titles'))
     stories_10 = parse_numbered_long_blocks(clean_cell(row, "10 Story's & Context's"))
@@ -985,6 +1120,7 @@ def expand_participant_entry_row(row):
         expanded.append({
             'Title': display_title,
             'Photographer': photographer,
+            'Photographer Email': photographer_email,
             'Category': 'General',
             'Description': stories_10.get(index) or stories_15.get(index) or '',
             'Camera Settings': camera_settings.get(index, ''),
@@ -1148,6 +1284,15 @@ def process_entry_zip_job(job_id):
                     try:
                         title = truncate_text(clean_cell(row, 'Title', 'title', default='Untitled'), 200)
                         photographer = truncate_text(clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown'), 200)
+                        photographer_email = clean_cell(
+                            row,
+                            'Photographer Email',
+                            'photographer_email',
+                            'Email',
+                            'email',
+                            'Email Address',
+                            'email_address',
+                        )
                         category = truncate_text(clean_cell(row, 'Category', 'category', default='General'), 100)
                         entry_code = clean_cell(row, 'Code', 'ID', 'Number', 'Entry ID', 'Entry Code', 'id')
                         image_references = [
@@ -1175,6 +1320,7 @@ def process_entry_zip_job(job_id):
                             'entry_code': truncate_text(entry_code, 120) if entry_code else '',
                             'title': title,
                             'photographer_name': photographer,
+                            'photographer_email': photographer_email,
                             'category': category,
                             'description': description,
                             'camera_settings': camera_settings,

@@ -1,0 +1,5 @@
+Hello {{ photo.photographer_name }},
+
+Congratulations. Your image "{{ photo.title }}" has been shortlisted for {{ competition.name }}.
+
+Thank you for being part of the event.

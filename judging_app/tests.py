@@ -1,15 +1,21 @@
 import io
+import json
 import tempfile
 import zipfile
+from decimal import Decimal
+from django.contrib import admin as django_admin
 from django.contrib.auth.models import User
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
-from .models import Competition, CompetitionMembership, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
+from .admin import CompetitionAdmin
+from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
+from .utils import calculate_judge_calibration, send_automated_email
 from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job
 
 
@@ -47,6 +53,84 @@ class PhotoStatusWorkflowTests(TestCase):
         defaults.update(overrides)
         return Photo.objects.create(
             **defaults,
+        )
+
+    def test_create_checkout_session_creates_unpaid_entry_order(self):
+        self.competition.entry_fee = Decimal('25.50')
+        self.competition.save(update_fields=['entry_fee'])
+        self.client.force_login(self.guest_judge)
+        checkout_create = Mock(
+            return_value=SimpleNamespace(
+                id='cs_test_123',
+                url='https://checkout.stripe.com/c/pay/cs_test_123',
+            )
+        )
+        fake_stripe = SimpleNamespace(
+            api_key='',
+            checkout=SimpleNamespace(
+                Session=SimpleNamespace(create=checkout_create),
+            ),
+        )
+
+        with self.settings(STRIPE_SECRET_KEY='sk_test_123', STRIPE_CURRENCY='zar'):
+            with patch('judging_app.views.stripe', fake_stripe):
+                response = self.client.post(reverse('create_checkout_session', args=[self.competition.slug]))
+
+        self.assertRedirects(
+            response,
+            'https://checkout.stripe.com/c/pay/cs_test_123',
+            fetch_redirect_response=False,
+        )
+        order = EntryOrder.objects.get()
+        self.assertEqual(order.user, self.guest_judge)
+        self.assertEqual(order.competition, self.competition)
+        self.assertEqual(order.stripe_checkout_id, 'cs_test_123')
+        self.assertEqual(order.amount_paid, Decimal('25.50'))
+        self.assertFalse(order.is_paid)
+        self.assertEqual(fake_stripe.api_key, 'sk_test_123')
+
+        checkout_kwargs = checkout_create.call_args.kwargs
+        self.assertEqual(checkout_kwargs['mode'], 'payment')
+        self.assertEqual(checkout_kwargs['line_items'][0]['price_data']['currency'], 'zar')
+        self.assertEqual(checkout_kwargs['line_items'][0]['price_data']['unit_amount'], 2550)
+        self.assertEqual(checkout_kwargs['metadata']['competition_slug'], self.competition.slug)
+        self.assertEqual(checkout_kwargs['metadata']['user_id'], str(self.guest_judge.id))
+
+    def test_stripe_webhook_marks_order_paid_and_grants_entrant_access(self):
+        entrant = User.objects.create_user(username='entrant', password='test-pass')
+        order = EntryOrder.objects.create(
+            user=entrant,
+            competition=self.competition,
+            stripe_checkout_id='cs_test_paid',
+            amount_paid=Decimal('25.50'),
+            is_paid=False,
+        )
+        payload = {
+            'type': 'checkout.session.completed',
+            'data': {
+                'object': {
+                    'id': 'cs_test_paid',
+                },
+            },
+        }
+
+        with self.settings(STRIPE_WEBHOOK_SECRET=''):
+            response = self.client.post(
+                reverse('stripe_webhook'),
+                data=json.dumps(payload),
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertTrue(order.is_paid)
+        self.assertTrue(
+            CompetitionMembership.objects.filter(
+                competition=self.competition,
+                user=entrant,
+                role=CompetitionMembership.Role.ENTRANT,
+                is_active=True,
+            ).exists()
         )
 
     def test_guest_judge_router_only_serves_shortlisted_photos(self):
@@ -621,7 +705,207 @@ class AuthNavigationTests(TestCase):
         logout_response = self.client.post(reverse('logout'))
 
         self.assertRedirects(logout_response, reverse('home_hub'))
+
+
+class AutomatedEmailTests(TestCase):
+    def test_send_automated_email_returns_false_when_disabled(self):
+        competition = Competition.objects.create(name='Quiet Event', slug='quiet-event')
+
+        with patch('judging_app.utils.render_to_string') as render_mock:
+            with patch('judging_app.utils.send_mail') as send_mock:
+                result = send_automated_email(
+                    competition=competition,
+                    subject='Results ready',
+                    template_name='emails/results.txt',
+                    context={'name': 'Entrant'},
+                    recipient_list=['entrant@example.com'],
+                )
+
+        self.assertFalse(result)
+        render_mock.assert_not_called()
+        send_mock.assert_not_called()
+
+    def test_send_automated_email_sends_when_enabled(self):
+        competition = Competition.objects.create(
+            name='Published Event',
+            slug='published-event',
+            emails_enabled=True,
+        )
+
+        with patch('judging_app.utils.render_to_string', return_value='Hello from SimplyJudge') as render_mock:
+            with patch('judging_app.utils.send_mail', return_value=1) as send_mock:
+                result = send_automated_email(
+                    competition=competition,
+                    subject='Results ready',
+                    template_name='emails/results.txt',
+                    context={'name': 'Entrant'},
+                    recipient_list=['entrant@example.com'],
+                    from_email='team@simplyjudge.com',
+                )
+
+        self.assertEqual(result, 1)
+        render_mock.assert_called_once_with(
+            'emails/results.txt',
+            {'name': 'Entrant', 'competition': competition},
+        )
+        send_mock.assert_called_once_with(
+            'Results ready',
+            'Hello from SimplyJudge',
+            'team@simplyjudge.com',
+            ['entrant@example.com'],
+            fail_silently=False,
+            html_message=None,
+        )
+
+
+class JudgeCalibrationTests(TestCase):
+    def test_calculate_judge_calibration_flags_harsh_and_lenient_outliers(self):
+        competition = Competition.objects.create(name='Calibration Event', slug='calibration-event')
+        photos = [
+            Photo.objects.create(
+                competition=competition,
+                title=f'Entry {index}',
+                photographer_name='Entrant',
+                category='Open',
+                image='competition_photos/placeholder.jpg',
+            )
+            for index in range(3)
+        ]
+        fair_judges = [
+            User.objects.create_user(username=f'fair_judge_{index}')
+            for index in range(9)
+        ]
+        fair_judge = User.objects.create_user(username='fair_judge', first_name='Fair', last_name='Judge')
+        fair_judges.append(fair_judge)
+        harsh_judge = User.objects.create_user(username='harsh_judge')
+        lenient_judge = User.objects.create_user(username='lenient_judge')
+
+        for photo in photos:
+            for judge in fair_judges:
+                Score.objects.create(photo=photo, judge=judge, criteria_scores={}, total_score=50)
+            Score.objects.create(photo=photo, judge=harsh_judge, criteria_scores={}, total_score=0)
+            Score.objects.create(photo=photo, judge=lenient_judge, criteria_scores={}, total_score=100)
+
+        result = calculate_judge_calibration(competition.id)
+
+        self.assertAlmostEqual(result['overall_average'], 50)
+        flagged = {judge['judge_username']: judge for judge in result['flagged_judges']}
+        self.assertEqual(set(flagged), {'harsh_judge', 'lenient_judge'})
+        self.assertEqual(flagged['harsh_judge']['direction'], 'harsh')
+        self.assertEqual(flagged['lenient_judge']['direction'], 'lenient')
+        self.assertEqual(flagged['harsh_judge']['score_count'], 3)
+        fair_result = next(judge for judge in result['judges'] if judge['judge_username'] == 'fair_judge')
+        self.assertFalse(fair_result['is_flagged'])
+        self.assertEqual(fair_result['judge_name'], 'Fair Judge')
+
+    def test_calculate_judge_calibration_handles_competition_without_scores(self):
+        competition = Competition.objects.create(name='Empty Event', slug='empty-event')
+
+        result = calculate_judge_calibration(competition.id)
+
+        self.assertIsNone(result['overall_average'])
+        self.assertIsNone(result['standard_deviation'])
+        self.assertEqual(result['judges'], [])
+        self.assertEqual(result['flagged_judges'], [])
+
+
+class EntryOrderSignalTests(TestCase):
+    def test_payment_receipt_sends_only_when_order_first_becomes_paid(self):
+        competition = Competition.objects.create(name='Paid Event', slug='paid-event')
+        entrant = User.objects.create_user(
+            username='paid-entrant',
+            email='entrant@example.com',
+            password='test-pass',
+        )
+
+        with patch('judging_app.signals.send_automated_email') as email_mock:
+            order = EntryOrder.objects.create(
+                user=entrant,
+                competition=competition,
+                stripe_checkout_id='cs_signal_123',
+                amount_paid=Decimal('25.50'),
+                is_paid=False,
+            )
+            email_mock.assert_not_called()
+
+            order.is_paid = True
+            order.save(update_fields=['is_paid'])
+            email_mock.assert_called_once_with(
+                competition=competition,
+                subject='Payment receipt for Paid Event',
+                template_name='emails/payment_receipt.txt',
+                context={'order': order, 'user': entrant},
+                recipient_list=['entrant@example.com'],
+            )
+
+            order.amount_paid = Decimal('30.00')
+            order.save(update_fields=['amount_paid'])
+
+        email_mock.assert_called_once()
         self.assertNotIn('_auth_user_id', self.client.session)
+
+
+class PublishCompetitionResultsAdminActionTests(TestCase):
+    def test_publish_competition_results_emails_shortlisted_photographers(self):
+        competition = Competition.objects.create(
+            name='World Class Photo Awards',
+            slug='world-class-photo-awards',
+            emails_enabled=True,
+        )
+        shortlisted = Photo.objects.create(
+            competition=competition,
+            title='Finalist Image',
+            photographer_name='Finalist One',
+            photographer_email='finalist@example.com',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+        Photo.objects.create(
+            competition=competition,
+            title='Shortlisted Without Email',
+            photographer_name='Finalist Two',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+        Photo.objects.create(
+            competition=competition,
+            title='Rejected Image',
+            photographer_name='Rejected Entrant',
+            photographer_email='rejected@example.com',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.REJECTED,
+        )
+        request = RequestFactory().post('/admin/judging_app/competition/')
+        request.user = User.objects.create_superuser(
+            username='platform-admin',
+            email='admin@example.com',
+            password='test-pass',
+        )
+        model_admin = CompetitionAdmin(Competition, django_admin.site)
+
+        with patch.object(model_admin, 'message_user') as message_mock:
+            with patch('judging_app.admin.send_automated_email', return_value=1) as email_mock:
+                model_admin.publish_competition_results(
+                    request,
+                    Competition.objects.filter(id=competition.id),
+                )
+
+        competition.refresh_from_db()
+        self.assertTrue(competition.results_published)
+        email_mock.assert_called_once_with(
+            competition=competition,
+            subject='Congratulations from World Class Photo Awards',
+            template_name='emails/congratulations.txt',
+            context={'photo': shortlisted},
+            recipient_list=['finalist@example.com'],
+        )
+        message = message_mock.call_args.args[1]
+        self.assertIn('Shortlisted photos: 2', message)
+        self.assertIn('Emails sent: 1', message)
+        self.assertIn('Skipped without photographer email: 1', message)
 
 
 class UserTimezoneMiddlewareTests(TestCase):
