@@ -149,6 +149,10 @@
                                         Feedback report
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
+                                    <a class="action-link" href="{% url 'export_competition_results_csv' competition.slug %}">
+                                        Download results CSV
+                                        <span aria-hidden="true">&gt;</span>
+                                    </a>
                                 {% endif %}
                                 {% if competition.can_review %}
                                     <a class="action-link" href="{% url 'elimination_mode' competition.slug %}">

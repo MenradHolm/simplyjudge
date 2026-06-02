@@ -17,6 +17,7 @@ from PIL.ExifTags import TAGS
 from PIL import ImageOps
 
 from django.contrib import messages
+from django.contrib.auth import login as auth_login
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
@@ -41,16 +42,53 @@ IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'}
 CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024
 CLOUDINARY_SAFE_UPLOAD_TARGET_BYTES = int(CLOUDINARY_FREE_UPLOAD_LIMIT_BYTES * 0.92)
 MAX_IMAGE_PROCESSING_DIMENSION = 2400
+PENDING_JUDGE_INVITE_SESSION_KEY = 'pending_judge_invite_token'
+
+def grant_judge_invite_access(user, competition):
+    competition.judges.add(user)
+    CompetitionMembership.objects.update_or_create(
+        competition=competition,
+        user=user,
+        role=CompetitionMembership.Role.VIP_JUDGE,
+        defaults={'is_active': True},
+    )
+
+def apply_pending_judge_invite(request):
+    token = request.session.pop(PENDING_JUDGE_INVITE_SESSION_KEY, None)
+    if not token or not request.user.is_authenticated:
+        return None
+    competition = Competition.objects.filter(judge_invite_token=token).first()
+    if competition:
+        grant_judge_invite_access(request.user, competition)
+    return competition
 
 def register_user(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
-            form.save()
-            return redirect('login')
+            user = form.save()
+            auth_login(request, user)
+            invited_competition = apply_pending_judge_invite(request)
+            if invited_competition:
+                messages.success(request, f'You have joined {invited_competition.name} as a judge.')
+                return redirect('judge_router', comp_slug=invited_competition.slug)
+            return redirect('home_hub')
     else:
         form = UserCreationForm()
     return render(request, 'judging_app/register.html', {'form': form})
+
+def accept_judge_invite(request, token):
+    competition = get_object_or_404(Competition, judge_invite_token=token, is_active=True)
+    request.session[PENDING_JUDGE_INVITE_SESSION_KEY] = str(token)
+
+    if request.user.is_authenticated:
+        grant_judge_invite_access(request.user, competition)
+        request.session.pop(PENDING_JUDGE_INVITE_SESSION_KEY, None)
+        messages.success(request, f'You have joined {competition.name} as a judge.')
+        return redirect('judge_router', comp_slug=competition.slug)
+
+    login_url = f"{reverse('login')}?next={request.path}"
+    return redirect(login_url)
 
 ORGANIZER_ROLES = {CompetitionMembership.Role.ORGANIZER}
 INTERNAL_REVIEW_ROLES = {
@@ -764,6 +802,59 @@ def feedback_report(request, comp_slug):
         'judging_app/feedback_report.html',
         feedback_report_context(competition, can_edit_notes=can_edit_notes),
     )
+
+def split_entrant_name(full_name):
+    parts = str(full_name or '').strip().split()
+    if not parts:
+        return '', ''
+    if len(parts) == 1:
+        return parts[0], ''
+    return parts[0], ' '.join(parts[1:])
+
+@login_required(login_url='/accounts/login/')
+def export_competition_results_csv(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="competition_results.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Entrant First Name',
+        'Entrant Last Name',
+        'Country',
+        'Email',
+        'Category/Section',
+        'Image Title',
+        'Total Score',
+        'Final Status',
+    ])
+
+    score_totals = dict(
+        Score.objects.filter(photo__competition=competition)
+        .values('photo_id')
+        .annotate(average_total=Avg('total_score'))
+        .values_list('photo_id', 'average_total')
+    )
+    photos = Photo.objects.filter(competition=competition).order_by('category', 'title', 'id')
+
+    for photo in photos:
+        first_name, last_name = split_entrant_name(photo.photographer_name)
+        total_score = score_totals.get(photo.id)
+        writer.writerow([
+            first_name,
+            last_name,
+            '',
+            photo.photographer_email,
+            photo.category,
+            photo.title,
+            f'{total_score:.2f}' if total_score is not None else '',
+            photo.get_status_display(),
+        ])
+
+    return response
 
 @login_required(login_url='/accounts/login/')
 def upload_spreadsheet(request, comp_slug):

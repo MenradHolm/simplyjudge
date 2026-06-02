@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal
 
 from django.db import models
@@ -37,7 +38,8 @@ class Competition(models.Model):
     results_published = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    judges = models.ManyToManyField(User, blank=True)
+    judge_invite_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=True)
+    judges = models.ManyToManyField(User, blank=True, related_name='judged_competitions')
     tie_breaker_criterion = models.ForeignKey(
         'RubricCriterion', 
         on_delete=models.SET_NULL, 

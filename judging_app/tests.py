@@ -1,3 +1,4 @@
+import csv
 import io
 import json
 import tempfile
@@ -200,6 +201,58 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(score.criteria_scores[str(criterion.id)], 12.5)
         self.assertEqual(score.total_score, 12.5)
         self.assertEqual(score.comment, 'Strong atmosphere, saved while typing.')
+
+    def test_organizer_can_export_competition_results_csv(self):
+        photo = self.create_photo(
+            'Storm, Over Valley',
+            Photo.Status.SHORTLISTED,
+            photographer_name='Amina Jacobs',
+            photographer_email='amina@example.com',
+            category='Landscape',
+        )
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=80)
+        Score.objects.create(photo=photo, judge=self.internal_judge, criteria_scores={}, total_score=90)
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('export_competition_results_csv', args=[self.competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertEqual(response['Content-Disposition'], 'attachment; filename="competition_results.csv"')
+        rows = list(csv.reader(io.StringIO(response.content.decode('utf-8'))))
+        self.assertEqual(
+            rows[0],
+            [
+                'Entrant First Name',
+                'Entrant Last Name',
+                'Country',
+                'Email',
+                'Category/Section',
+                'Image Title',
+                'Total Score',
+                'Final Status',
+            ],
+        )
+        self.assertEqual(
+            rows[1],
+            [
+                'Amina',
+                'Jacobs',
+                '',
+                'amina@example.com',
+                'Landscape',
+                'Storm, Over Valley',
+                '85.00',
+                'Shortlisted',
+            ],
+        )
+
+    def test_non_organizer_cannot_export_competition_results_csv(self):
+        self.client.force_login(self.guest_judge)
+
+        response = self.client.get(reverse('export_competition_results_csv', args=[self.competition.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
 
     def test_judge_can_review_and_update_submitted_scores(self):
         criterion = RubricCriterion.objects.create(
@@ -750,6 +803,65 @@ class AuthNavigationTests(TestCase):
         logout_response = self.client.post(reverse('logout'))
 
         self.assertRedirects(logout_response, reverse('home_hub'))
+
+
+class JudgeInviteTests(TestCase):
+    def test_logged_in_user_accepts_judge_invite(self):
+        competition = Competition.objects.create(name='Invite Event', slug='invite-event')
+        user = User.objects.create_user(username='invited-judge', password='test-pass')
+
+        self.client.force_login(user)
+        response = self.client.get(reverse('accept_judge_invite', args=[competition.judge_invite_token]))
+
+        self.assertRedirects(response, reverse('judge_router', args=[competition.slug]))
+        self.assertTrue(competition.judges.filter(id=user.id).exists())
+        self.assertTrue(
+            CompetitionMembership.objects.filter(
+                competition=competition,
+                user=user,
+                role=CompetitionMembership.Role.VIP_JUDGE,
+                is_active=True,
+            ).exists()
+        )
+
+    def test_anonymous_invite_redirects_to_login_and_preserves_token(self):
+        competition = Competition.objects.create(name='Invite Event', slug='invite-event')
+
+        response = self.client.get(reverse('accept_judge_invite', args=[competition.judge_invite_token]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response['Location'])
+        self.assertEqual(
+            self.client.session['pending_judge_invite_token'],
+            str(competition.judge_invite_token),
+        )
+
+    def test_invited_user_is_added_after_signup(self):
+        competition = Competition.objects.create(name='Signup Invite Event', slug='signup-invite-event')
+        session = self.client.session
+        session['pending_judge_invite_token'] = str(competition.judge_invite_token)
+        session.save()
+
+        response = self.client.post(
+            reverse('register'),
+            {
+                'username': 'new-invited-judge',
+                'password1': 'a-secure-test-pass-123',
+                'password2': 'a-secure-test-pass-123',
+            },
+        )
+
+        user = User.objects.get(username='new-invited-judge')
+        self.assertRedirects(response, reverse('judge_router', args=[competition.slug]))
+        self.assertTrue(competition.judges.filter(id=user.id).exists())
+        self.assertTrue(
+            CompetitionMembership.objects.filter(
+                competition=competition,
+                user=user,
+                role=CompetitionMembership.Role.VIP_JUDGE,
+                is_active=True,
+            ).exists()
+        )
 
 
 class AutomatedEmailTests(TestCase):

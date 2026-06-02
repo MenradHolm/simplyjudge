@@ -9,6 +9,7 @@ urlpatterns = [
     path('privacy/', TemplateView.as_view(template_name='judging_app/privacy.html'), name='privacy'),
     path('terms/', TemplateView.as_view(template_name='judging_app/terms.html'), name='terms'),
     path('stripe/webhook/', views.stripe_webhook, name='stripe_webhook'),
+    path('judge-invite/<uuid:token>/', views.accept_judge_invite, name='accept_judge_invite'),
     
     # Competition-Specific Routes (Using Slugs)
     path('competition/<slug:comp_slug>/', views.judge_router, name='judge_router'),
@@ -23,6 +24,7 @@ urlpatterns = [
     path('competition/<slug:comp_slug>/photo/<int:photo_id>/upload-raw/', views.upload_raw_file, name='upload_raw_file'),
     path('competition/<slug:comp_slug>/checkout/', views.create_checkout_session, name='create_checkout_session'),
     path('competition/<slug:comp_slug>/ledger-report/', views.feedback_report, name='feedback_report'),
+    path('competition/<slug:comp_slug>/results-csv/', views.export_competition_results_csv, name='export_competition_results_csv'),
     
     # Upload Data Routes (Using Slugs)
     path('competition/<slug:comp_slug>/upload-csv/', views.upload_spreadsheet, name='upload_spreadsheet'),
