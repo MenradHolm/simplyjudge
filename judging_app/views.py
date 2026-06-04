@@ -831,11 +831,14 @@ def score_report_thumbnail_url(photo, width=128, height=128):
 
 def competition_score_summary(competition):
     photos = list(Photo.objects.filter(competition=competition).order_by('category', 'title', 'id'))
+    rubric = list(RubricCriterion.objects.filter(competition=competition))
+    max_score = rubric_max_score(rubric)
     scores = list(
         Score.objects.filter(photo__competition=competition)
         .select_related('photo', 'judge')
         .order_by('judge__username', 'judge__id')
     )
+    attach_score_display_values(scores, rubric, max_score)
     judges_by_id = {}
     scores_by_photo = {}
 
@@ -851,8 +854,9 @@ def competition_score_summary(competition):
 
     for photo in photos:
         photo_scores = scores_by_photo.get(photo.id, {})
-        score_values = [score.total_score for score in photo_scores.values()]
+        score_values = [score.display_total for score in photo_scores.values()]
         average_score = sum(score_values) / len(score_values) if score_values else None
+        average_percentage = (average_score / max_score * 100) if average_score is not None and max_score else None
         judge_cells = [
             {
                 'judge': judge,
@@ -868,11 +872,12 @@ def competition_score_summary(competition):
             'last_name': last_name,
             'entrant_name': ' '.join(part for part in [first_name, last_name] if part),
             'average_score': average_score,
+            'average_percentage': average_percentage,
             'thumbnail_url': score_report_thumbnail_url(photo),
             'judge_cells': judge_cells,
         })
 
-    return rows, judges
+    return rows, judges, max_score
 
 @login_required(login_url='/accounts/login/')
 def export_competition_results_csv(request, comp_slug):
@@ -880,7 +885,7 @@ def export_competition_results_csv(request, comp_slug):
     if not is_competition_organizer(request.user, competition):
         return redirect('home_hub')
 
-    rows, judges = competition_score_summary(competition)
+    rows, judges, max_score = competition_score_summary(competition)
     header = [
         'Entrant First Name',
         'Entrant Last Name',
@@ -916,7 +921,7 @@ def export_competition_results_csv(request, comp_slug):
         for cell in row['judge_cells']:
             score = cell['score']
             csv_row.extend([
-                f'{score.total_score:.2f}' if score else '',
+                f'{score.display_total:.2f}' if score else '',
                 score.comment if score and score.comment else '',
             ])
         writer.writerow(csv_row)
@@ -929,7 +934,7 @@ def competition_score_summary_pdf(request, comp_slug):
     if not is_competition_organizer(request.user, competition):
         return redirect('home_hub')
 
-    rows, judges = competition_score_summary(competition)
+    rows, judges, max_score = competition_score_summary(competition)
     return render(
         request,
         'judging_app/score_summary_pdf.html',
@@ -937,6 +942,7 @@ def competition_score_summary_pdf(request, comp_slug):
             'competition': competition,
             'rows': rows,
             'judges': judges,
+            'max_score': max_score,
             'generated_at': timezone.now(),
             'is_shareable_report': False,
         },
@@ -948,7 +954,7 @@ def shareable_score_summary_pdf(request, comp_slug):
     if not is_competition_organizer(request.user, competition):
         return redirect('home_hub')
 
-    rows, judges = competition_score_summary(competition)
+    rows, judges, max_score = competition_score_summary(competition)
     return render(
         request,
         'judging_app/score_summary_pdf.html',
@@ -956,6 +962,7 @@ def shareable_score_summary_pdf(request, comp_slug):
             'competition': competition,
             'rows': rows,
             'judges': judges,
+            'max_score': max_score,
             'generated_at': timezone.now(),
             'is_shareable_report': True,
         },

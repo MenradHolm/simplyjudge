@@ -151,6 +151,15 @@
         font-weight: 900;
     }
 
+    .score-subtext {
+        display: block;
+        margin-top: 0.12rem;
+        color: var(--muted);
+        font-size: 0.66rem;
+        font-weight: 800;
+        line-height: 1.25;
+    }
+
     .judge-summary-cell {
         min-width: 30rem;
     }
@@ -293,6 +302,9 @@
             <div class="summary-meta">
                 <span class="tag tag-neutral">{{ rows|length }} image{{ rows|length|pluralize }}</span>
                 <span class="tag tag-neutral">{{ judges|length }} judge{{ judges|length|pluralize }}</span>
+                {% if max_score %}
+                    <span class="tag tag-neutral">Maximum score {{ max_score|floatformat:"-2" }}</span>
+                {% endif %}
                 <span class="tag tag-neutral">
                     Generated
                     <time data-local-datetime="{{ generated_at|date:'c' }}" data-local-format="datetime">
@@ -342,7 +354,7 @@
                                 <th>Entrant</th>
                                 <th>Status</th>
                             {% endif %}
-                            <th>Average</th>
+                            <th>Average{% if max_score %} / {{ max_score|floatformat:"-2" }}{% endif %}</th>
                             <th>Judge scores and feedback</th>
                         </tr>
                     </thead>
@@ -378,6 +390,9 @@
                                 <td class="average-cell">
                                     {% if row.average_score != None %}
                                         <span class="average-number">{{ row.average_score|floatformat:2 }}</span>
+                                        {% if max_score %}
+                                            <span class="score-subtext">/ {{ max_score|floatformat:"-2" }}{% if row.average_percentage != None %} · {{ row.average_percentage|floatformat:1 }}%{% endif %}</span>
+                                        {% endif %}
                                     {% else %}
                                         <span class="empty-score">No scores</span>
                                     {% endif %}
@@ -394,7 +409,10 @@
                                                     {% endif %}
                                                 </span>
                                                 {% if cell.score %}
-                                                    <span class="judge-score">{{ cell.score.total_score|floatformat:2 }}</span>
+                                                    <span class="judge-score">
+                                                        {{ cell.score.display_total|floatformat:2 }}
+                                                        {% if max_score %}<span class="score-subtext">/ {{ max_score|floatformat:"-2" }}</span>{% endif %}
+                                                    </span>
                                                     <span class="judge-comment">
                                                         {% if cell.score.comment %}
                                                             {{ cell.score.comment }}

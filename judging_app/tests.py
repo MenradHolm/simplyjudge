@@ -269,6 +269,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertRedirects(response, reverse('home_hub'))
 
     def test_organizer_can_view_score_summary_pdf_page(self):
+        RubricCriterion.objects.create(competition=self.competition, name='Overall', score_out_of=15)
         photo = self.create_photo(
             'Storm Over Valley',
             Photo.Status.SHORTLISTED,
@@ -281,14 +282,14 @@ class PhotoStatusWorkflowTests(TestCase):
             photo=photo,
             judge=self.guest_judge,
             criteria_scores={},
-            total_score=80,
+            total_score=11,
             comment='Strong atmosphere.',
         )
         Score.objects.create(
             photo=photo,
             judge=self.internal_judge,
             criteria_scores={},
-            total_score=90,
+            total_score=14,
             comment='Excellent control of light.',
         )
 
@@ -302,9 +303,12 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Amina Jacobs')
         self.assertContains(response, 'Shortlisted')
         self.assertContains(response, 'Save as PDF')
+        self.assertContains(response, 'Maximum score 15')
+        self.assertContains(response, 'Average / 15')
         self.assertContains(response, 'judge')
         self.assertContains(response, 'reviewer')
-        self.assertContains(response, '80.00')
+        self.assertContains(response, '11.00')
+        self.assertContains(response, '/ 15')
         self.assertContains(response, 'Excellent control of light.')
 
     def test_non_organizer_cannot_view_score_summary_pdf_page(self):
@@ -315,6 +319,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertRedirects(response, reverse('home_hub'))
 
     def test_organizer_can_view_anonymized_shareable_score_summary_pdf_page(self):
+        RubricCriterion.objects.create(competition=self.competition, name='Overall', score_out_of=15)
         self.guest_judge.username = 'private_judge_alpha'
         self.guest_judge.save(update_fields=['username'])
         self.internal_judge.username = 'private_judge_beta'
@@ -331,14 +336,14 @@ class PhotoStatusWorkflowTests(TestCase):
             photo=photo,
             judge=self.guest_judge,
             criteria_scores={},
-            total_score=80,
+            total_score=11,
             comment='Strong atmosphere.',
         )
         Score.objects.create(
             photo=photo,
             judge=self.internal_judge,
             criteria_scores={},
-            total_score=90,
+            total_score=14,
             comment='Excellent control of light.',
         )
 
@@ -348,6 +353,8 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Shareable group report')
         self.assertContains(response, 'Judge names hidden')
+        self.assertContains(response, 'Maximum score 15')
+        self.assertContains(response, 'Average / 15')
         self.assertContains(response, 'Judge 1')
         self.assertContains(response, 'Judge 2')
         self.assertContains(response, 'Storm Over Valley')
