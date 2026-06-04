@@ -22,9 +22,38 @@
 
     .summary-table {
         width: 100%;
-        min-width: 68rem;
+        table-layout: auto;
         border-collapse: collapse;
         font-size: 0.78rem;
+    }
+
+    .summary-table-private {
+        min-width: 62rem;
+    }
+
+    .summary-table-shareable {
+        min-width: 48rem;
+    }
+
+    .col-photo {
+        width: 6.5rem;
+    }
+
+    .col-submission {
+        width: 9rem;
+    }
+
+    .col-entrant {
+        width: 11rem;
+    }
+
+    .col-status,
+    .col-average {
+        width: 5.75rem;
+    }
+
+    .col-scores {
+        width: auto;
     }
 
     .summary-table th,
@@ -78,8 +107,8 @@
     }
 
     .submission-cell {
-        width: 16rem;
-        min-width: 14rem;
+        width: 9rem;
+        max-width: 10rem;
     }
 
     .submission-title {
@@ -123,7 +152,7 @@
     }
 
     .judge-summary-cell {
-        min-width: 27rem;
+        min-width: 30rem;
     }
 
     .judge-score-grid {
@@ -197,6 +226,14 @@
             font-size: 0.62rem;
         }
 
+        .submission-cell {
+            max-width: 7.5rem;
+        }
+
+        .judge-summary-cell {
+            min-width: 18rem;
+        }
+
         .summary-table th {
             position: static;
         }
@@ -232,8 +269,12 @@
     }
 
     @media (max-width: 900px) {
-        .summary-table {
-            min-width: 60rem;
+        .summary-table-private {
+            min-width: 58rem;
+        }
+
+        .summary-table-shareable {
+            min-width: 44rem;
         }
 
         .judge-score-row {
@@ -282,7 +323,17 @@
 
         {% if rows %}
             <div class="summary-table-wrap">
-                <table class="summary-table">
+                <table class="summary-table {% if is_shareable_report %}summary-table-shareable{% else %}summary-table-private{% endif %}">
+                    <colgroup>
+                        <col class="col-photo">
+                        <col class="col-submission">
+                        {% if not is_shareable_report %}
+                            <col class="col-entrant">
+                            <col class="col-status">
+                        {% endif %}
+                        <col class="col-average">
+                        <col class="col-scores">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th>Photo</th>
