@@ -18,7 +18,7 @@ from .admin import CompetitionAdmin
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
-from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job
+from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job, score_report_thumbnail_url
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -352,6 +352,20 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertNotContains(response, 'private_judge_alpha')
         self.assertNotContains(response, 'private_judge_beta')
         self.assertNotContains(response, 'amina@example.com')
+
+    def test_score_report_thumbnail_url_uses_small_cloudinary_transformation(self):
+        photo = SimpleNamespace(
+            image=SimpleNamespace(
+                url='https://res.cloudinary.com/demo/image/upload/v123/youth-poty/full-size-image.jpg'
+            )
+        )
+
+        thumbnail_url = score_report_thumbnail_url(photo)
+
+        self.assertEqual(
+            thumbnail_url,
+            'https://res.cloudinary.com/demo/image/upload/c_fill,w_96,h_96,q_auto:eco,f_auto/v123/youth-poty/full-size-image.jpg',
+        )
 
     def test_non_organizer_cannot_view_shareable_score_summary_pdf_page(self):
         self.client.force_login(self.guest_judge)

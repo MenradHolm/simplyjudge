@@ -244,7 +244,7 @@
             </div>
         </div>
         <div class="actions no-print">
-            <button onclick="window.print()" class="button button-accent">Save as PDF</button>
+            <button onclick="printScoreSheet(this)" class="button button-accent">Save as PDF</button>
             {% if not is_shareable_report %}
                 <a href="{% url 'shareable_score_summary_pdf' competition.slug %}" class="button button-secondary">Open anonymous share sheet</a>
                 <a href="{% url 'export_competition_results_csv' competition.slug %}" class="button button-secondary">Download private CSV</a>
@@ -280,7 +280,7 @@
                         {% for row in rows %}
                             <tr>
                                 <td class="thumb-cell">
-                                    <img src="{% if row.photo.image %}{{ row.photo.image.url }}{% else %}/media/competition_photos/placeholder.jpg{% endif %}" alt="{{ row.photo.title }}" class="summary-thumb">
+                                    <img src="{{ row.thumbnail_url }}" width="68" height="68" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
                                 </td>
                                 <td class="submission-cell">
                                     <span class="tag tag-neutral">SJ #{{ row.photo.id }}</span>
@@ -349,4 +349,32 @@
         {% endif %}
     </section>
 </main>
+<script>
+    function printScoreSheet(button) {
+        const originalLabel = button ? button.textContent : '';
+        const images = Array.from(document.querySelectorAll('.summary-thumb'));
+        const pendingImages = images.filter((image) => !image.complete);
+        const waitForImage = (image) => new Promise((resolve) => {
+            image.addEventListener('load', resolve, { once: true });
+            image.addEventListener('error', resolve, { once: true });
+        });
+        const timeout = new Promise((resolve) => window.setTimeout(resolve, 2500));
+
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Preparing PDF...';
+        }
+
+        Promise.race([
+            Promise.all(pendingImages.map(waitForImage)),
+            timeout,
+        ]).then(() => {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+            window.print();
+        });
+    }
+</script>
 {% endblock %}

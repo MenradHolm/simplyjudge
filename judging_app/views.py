@@ -814,6 +814,21 @@ def split_entrant_name(full_name):
 def judge_display_name(user):
     return user.get_full_name() or user.username or user.email or f'Judge {user.id}'
 
+def score_report_thumbnail_url(photo, width=96, height=96):
+    if not photo.image:
+        return '/media/competition_photos/placeholder.jpg'
+    try:
+        image_url = photo.image.url
+    except ValueError:
+        return '/media/competition_photos/placeholder.jpg'
+
+    if 'res.cloudinary.com' in image_url and '/upload/' in image_url:
+        prefix, asset_path = image_url.split('/upload/', 1)
+        transformation = f'c_fill,w_{width},h_{height},q_auto:eco,f_auto'
+        return f'{prefix}/upload/{transformation}/{asset_path}'
+
+    return image_url
+
 def competition_score_summary(competition):
     photos = list(Photo.objects.filter(competition=competition).order_by('category', 'title', 'id'))
     scores = list(
@@ -852,6 +867,7 @@ def competition_score_summary(competition):
             'first_name': first_name,
             'last_name': last_name,
             'average_score': average_score,
+            'thumbnail_url': score_report_thumbnail_url(photo),
             'judge_cells': judge_cells,
         })
 
