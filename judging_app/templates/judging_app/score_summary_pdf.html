@@ -293,9 +293,6 @@
             <div class="summary-meta">
                 <span class="tag tag-neutral">{{ rows|length }} image{{ rows|length|pluralize }}</span>
                 <span class="tag tag-neutral">{{ judges|length }} judge{{ judges|length|pluralize }}</span>
-                {% if max_score %}
-                    <span class="tag tag-neutral">Maximum score {{ max_score|floatformat:"-2" }}</span>
-                {% endif %}
                 <span class="tag tag-neutral">
                     Generated
                     <time data-local-datetime="{{ generated_at|date:'c' }}" data-local-format="datetime">
@@ -345,7 +342,7 @@
                                 <th>Entrant</th>
                                 <th>Status</th>
                             {% endif %}
-                            <th>Average</th>
+                            <th>Average{% if max_score %} (/{{ max_score|floatformat:"-2" }}){% endif %}</th>
                             <th>Judge scores and feedback</th>
                         </tr>
                     </thead>
