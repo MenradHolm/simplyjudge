@@ -311,6 +311,55 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertRedirects(response, reverse('home_hub'))
 
+    def test_organizer_can_view_anonymized_shareable_score_summary_pdf_page(self):
+        self.guest_judge.username = 'private_judge_alpha'
+        self.guest_judge.save(update_fields=['username'])
+        self.internal_judge.username = 'private_judge_beta'
+        self.internal_judge.save(update_fields=['username'])
+        photo = self.create_photo(
+            'Storm Over Valley',
+            Photo.Status.SHORTLISTED,
+            photographer_name='Amina Jacobs',
+            photographer_email='amina@example.com',
+            category='Landscape',
+            entry_code='SS001',
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=self.guest_judge,
+            criteria_scores={},
+            total_score=80,
+            comment='Strong atmosphere.',
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=self.internal_judge,
+            criteria_scores={},
+            total_score=90,
+            comment='Excellent control of light.',
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('shareable_score_summary_pdf', args=[self.competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Shareable group report')
+        self.assertContains(response, 'Judge names hidden')
+        self.assertContains(response, 'Reviewer 1')
+        self.assertContains(response, 'Reviewer 2')
+        self.assertContains(response, 'Storm Over Valley')
+        self.assertContains(response, 'Excellent control of light.')
+        self.assertNotContains(response, 'private_judge_alpha')
+        self.assertNotContains(response, 'private_judge_beta')
+        self.assertNotContains(response, 'amina@example.com')
+
+    def test_non_organizer_cannot_view_shareable_score_summary_pdf_page(self):
+        self.client.force_login(self.guest_judge)
+
+        response = self.client.get(reverse('shareable_score_summary_pdf', args=[self.competition.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
+
     def test_judge_can_review_and_update_submitted_scores(self):
         criterion = RubricCriterion.objects.create(
             competition=self.competition,

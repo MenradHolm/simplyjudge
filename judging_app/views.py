@@ -921,6 +921,26 @@ def competition_score_summary_pdf(request, comp_slug):
             'rows': rows,
             'judges': judges,
             'generated_at': timezone.now(),
+            'is_shareable_report': False,
+        },
+    )
+
+@login_required(login_url='/accounts/login/')
+def shareable_score_summary_pdf(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
+
+    rows, judges = competition_score_summary(competition)
+    return render(
+        request,
+        'judging_app/score_summary_pdf.html',
+        {
+            'competition': competition,
+            'rows': rows,
+            'judges': judges,
+            'generated_at': timezone.now(),
+            'is_shareable_report': True,
         },
     )
 

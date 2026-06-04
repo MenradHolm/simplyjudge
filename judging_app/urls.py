@@ -26,6 +26,7 @@ urlpatterns = [
     path('competition/<slug:comp_slug>/ledger-report/', views.feedback_report, name='feedback_report'),
     path('competition/<slug:comp_slug>/results-csv/', views.export_competition_results_csv, name='export_competition_results_csv'),
     path('competition/<slug:comp_slug>/score-summary/', views.competition_score_summary_pdf, name='competition_score_summary_pdf'),
+    path('competition/<slug:comp_slug>/shareable-score-summary/', views.shareable_score_summary_pdf, name='shareable_score_summary_pdf'),
     
     # Upload Data Routes (Using Slugs)
     path('competition/<slug:comp_slug>/upload-csv/', views.upload_spreadsheet, name='upload_spreadsheet'),

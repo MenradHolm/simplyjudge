@@ -157,6 +157,10 @@
                                         Score summary PDF
                                         <span aria-hidden="true">&gt;</span>
                                     </a>
+                                    <a class="action-link" href="{% url 'shareable_score_summary_pdf' competition.slug %}">
+                                        Shareable score PDF
+                                        <span aria-hidden="true">&gt;</span>
+                                    </a>
                                 {% endif %}
                                 {% if competition.can_review %}
                                     <a class="action-link" href="{% url 'elimination_mode' competition.slug %}">

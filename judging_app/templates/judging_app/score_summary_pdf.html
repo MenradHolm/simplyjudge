@@ -230,11 +230,11 @@
 <main class="shell shell-wide">
     <div class="page-head">
         <div>
-            <p class="eyebrow">Private organiser report</p>
+            <p class="eyebrow">{% if is_shareable_report %}Shareable group report{% else %}Private organiser report{% endif %}</p>
             <h2 class="page-title">{{ competition.name }} Score Summary</h2>
             <div class="summary-meta">
                 <span class="tag tag-neutral">{{ rows|length }} image{{ rows|length|pluralize }}</span>
-                <span class="tag tag-neutral">{{ judges|length }} judge{{ judges|length|pluralize }}</span>
+                <span class="tag tag-neutral">{{ judges|length }} reviewer{{ judges|length|pluralize }}</span>
                 <span class="tag tag-neutral">
                     Generated
                     <time data-local-datetime="{{ generated_at|date:'c' }}" data-local-format="datetime">
@@ -245,15 +245,22 @@
         </div>
         <div class="actions no-print">
             <button onclick="window.print()" class="button button-accent">Print or Save PDF</button>
-            <a href="{% url 'export_competition_results_csv' competition.slug %}" class="button button-secondary">Download CSV</a>
+            {% if not is_shareable_report %}
+                <a href="{% url 'shareable_score_summary_pdf' competition.slug %}" class="button button-secondary">Open Shareable Version</a>
+                <a href="{% url 'export_competition_results_csv' competition.slug %}" class="button button-secondary">Download CSV</a>
+            {% endif %}
             <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
         </div>
     </div>
 
     <section class="panel">
         <div class="panel-header no-print">
-            <p class="panel-title">All judge scores and feedback</p>
-            <span class="tag tag-warning">Private organiser view</span>
+            <p class="panel-title">All reviewer scores and feedback</p>
+            {% if is_shareable_report %}
+                <span class="tag tag-neutral">Judge names hidden</span>
+            {% else %}
+                <span class="tag tag-warning">Private organiser view</span>
+            {% endif %}
         </div>
 
         {% if rows %}
@@ -285,9 +292,11 @@
                                 </td>
                                 <td class="entrant-cell">
                                     <strong>{{ row.first_name }} {{ row.last_name }}</strong>
-                                    <span class="compact-meta">
-                                        {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
-                                    </span>
+                                    {% if not is_shareable_report %}
+                                        <span class="compact-meta">
+                                            {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
+                                        </span>
+                                    {% endif %}
                                 </td>
                                 <td class="status-cell">
                                     <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
@@ -303,7 +312,13 @@
                                     <div class="judge-score-grid">
                                         {% for cell in row.judge_cells %}
                                             <div class="judge-score-row">
-                                                <span class="judge-name">{{ cell.judge_name }}</span>
+                                                <span class="judge-name">
+                                                    {% if is_shareable_report %}
+                                                        Reviewer {{ forloop.counter }}
+                                                    {% else %}
+                                                        {{ cell.judge_name }}
+                                                    {% endif %}
+                                                </span>
                                                 {% if cell.score %}
                                                     <span class="judge-score">{{ cell.score.total_score|floatformat:2 }}</span>
                                                     <span class="judge-comment">
