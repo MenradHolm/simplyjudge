@@ -287,8 +287,10 @@
                         <tr>
                             <th>Photo</th>
                             <th>Submission</th>
-                            <th>Entrant</th>
-                            <th>Status</th>
+                            {% if not is_shareable_report %}
+                                <th>Entrant</th>
+                                <th>Status</th>
+                            {% endif %}
                             <th>Average</th>
                             <th>Judge scores and feedback</th>
                         </tr>
@@ -309,21 +311,19 @@
                                         {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
                                     </span>
                                 </td>
-                                <td class="entrant-cell">
-                                    {% if not is_shareable_report and row.entrant_name %}
-                                        <strong>{{ row.entrant_name }}</strong>
-                                    {% endif %}
-                                    {% if not is_shareable_report %}
+                                {% if not is_shareable_report %}
+                                    <td class="entrant-cell">
+                                        {% if row.entrant_name %}
+                                            <strong>{{ row.entrant_name }}</strong>
+                                        {% endif %}
                                         <span class="compact-meta">
                                             {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
                                         </span>
-                                    {% endif %}
-                                </td>
-                                <td class="status-cell">
-                                    {% if not is_shareable_report %}
+                                    </td>
+                                    <td class="status-cell">
                                         <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
-                                    {% endif %}
-                                </td>
+                                    </td>
+                                {% endif %}
                                 <td class="average-cell">
                                     {% if row.average_score != None %}
                                         <span class="average-number">{{ row.average_score|floatformat:2 }}</span>

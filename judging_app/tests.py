@@ -354,6 +354,8 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Excellent control of light.')
         self.assertNotContains(response, 'private_judge_alpha')
         self.assertNotContains(response, 'private_judge_beta')
+        self.assertNotContains(response, '<th>Entrant</th>', html=True)
+        self.assertNotContains(response, '<th>Status</th>', html=True)
         self.assertNotContains(response, 'Amina Jacobs')
         self.assertNotContains(response, 'amina@example.com')
         self.assertNotContains(response, 'Shortlisted')
