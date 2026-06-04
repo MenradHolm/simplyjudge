@@ -342,8 +342,15 @@
                                 <th>Entrant</th>
                                 <th>Status</th>
                             {% endif %}
-                            <th>Average{% if max_score %} (/{{ max_score|floatformat:"-2" }}){% endif %}</th>
-                            <th>Judge scores and feedback</th>
+                            <th>
+                                Average
+                                {% if max_score %}<br><span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Max Score: {{ max_score|floatformat:"-2" }})</span>{% endif %}
+                            </th>
+                            <th>
+                                Judge scores
+                                {% if max_score %}<span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Out of {{ max_score|floatformat:"-2" }})</span>{% endif %}
+                                and feedback
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
