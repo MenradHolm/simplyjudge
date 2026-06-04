@@ -1,0 +1,337 @@
+{% extends "judging_app/base.html" %}
+
+{% block title %}Score Summary - SimplyJudge{% endblock %}
+
+{% block extra_head %}
+<style>
+    @page {
+        size: A4 landscape;
+        margin: 10mm;
+    }
+
+    .summary-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+    }
+
+    .summary-table-wrap {
+        overflow-x: auto;
+    }
+
+    .summary-table {
+        width: 100%;
+        min-width: 68rem;
+        border-collapse: collapse;
+        font-size: 0.78rem;
+    }
+
+    .summary-table th,
+    .summary-table td {
+        padding: 0.55rem;
+        border: 1px solid var(--line);
+        vertical-align: top;
+        text-align: left;
+    }
+
+    .summary-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        color: #455166;
+        background: #f5f7fb;
+        font-size: 0.68rem;
+        font-weight: 850;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .summary-table tbody tr:nth-child(even) {
+        background: #fbfcfe;
+    }
+
+    .thumb-cell {
+        width: 5rem;
+    }
+
+    .summary-thumb {
+        width: 4.25rem;
+        height: 4.25rem;
+        display: block;
+        object-fit: cover;
+        border: 1px solid var(--line);
+        border-radius: 0.35rem;
+        background: #eef3f9;
+    }
+
+    .submission-cell {
+        width: 16rem;
+        min-width: 14rem;
+    }
+
+    .submission-title {
+        display: block;
+        margin-top: 0.35rem;
+        color: var(--ink);
+        font-size: 0.9rem;
+        font-weight: 900;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    .compact-meta {
+        display: grid;
+        gap: 0.18rem;
+        margin-top: 0.4rem;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+
+    .entrant-cell {
+        width: 12rem;
+        max-width: 12rem;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .average-cell,
+    .status-cell {
+        width: 6.5rem;
+        white-space: nowrap;
+    }
+
+    .average-number {
+        display: block;
+        color: var(--ink);
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .judge-summary-cell {
+        min-width: 27rem;
+    }
+
+    .judge-score-grid {
+        display: grid;
+        gap: 0.4rem;
+    }
+
+    .judge-score-row {
+        display: grid;
+        grid-template-columns: minmax(7rem, 10rem) 4.5rem minmax(12rem, 1fr);
+        gap: 0.45rem;
+        align-items: start;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid rgba(217, 225, 236, 0.8);
+    }
+
+    .judge-score-row:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+
+    .judge-name,
+    .judge-score {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        font-weight: 850;
+    }
+
+    .judge-score {
+        white-space: nowrap;
+    }
+
+    .judge-comment {
+        color: #455166;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+
+    .empty-score {
+        color: var(--muted);
+        font-style: italic;
+    }
+
+    @media print {
+        .topbar,
+        .no-print {
+            display: none !important;
+        }
+
+        body {
+            background: #fff !important;
+        }
+
+        .shell,
+        .shell-wide {
+            width: 100%;
+            padding: 0;
+        }
+
+        .panel {
+            border: 0;
+            box-shadow: none;
+        }
+
+        .summary-table-wrap {
+            overflow: visible;
+        }
+
+        .summary-table {
+            min-width: 0;
+            font-size: 0.62rem;
+        }
+
+        .summary-table th {
+            position: static;
+        }
+
+        .summary-table th,
+        .summary-table td {
+            padding: 0.32rem;
+        }
+
+        .summary-thumb {
+            width: 3rem;
+            height: 3rem;
+        }
+
+        .submission-title {
+            font-size: 0.68rem;
+        }
+
+        .compact-meta {
+            font-size: 0.58rem;
+        }
+
+        .judge-score-row {
+            grid-template-columns: 6.5rem 3.2rem minmax(10rem, 1fr);
+            gap: 0.25rem;
+            padding-bottom: 0.25rem;
+        }
+    }
+
+    @media (max-width: 900px) {
+        .summary-table {
+            min-width: 60rem;
+        }
+
+        .judge-score-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="shell shell-wide">
+    <div class="page-head">
+        <div>
+            <p class="eyebrow">Private organiser report</p>
+            <h2 class="page-title">{{ competition.name }} Score Summary</h2>
+            <div class="summary-meta">
+                <span class="tag tag-neutral">{{ rows|length }} image{{ rows|length|pluralize }}</span>
+                <span class="tag tag-neutral">{{ judges|length }} judge{{ judges|length|pluralize }}</span>
+                <span class="tag tag-neutral">
+                    Generated
+                    <time data-local-datetime="{{ generated_at|date:'c' }}" data-local-format="datetime">
+                        {{ generated_at|date:"M j, Y H:i" }}
+                    </time>
+                </span>
+            </div>
+        </div>
+        <div class="actions no-print">
+            <button onclick="window.print()" class="button button-accent">Print or Save PDF</button>
+            <a href="{% url 'export_competition_results_csv' competition.slug %}" class="button button-secondary">Download CSV</a>
+            <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
+        </div>
+    </div>
+
+    <section class="panel">
+        <div class="panel-header no-print">
+            <p class="panel-title">All judge scores and feedback</p>
+            <span class="tag tag-warning">Private organiser view</span>
+        </div>
+
+        {% if rows %}
+            <div class="summary-table-wrap">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Photo</th>
+                            <th>Submission</th>
+                            <th>Entrant</th>
+                            <th>Status</th>
+                            <th>Average</th>
+                            <th>Judge scores and feedback</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                <td class="thumb-cell">
+                                    <img src="{% if row.photo.image %}{{ row.photo.image.url }}{% else %}/media/competition_photos/placeholder.jpg{% endif %}" alt="{{ row.photo.title }}" class="summary-thumb">
+                                </td>
+                                <td class="submission-cell">
+                                    <span class="tag tag-neutral">SJ #{{ row.photo.id }}</span>
+                                    <span class="submission-title">{{ row.photo.title }}</span>
+                                    <span class="compact-meta">
+                                        <span>{{ row.photo.category }}</span>
+                                        {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
+                                    </span>
+                                </td>
+                                <td class="entrant-cell">
+                                    <strong>{{ row.first_name }} {{ row.last_name }}</strong>
+                                    <span class="compact-meta">
+                                        {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
+                                    </span>
+                                </td>
+                                <td class="status-cell">
+                                    <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
+                                </td>
+                                <td class="average-cell">
+                                    {% if row.average_score != None %}
+                                        <span class="average-number">{{ row.average_score|floatformat:2 }}</span>
+                                    {% else %}
+                                        <span class="empty-score">No scores</span>
+                                    {% endif %}
+                                </td>
+                                <td class="judge-summary-cell">
+                                    <div class="judge-score-grid">
+                                        {% for cell in row.judge_cells %}
+                                            <div class="judge-score-row">
+                                                <span class="judge-name">{{ cell.judge_name }}</span>
+                                                {% if cell.score %}
+                                                    <span class="judge-score">{{ cell.score.total_score|floatformat:2 }}</span>
+                                                    <span class="judge-comment">
+                                                        {% if cell.score.comment %}
+                                                            {{ cell.score.comment }}
+                                                        {% else %}
+                                                            <span class="empty-score">No comment.</span>
+                                                        {% endif %}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="judge-score empty-score">-</span>
+                                                    <span class="judge-comment empty-score">Not scored.</span>
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <h3>No submissions yet</h3>
+                <p class="page-copy">Scores will appear here once judging starts.</p>
+            </div>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

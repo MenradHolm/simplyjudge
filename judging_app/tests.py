@@ -211,7 +211,13 @@ class PhotoStatusWorkflowTests(TestCase):
             category='Landscape',
         )
         Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=80)
-        Score.objects.create(photo=photo, judge=self.internal_judge, criteria_scores={}, total_score=90)
+        Score.objects.create(
+            photo=photo,
+            judge=self.internal_judge,
+            criteria_scores={},
+            total_score=90,
+            comment='Excellent control of light.',
+        )
 
         self.client.force_login(self.organizer)
         response = self.client.get(reverse('export_competition_results_csv', args=[self.competition.slug]))
@@ -231,6 +237,10 @@ class PhotoStatusWorkflowTests(TestCase):
                 'Image Title',
                 'Total Score',
                 'Final Status',
+                'judge Score',
+                'judge Feedback',
+                'reviewer Score',
+                'reviewer Feedback',
             ],
         )
         self.assertEqual(
@@ -244,6 +254,10 @@ class PhotoStatusWorkflowTests(TestCase):
                 'Storm, Over Valley',
                 '85.00',
                 'Shortlisted',
+                '80.00',
+                '',
+                '90.00',
+                'Excellent control of light.',
             ],
         )
 
@@ -251,6 +265,49 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.guest_judge)
 
         response = self.client.get(reverse('export_competition_results_csv', args=[self.competition.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
+
+    def test_organizer_can_view_score_summary_pdf_page(self):
+        photo = self.create_photo(
+            'Storm Over Valley',
+            Photo.Status.SHORTLISTED,
+            photographer_name='Amina Jacobs',
+            photographer_email='amina@example.com',
+            category='Landscape',
+            entry_code='SS001',
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=self.guest_judge,
+            criteria_scores={},
+            total_score=80,
+            comment='Strong atmosphere.',
+        )
+        Score.objects.create(
+            photo=photo,
+            judge=self.internal_judge,
+            criteria_scores={},
+            total_score=90,
+            comment='Excellent control of light.',
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('competition_score_summary_pdf', args=[self.competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Storm Over Valley')
+        self.assertContains(response, 'summary-thumb')
+        self.assertContains(response, 'Print or Save PDF')
+        self.assertContains(response, 'judge')
+        self.assertContains(response, 'reviewer')
+        self.assertContains(response, '80.00')
+        self.assertContains(response, 'Excellent control of light.')
+
+    def test_non_organizer_cannot_view_score_summary_pdf_page(self):
+        self.client.force_login(self.guest_judge)
+
+        response = self.client.get(reverse('competition_score_summary_pdf', args=[self.competition.slug]))
 
         self.assertRedirects(response, reverse('home_hub'))
 

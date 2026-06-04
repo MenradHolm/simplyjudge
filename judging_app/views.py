@@ -811,17 +811,60 @@ def split_entrant_name(full_name):
         return parts[0], ''
     return parts[0], ' '.join(parts[1:])
 
+def judge_display_name(user):
+    return user.get_full_name() or user.username or user.email or f'Judge {user.id}'
+
+def competition_score_summary(competition):
+    photos = list(Photo.objects.filter(competition=competition).order_by('category', 'title', 'id'))
+    scores = list(
+        Score.objects.filter(photo__competition=competition)
+        .select_related('photo', 'judge')
+        .order_by('judge__username', 'judge__id')
+    )
+    judges_by_id = {}
+    scores_by_photo = {}
+
+    for score in scores:
+        judges_by_id[score.judge_id] = score.judge
+        scores_by_photo.setdefault(score.photo_id, {})[score.judge_id] = score
+
+    judges = sorted(
+        judges_by_id.values(),
+        key=lambda judge: (judge_display_name(judge).lower(), judge.id),
+    )
+    rows = []
+
+    for photo in photos:
+        photo_scores = scores_by_photo.get(photo.id, {})
+        score_values = [score.total_score for score in photo_scores.values()]
+        average_score = sum(score_values) / len(score_values) if score_values else None
+        judge_cells = [
+            {
+                'judge': judge,
+                'judge_name': judge_display_name(judge),
+                'score': photo_scores.get(judge.id),
+            }
+            for judge in judges
+        ]
+        first_name, last_name = split_entrant_name(photo.photographer_name)
+        rows.append({
+            'photo': photo,
+            'first_name': first_name,
+            'last_name': last_name,
+            'average_score': average_score,
+            'judge_cells': judge_cells,
+        })
+
+    return rows, judges
+
 @login_required(login_url='/accounts/login/')
 def export_competition_results_csv(request, comp_slug):
     competition = get_object_or_404(Competition, slug=comp_slug)
     if not is_competition_organizer(request.user, competition):
         return redirect('home_hub')
 
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="competition_results.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow([
+    rows, judges = competition_score_summary(competition)
+    header = [
         'Entrant First Name',
         'Entrant Last Name',
         'Country',
@@ -830,31 +873,56 @@ def export_competition_results_csv(request, comp_slug):
         'Image Title',
         'Total Score',
         'Final Status',
-    ])
+    ]
+    for judge in judges:
+        display_name = judge_display_name(judge)
+        header.extend([f'{display_name} Score', f'{display_name} Feedback'])
 
-    score_totals = dict(
-        Score.objects.filter(photo__competition=competition)
-        .values('photo_id')
-        .annotate(average_total=Avg('total_score'))
-        .values_list('photo_id', 'average_total')
-    )
-    photos = Photo.objects.filter(competition=competition).order_by('category', 'title', 'id')
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="competition_results.csv"'
+    writer = csv.writer(response)
+    writer.writerow(header)
 
-    for photo in photos:
-        first_name, last_name = split_entrant_name(photo.photographer_name)
-        total_score = score_totals.get(photo.id)
-        writer.writerow([
-            first_name,
-            last_name,
+    for row in rows:
+        photo = row['photo']
+        total_score = row['average_score']
+        csv_row = [
+            row['first_name'],
+            row['last_name'],
             '',
             photo.photographer_email,
             photo.category,
             photo.title,
             f'{total_score:.2f}' if total_score is not None else '',
             photo.get_status_display(),
-        ])
+        ]
+        for cell in row['judge_cells']:
+            score = cell['score']
+            csv_row.extend([
+                f'{score.total_score:.2f}' if score else '',
+                score.comment if score and score.comment else '',
+            ])
+        writer.writerow(csv_row)
 
     return response
+
+@login_required(login_url='/accounts/login/')
+def competition_score_summary_pdf(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
+
+    rows, judges = competition_score_summary(competition)
+    return render(
+        request,
+        'judging_app/score_summary_pdf.html',
+        {
+            'competition': competition,
+            'rows': rows,
+            'judges': judges,
+            'generated_at': timezone.now(),
+        },
+    )
 
 @login_required(login_url='/accounts/login/')
 def upload_spreadsheet(request, comp_slug):
