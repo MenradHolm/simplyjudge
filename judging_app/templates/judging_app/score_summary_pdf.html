@@ -151,15 +151,6 @@
         font-weight: 900;
     }
 
-    .score-subtext {
-        display: block;
-        margin-top: 0.12rem;
-        color: var(--muted);
-        font-size: 0.66rem;
-        font-weight: 800;
-        line-height: 1.25;
-    }
-
     .judge-summary-cell {
         min-width: 30rem;
     }
@@ -354,7 +345,7 @@
                                 <th>Entrant</th>
                                 <th>Status</th>
                             {% endif %}
-                            <th>Average{% if max_score %} / {{ max_score|floatformat:"-2" }}{% endif %}</th>
+                            <th>Average</th>
                             <th>Judge scores and feedback</th>
                         </tr>
                     </thead>
@@ -390,9 +381,6 @@
                                 <td class="average-cell">
                                     {% if row.average_score != None %}
                                         <span class="average-number">{{ row.average_score|floatformat:2 }}</span>
-                                        {% if max_score %}
-                                            <span class="score-subtext">/ {{ max_score|floatformat:"-2" }}{% if row.average_percentage != None %} · {{ row.average_percentage|floatformat:1 }}%{% endif %}</span>
-                                        {% endif %}
                                     {% else %}
                                         <span class="empty-score">No scores</span>
                                     {% endif %}
@@ -411,7 +399,6 @@
                                                 {% if cell.score %}
                                                     <span class="judge-score">
                                                         {{ cell.score.display_total|floatformat:2 }}
-                                                        {% if max_score %}<span class="score-subtext">/ {{ max_score|floatformat:"-2" }}</span>{% endif %}
                                                     </span>
                                                     <span class="judge-comment">
                                                         {% if cell.score.comment %}

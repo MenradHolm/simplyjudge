@@ -304,11 +304,9 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Shortlisted')
         self.assertContains(response, 'Save as PDF')
         self.assertContains(response, 'Maximum score 15')
-        self.assertContains(response, 'Average / 15')
         self.assertContains(response, 'judge')
         self.assertContains(response, 'reviewer')
         self.assertContains(response, '11.00')
-        self.assertContains(response, '/ 15')
         self.assertContains(response, 'Excellent control of light.')
 
     def test_non_organizer_cannot_view_score_summary_pdf_page(self):
@@ -354,7 +352,6 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Shareable group report')
         self.assertContains(response, 'Judge names hidden')
         self.assertContains(response, 'Maximum score 15')
-        self.assertContains(response, 'Average / 15')
         self.assertContains(response, 'Judge 1')
         self.assertContains(response, 'Judge 2')
         self.assertContains(response, 'Storm Over Valley')

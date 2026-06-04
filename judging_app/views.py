@@ -856,7 +856,6 @@ def competition_score_summary(competition):
         photo_scores = scores_by_photo.get(photo.id, {})
         score_values = [score.display_total for score in photo_scores.values()]
         average_score = sum(score_values) / len(score_values) if score_values else None
-        average_percentage = (average_score / max_score * 100) if average_score is not None and max_score else None
         judge_cells = [
             {
                 'judge': judge,
@@ -872,7 +871,6 @@ def competition_score_summary(competition):
             'last_name': last_name,
             'entrant_name': ' '.join(part for part in [first_name, last_name] if part),
             'average_score': average_score,
-            'average_percentage': average_percentage,
             'thumbnail_url': score_report_thumbnail_url(photo),
             'judge_cells': judge_cells,
         })
