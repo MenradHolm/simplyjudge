@@ -131,7 +131,7 @@
                                         {% if can_edit_notes %}
                                             <strong class="judge-identity-internal no-print">{{ score.judge.username }}</strong>
                                         {% endif %}
-                                        <strong class="reviewer-label {% if can_edit_notes %}print-only{% endif %}">Reviewer feedback</strong>
+                                        <strong class="reviewer-label {% if can_edit_notes %}print-only{% endif %}">Judge feedback</strong>
                                         {% if max_score %}
                                             <span class="metric-label">Score {{ score.display_total|floatformat:1 }} / {{ max_score|floatformat:"-2" }} ({{ score.display_percentage|floatformat:1 }}%)</span>
                                         {% else %}

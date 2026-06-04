@@ -21,6 +21,23 @@
         cursor: pointer;
         text-align: left;
     }
+    .action-group {
+        display: grid;
+        gap: 0.5rem;
+    }
+    .action-group + .action-group {
+        margin-top: 0.45rem;
+        padding-top: 0.7rem;
+        border-top: 1px solid var(--line);
+    }
+    .action-heading {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
 </style>
 
 <main class="shell">
@@ -129,63 +146,80 @@
                         <div class="card-actions">
                             {% if competition.slug %}
                                 {% if competition.can_judge %}
-                                    <a class="action-link primary" href="{% url 'judge_router' competition.slug %}">
-                                        {{ competition.start_label }}
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
-                                    <a class="action-link" href="{% url 'judge_review' competition.slug %}">
-                                        My submitted scores
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
-                                {% endif %}
-                                {% if user.is_superuser or competition.user_role %}
-                                    <a class="action-link" href="{% url 'leaderboard' competition.slug %}">
-                                        Leaderboard
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
-                                {% endif %}
-                                {% if competition.can_manage %}
-                                    <a class="action-link" href="{% url 'feedback_report' competition.slug %}">
-                                        Feedback report
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
-                                    <a class="action-link" href="{% url 'export_competition_results_csv' competition.slug %}">
-                                        Download results CSV
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
-                                    <a class="action-link" href="{% url 'competition_score_summary_pdf' competition.slug %}">
-                                        Score summary PDF
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
-                                    <a class="action-link" href="{% url 'shareable_score_summary_pdf' competition.slug %}">
-                                        Shareable score PDF
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
+                                    <div class="action-group">
+                                        <p class="action-heading">Judging</p>
+                                        <a class="action-link primary" href="{% url 'judge_router' competition.slug %}">
+                                            {{ competition.start_label }}
+                                            <span aria-hidden="true">&gt;</span>
+                                        </a>
+                                        <a class="action-link" href="{% url 'judge_review' competition.slug %}">
+                                            My submitted scores
+                                            <span aria-hidden="true">&gt;</span>
+                                        </a>
+                                    </div>
                                 {% endif %}
                                 {% if competition.can_review %}
-                                    <a class="action-link" href="{% url 'elimination_mode' competition.slug %}">
-                                        Triage review
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
-                                    <a class="action-link" href="{% url 'round_1_review' competition.slug %}">
-                                        Round 1 review
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
+                                    <div class="action-group">
+                                        <p class="action-heading">Internal review</p>
+                                        <a class="action-link" href="{% url 'elimination_mode' competition.slug %}">
+                                            Triage review
+                                            <span aria-hidden="true">&gt;</span>
+                                        </a>
+                                        <a class="action-link" href="{% url 'round_1_review' competition.slug %}">
+                                            Round 1 review
+                                            <span aria-hidden="true">&gt;</span>
+                                        </a>
+                                    </div>
                                 {% endif %}
                                 {% if competition.can_finalize %}
-                                    <form method="POST" action="{% url 'finalize_shortlist' competition.slug %}">
-                                        {% csrf_token %}
-                                        <button class="action-link" type="submit">
-                                            Finalize shortlist
-                                            <span aria-hidden="true">&gt;</span>
-                                        </button>
-                                    </form>
+                                    <div class="action-group">
+                                        <p class="action-heading">Final decisions</p>
+                                        <form method="POST" action="{% url 'finalize_shortlist' competition.slug %}">
+                                            {% csrf_token %}
+                                            <button class="action-link" type="submit">
+                                                Finalize shortlist
+                                                <span aria-hidden="true">&gt;</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% endif %}
+                                {% if user.is_superuser or competition.user_role or competition.can_manage %}
+                                    <div class="action-group">
+                                        <p class="action-heading">Results and reports</p>
+                                        {% if user.is_superuser or competition.user_role %}
+                                            <a class="action-link" href="{% url 'leaderboard' competition.slug %}">
+                                                Leaderboard
+                                                <span aria-hidden="true">&gt;</span>
+                                            </a>
+                                        {% endif %}
+                                        {% if competition.can_manage %}
+                                            <a class="action-link" href="{% url 'feedback_report' competition.slug %}">
+                                                Feedback ledger
+                                                <span aria-hidden="true">&gt;</span>
+                                            </a>
+                                            <a class="action-link" href="{% url 'export_competition_results_csv' competition.slug %}">
+                                                Private scores CSV
+                                                <span aria-hidden="true">&gt;</span>
+                                            </a>
+                                            <a class="action-link" href="{% url 'competition_score_summary_pdf' competition.slug %}">
+                                                Internal judge audit sheet
+                                                <span aria-hidden="true">&gt;</span>
+                                            </a>
+                                            <a class="action-link" href="{% url 'shareable_score_summary_pdf' competition.slug %}">
+                                                Anonymous group score sheet
+                                                <span aria-hidden="true">&gt;</span>
+                                            </a>
+                                        {% endif %}
+                                    </div>
                                 {% endif %}
                                 {% if competition.can_manage %}
-                                    <a class="action-link" href="{% url 'upload_spreadsheet' competition.slug %}">
-                                        Upload data
-                                        <span aria-hidden="true">&gt;</span>
-                                    </a>
+                                    <div class="action-group">
+                                        <p class="action-heading">Setup</p>
+                                        <a class="action-link" href="{% url 'upload_spreadsheet' competition.slug %}">
+                                            Upload data package
+                                            <span aria-hidden="true">&gt;</span>
+                                        </a>
+                                    </div>
                                 {% endif %}
                             {% else %}
                                 {% if user.is_superuser %}

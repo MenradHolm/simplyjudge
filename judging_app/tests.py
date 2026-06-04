@@ -298,7 +298,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Storm Over Valley')
         self.assertContains(response, 'summary-thumb')
-        self.assertContains(response, 'Print or Save PDF')
+        self.assertContains(response, 'Save as PDF')
         self.assertContains(response, 'judge')
         self.assertContains(response, 'reviewer')
         self.assertContains(response, '80.00')
@@ -345,8 +345,8 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Shareable group report')
         self.assertContains(response, 'Judge names hidden')
-        self.assertContains(response, 'Reviewer 1')
-        self.assertContains(response, 'Reviewer 2')
+        self.assertContains(response, 'Judge 1')
+        self.assertContains(response, 'Judge 2')
         self.assertContains(response, 'Storm Over Valley')
         self.assertContains(response, 'Excellent control of light.')
         self.assertNotContains(response, 'private_judge_alpha')
@@ -851,7 +851,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Strong composition and clear intent.')
-        self.assertContains(response, 'Reviewer feedback')
+        self.assertContains(response, 'Judge feedback')
         self.assertContains(response, 'Private organizer context')
         self.assertNotContains(response, private_judge.username)
         self.assertNotContains(response, '/admin/judging_app/photo/')
@@ -889,7 +889,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertContains(response, self.guest_judge.username)
         self.assertContains(response, 'judge-identity-internal no-print')
-        self.assertContains(response, 'Reviewer feedback')
+        self.assertContains(response, 'Judge feedback')
 
     def test_full_competition_feedback_report_is_not_public(self):
         response = self.client.get(reverse('feedback_report', args=[self.competition.slug]))
