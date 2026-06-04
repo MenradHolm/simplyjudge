@@ -52,7 +52,15 @@
         width: 5.75rem;
     }
 
-    .col-scores {
+    .col-judge {
+        width: 8rem;
+    }
+
+    .col-score {
+        width: 5.5rem;
+    }
+
+    .col-feedback {
         width: auto;
     }
 
@@ -151,34 +159,24 @@
         font-weight: 900;
     }
 
-    .judge-summary-cell {
-        min-width: 30rem;
-    }
-
-    .judge-score-grid {
-        display: grid;
-        gap: 0.4rem;
-    }
-
-    .judge-score-row {
-        display: grid;
-        grid-template-columns: minmax(7rem, 10rem) 4.5rem minmax(12rem, 1fr);
-        gap: 0.45rem;
-        align-items: start;
-        padding-bottom: 0.4rem;
-        border-bottom: 1px solid rgba(217, 225, 236, 0.8);
-    }
-
-    .judge-score-row:last-child {
-        padding-bottom: 0;
-        border-bottom: 0;
-    }
-
     .judge-name,
     .judge-score {
         overflow-wrap: anywhere;
         word-break: break-word;
         font-weight: 850;
+    }
+
+    .judge-cell {
+        width: 8rem;
+        max-width: 8rem;
+    }
+
+    .score-cell {
+        width: 5.5rem;
+    }
+
+    .feedback-cell {
+        min-width: 18rem;
     }
 
     .judge-score {
@@ -230,10 +228,6 @@
             max-width: 5.75rem;
         }
 
-        .judge-summary-cell {
-            min-width: 18rem;
-        }
-
         .summary-table th {
             position: static;
         }
@@ -261,10 +255,12 @@
             font-size: 0.58rem;
         }
 
-        .judge-score-row {
-            grid-template-columns: 6.5rem 3.2rem minmax(10rem, 1fr);
-            gap: 0.25rem;
-            padding-bottom: 0.25rem;
+        .judge-cell {
+            max-width: 5.75rem;
+        }
+
+        .feedback-cell {
+            min-width: 10rem;
         }
     }
 
@@ -277,8 +273,8 @@
             min-width: 42rem;
         }
 
-        .judge-score-row {
-            grid-template-columns: 1fr;
+        .judge-cell {
+            max-width: 7rem;
         }
     }
 </style>
@@ -332,7 +328,9 @@
                             <col class="col-status">
                         {% endif %}
                         <col class="col-average">
-                        <col class="col-scores">
+                        <col class="col-judge">
+                        <col class="col-score">
+                        <col class="col-feedback">
                     </colgroup>
                     <thead>
                         <tr>
@@ -347,79 +345,120 @@
                                 {% if max_score %}<br><span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Max Score: {{ max_score|floatformat:"-2" }})</span>{% endif %}
                             </th>
                             <th>
-                                Judge scores
-                                {% if max_score %}<span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Out of {{ max_score|floatformat:"-2" }})</span>{% endif %}
-                                and feedback
+                                Judge
+                            </th>
+                            <th>
+                                Score
+                                {% if max_score %}<span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Max: {{ max_score|floatformat:"-2" }})</span>{% endif %}
+                            </th>
+                            <th>
+                                Feedback
                             </th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in rows %}
-                            <tr>
-                                <td class="thumb-cell">
-                                    <img src="{{ row.thumbnail_url }}" width="84" height="84" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
-                                    <span class="photo-id">SJ #{{ row.photo.id }}</span>
-                                </td>
-                                <td class="submission-cell">
-                                    {% if row.photo.title %}
-                                        <span class="submission-title">{{ row.photo.title }}</span>
-                                    {% endif %}
-                                    <span class="compact-meta">
-                                        {% if row.photo.category %}<span>{{ row.photo.category }}</span>{% endif %}
-                                        {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
-                                    </span>
-                                </td>
-                                {% if not is_shareable_report %}
-                                    <td class="entrant-cell">
-                                        {% if row.entrant_name %}
-                                            <strong>{{ row.entrant_name }}</strong>
+                            {% if row.judge_cells %}
+                                {% for cell in row.judge_cells %}
+                                    <tr>
+                                        {% if forloop.first %}
+                                            <td class="thumb-cell" rowspan="{{ row.score_rowspan }}">
+                                                <img src="{{ row.thumbnail_url }}" width="84" height="84" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
+                                                <span class="photo-id">SJ #{{ row.photo.id }}</span>
+                                            </td>
+                                            <td class="submission-cell" rowspan="{{ row.score_rowspan }}">
+                                                {% if row.photo.title %}
+                                                    <span class="submission-title">{{ row.photo.title }}</span>
+                                                {% endif %}
+                                                <span class="compact-meta">
+                                                    {% if row.photo.category %}<span>{{ row.photo.category }}</span>{% endif %}
+                                                    {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
+                                                </span>
+                                            </td>
+                                            {% if not is_shareable_report %}
+                                                <td class="entrant-cell" rowspan="{{ row.score_rowspan }}">
+                                                    {% if row.entrant_name %}
+                                                        <strong>{{ row.entrant_name }}</strong>
+                                                    {% endif %}
+                                                    <span class="compact-meta">
+                                                        {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
+                                                    </span>
+                                                </td>
+                                                <td class="status-cell" rowspan="{{ row.score_rowspan }}">
+                                                    <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
+                                                </td>
+                                            {% endif %}
+                                            <td class="average-cell" rowspan="{{ row.score_rowspan }}">
+                                                {% if row.average_score != None %}
+                                                    <span class="average-number">{{ row.average_score|floatformat:2 }}</span>
+                                                {% else %}
+                                                    <span class="empty-score">No scores</span>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                        <td class="judge-cell">
+                                            <span class="judge-name">
+                                                {% if is_shareable_report %}
+                                                    Judge {{ forloop.counter }}
+                                                {% else %}
+                                                    {{ cell.judge_name }}
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                        <td class="score-cell">
+                                            {% if cell.score %}
+                                                <span class="judge-score">{{ cell.score.display_total|floatformat:2 }}</span>
+                                            {% else %}
+                                                <span class="judge-score empty-score">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="feedback-cell">
+                                            <span class="judge-comment">
+                                                {% if cell.score and cell.score.comment %}
+                                                    {{ cell.score.comment }}
+                                                {% elif cell.score %}
+                                                    <span class="empty-score">No comment.</span>
+                                                {% else %}
+                                                    <span class="empty-score">Not scored.</span>
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td class="thumb-cell">
+                                        <img src="{{ row.thumbnail_url }}" width="84" height="84" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
+                                        <span class="photo-id">SJ #{{ row.photo.id }}</span>
+                                    </td>
+                                    <td class="submission-cell">
+                                        {% if row.photo.title %}
+                                            <span class="submission-title">{{ row.photo.title }}</span>
                                         {% endif %}
                                         <span class="compact-meta">
-                                            {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
+                                            {% if row.photo.category %}<span>{{ row.photo.category }}</span>{% endif %}
+                                            {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
                                         </span>
                                     </td>
-                                    <td class="status-cell">
-                                        <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
-                                    </td>
-                                {% endif %}
-                                <td class="average-cell">
-                                    {% if row.average_score != None %}
-                                        <span class="average-number">{{ row.average_score|floatformat:2 }}</span>
-                                    {% else %}
-                                        <span class="empty-score">No scores</span>
+                                    {% if not is_shareable_report %}
+                                        <td class="entrant-cell">
+                                            {% if row.entrant_name %}
+                                                <strong>{{ row.entrant_name }}</strong>
+                                            {% endif %}
+                                            <span class="compact-meta">
+                                                {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
+                                            </span>
+                                        </td>
+                                        <td class="status-cell">
+                                            <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
+                                        </td>
                                     {% endif %}
-                                </td>
-                                <td class="judge-summary-cell">
-                                    <div class="judge-score-grid">
-                                        {% for cell in row.judge_cells %}
-                                            <div class="judge-score-row">
-                                                <span class="judge-name">
-                                                    {% if is_shareable_report %}
-                                                        Judge {{ forloop.counter }}
-                                                    {% else %}
-                                                        {{ cell.judge_name }}
-                                                    {% endif %}
-                                                </span>
-                                                {% if cell.score %}
-                                                    <span class="judge-score">
-                                                        {{ cell.score.display_total|floatformat:2 }}
-                                                    </span>
-                                                    <span class="judge-comment">
-                                                        {% if cell.score.comment %}
-                                                            {{ cell.score.comment }}
-                                                        {% else %}
-                                                            <span class="empty-score">No comment.</span>
-                                                        {% endif %}
-                                                    </span>
-                                                {% else %}
-                                                    <span class="judge-score empty-score">-</span>
-                                                    <span class="judge-comment empty-score">Not scored.</span>
-                                                {% endif %}
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                </td>
-                            </tr>
+                                    <td class="average-cell"><span class="empty-score">No scores</span></td>
+                                    <td class="judge-cell"><span class="empty-score">-</span></td>
+                                    <td class="score-cell"><span class="empty-score">-</span></td>
+                                    <td class="feedback-cell"><span class="empty-score">Not scored.</span></td>
+                                </tr>
+                            {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>

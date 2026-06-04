@@ -873,6 +873,7 @@ def competition_score_summary(competition):
             'average_score': average_score,
             'thumbnail_url': score_report_thumbnail_url(photo),
             'judge_cells': judge_cells,
+            'score_rowspan': len(judge_cells) or 1,
         })
 
     return rows, judges, max_score
