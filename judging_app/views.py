@@ -814,7 +814,7 @@ def split_entrant_name(full_name):
 def judge_display_name(user):
     return user.get_full_name() or user.username or user.email or f'Judge {user.id}'
 
-def score_report_thumbnail_url(photo, width=96, height=96):
+def score_report_thumbnail_url(photo, width=128, height=128):
     if not photo.image:
         return '/media/competition_photos/placeholder.jpg'
     try:
@@ -866,6 +866,7 @@ def competition_score_summary(competition):
             'photo': photo,
             'first_name': first_name,
             'last_name': last_name,
+            'entrant_name': ' '.join(part for part in [first_name, last_name] if part),
             'average_score': average_score,
             'thumbnail_url': score_report_thumbnail_url(photo),
             'judge_cells': judge_cells,

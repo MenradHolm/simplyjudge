@@ -52,17 +52,29 @@
     }
 
     .thumb-cell {
-        width: 5rem;
+        width: 6.4rem;
     }
 
     .summary-thumb {
-        width: 4.25rem;
-        height: 4.25rem;
+        width: 5.25rem;
+        height: 5.25rem;
         display: block;
         object-fit: cover;
         border: 1px solid var(--line);
         border-radius: 0.35rem;
         background: #eef3f9;
+    }
+
+    .photo-id {
+        display: block;
+        width: 5.25rem;
+        margin-top: 0.35rem;
+        color: #455166;
+        font-size: 0.68rem;
+        font-weight: 900;
+        letter-spacing: 0.03em;
+        text-align: center;
+        white-space: nowrap;
     }
 
     .submission-cell {
@@ -195,8 +207,13 @@
         }
 
         .summary-thumb {
-            width: 3rem;
-            height: 3rem;
+            width: 4rem;
+            height: 4rem;
+        }
+
+        .photo-id {
+            width: 4rem;
+            font-size: 0.52rem;
         }
 
         .submission-title {
@@ -280,18 +297,22 @@
                         {% for row in rows %}
                             <tr>
                                 <td class="thumb-cell">
-                                    <img src="{{ row.thumbnail_url }}" width="68" height="68" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
+                                    <img src="{{ row.thumbnail_url }}" width="84" height="84" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
+                                    <span class="photo-id">SJ #{{ row.photo.id }}</span>
                                 </td>
                                 <td class="submission-cell">
-                                    <span class="tag tag-neutral">SJ #{{ row.photo.id }}</span>
-                                    <span class="submission-title">{{ row.photo.title }}</span>
+                                    {% if row.photo.title %}
+                                        <span class="submission-title">{{ row.photo.title }}</span>
+                                    {% endif %}
                                     <span class="compact-meta">
-                                        <span>{{ row.photo.category }}</span>
+                                        {% if row.photo.category %}<span>{{ row.photo.category }}</span>{% endif %}
                                         {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
                                     </span>
                                 </td>
                                 <td class="entrant-cell">
-                                    <strong>{{ row.first_name }} {{ row.last_name }}</strong>
+                                    {% if not is_shareable_report and row.entrant_name %}
+                                        <strong>{{ row.entrant_name }}</strong>
+                                    {% endif %}
                                     {% if not is_shareable_report %}
                                         <span class="compact-meta">
                                             {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
@@ -299,7 +320,9 @@
                                     {% endif %}
                                 </td>
                                 <td class="status-cell">
-                                    <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
+                                    {% if not is_shareable_report %}
+                                        <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
+                                    {% endif %}
                                 </td>
                                 <td class="average-cell">
                                     {% if row.average_score != None %}

@@ -298,6 +298,9 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Storm Over Valley')
         self.assertContains(response, 'summary-thumb')
+        self.assertContains(response, 'SJ #')
+        self.assertContains(response, 'Amina Jacobs')
+        self.assertContains(response, 'Shortlisted')
         self.assertContains(response, 'Save as PDF')
         self.assertContains(response, 'judge')
         self.assertContains(response, 'reviewer')
@@ -351,7 +354,9 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Excellent control of light.')
         self.assertNotContains(response, 'private_judge_alpha')
         self.assertNotContains(response, 'private_judge_beta')
+        self.assertNotContains(response, 'Amina Jacobs')
         self.assertNotContains(response, 'amina@example.com')
+        self.assertNotContains(response, 'Shortlisted')
 
     def test_score_report_thumbnail_url_uses_small_cloudinary_transformation(self):
         photo = SimpleNamespace(
@@ -364,7 +369,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(
             thumbnail_url,
-            'https://res.cloudinary.com/demo/image/upload/c_fill,w_96,h_96,q_auto:eco,f_auto/v123/youth-poty/full-size-image.jpg',
+            'https://res.cloudinary.com/demo/image/upload/c_fill,w_128,h_128,q_auto:eco,f_auto/v123/youth-poty/full-size-image.jpg',
         )
 
     def test_non_organizer_cannot_view_shareable_score_summary_pdf_page(self):
