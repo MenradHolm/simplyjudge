@@ -27,6 +27,9 @@
         border-radius: 0.5rem;
         box-shadow: var(--shadow);
         overflow: hidden;
+        margin-bottom: 2rem;
+        break-inside: avoid;
+        page-break-inside: avoid;
         break-after: page;
         page-break-after: always;
     }
@@ -68,7 +71,7 @@
 
     .summary-thumb {
         width: 100%;
-        max-height: 28rem;
+        max-height: min(45vh, 400px);
         object-fit: contain;
         border: 1px solid var(--line);
         border-radius: 0.45rem;
@@ -145,10 +148,13 @@
 
     .judge-detail-table th,
     .judge-detail-table td {
-        padding: 0.5rem;
+        padding: 0.58rem;
         border: 1px solid var(--line);
         vertical-align: top;
         text-align: left;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        word-break: normal;
     }
 
     .judge-detail-table th {
@@ -161,11 +167,11 @@
     }
 
     .judge-col {
-        width: 15%;
+        width: 12%;
     }
 
     .score-col {
-        width: 11%;
+        width: 12%;
     }
 
     .rubric-col {
@@ -173,7 +179,7 @@
     }
 
     .feedback-col {
-        width: 44%;
+        width: 46%;
     }
 
     .judge-name,
@@ -246,10 +252,13 @@
 
         .score-page {
             height: 190mm;
+            margin-bottom: 2rem;
             border: 0;
             border-radius: 0;
             box-shadow: none;
             overflow: hidden;
+            break-inside: avoid;
+            page-break-inside: avoid;
         }
 
         .score-page-header {
@@ -267,7 +276,7 @@
         }
 
         .summary-thumb {
-            max-height: 118mm;
+            max-height: 45vh;
         }
 
         .submission-meta {
@@ -292,7 +301,10 @@
 
         .judge-detail-table th,
         .judge-detail-table td {
-            padding: 2.2mm;
+            padding: 2.6mm;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: normal;
         }
 
         .rubric-breakdown {

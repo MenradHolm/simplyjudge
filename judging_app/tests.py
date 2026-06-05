@@ -299,6 +299,8 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Storm Over Valley')
         self.assertContains(response, 'summary-thumb')
+        self.assertContains(response, 'score-page')
+        self.assertContains(response, 'judge-detail-table')
         self.assertContains(response, 'SJ #')
         self.assertContains(response, 'Amina Jacobs')
         self.assertContains(response, 'Shortlisted')
