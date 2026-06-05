@@ -251,14 +251,29 @@
         }
 
         .score-page {
+            display: block !important;
             height: 190mm;
-            margin-bottom: 2rem;
+            margin-bottom: 20px;
             border: 0;
             border-radius: 0;
             box-shadow: none;
             overflow: hidden;
             break-inside: avoid;
             page-break-inside: avoid;
+        }
+
+        .score-page:not(:first-child) {
+            break-before: page;
+            page-break-before: always;
+        }
+
+        .score-page > *,
+        .score-page-layout,
+        .score-page-layout > *,
+        .photo-panel,
+        .score-panel,
+        .score-summary-strip {
+            display: block !important;
         }
 
         .score-page-header {
@@ -270,8 +285,6 @@
         }
 
         .score-page-layout {
-            grid-template-columns: 83mm minmax(0, 1fr);
-            gap: 5mm;
             padding: 5mm;
         }
 
