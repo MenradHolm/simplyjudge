@@ -270,6 +270,10 @@ class PhotoStatusWorkflowTests(TestCase):
 
     def test_organizer_can_view_score_summary_pdf_page(self):
         criterion = RubricCriterion.objects.create(competition=self.competition, name='Overall', score_out_of=15)
+        self.guest_judge.username = 'private_audit_judge_alpha'
+        self.guest_judge.save(update_fields=['username'])
+        self.internal_judge.username = 'private_audit_judge_beta'
+        self.internal_judge.save(update_fields=['username'])
         photo = self.create_photo(
             'Storm Over Valley',
             Photo.Status.SHORTLISTED,
@@ -307,9 +311,11 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Save as PDF')
         self.assertContains(response, '(Max Score: 15)')
         self.assertContains(response, '(Max: 15)')
-        self.assertContains(response, 'Rubric points')
-        self.assertContains(response, 'judge')
-        self.assertContains(response, 'reviewer')
+        self.assertContains(response, 'Criteria scores')
+        self.assertContains(response, 'Judge 1')
+        self.assertContains(response, 'Judge 2')
+        self.assertNotContains(response, 'private_audit_judge_alpha')
+        self.assertNotContains(response, 'private_audit_judge_beta')
         self.assertContains(response, '11.00')
         self.assertContains(response, 'Overall')
         self.assertContains(response, '11/15')
@@ -360,7 +366,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Judge names hidden')
         self.assertContains(response, '(Max Score: 15)')
         self.assertContains(response, '(Max: 15)')
-        self.assertContains(response, 'Rubric points')
+        self.assertContains(response, 'Criteria scores')
         self.assertContains(response, 'Judge 1')
         self.assertContains(response, 'Judge 2')
         self.assertContains(response, 'Overall')
