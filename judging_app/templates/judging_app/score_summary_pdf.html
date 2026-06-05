@@ -28,15 +28,15 @@
     }
 
     .summary-table-private {
-        min-width: 62rem;
+        min-width: 70rem;
     }
 
     .summary-table-shareable {
-        min-width: 46rem;
+        min-width: 54rem;
     }
 
     .col-photo {
-        width: 7.75rem;
+        width: 9rem;
     }
 
     .col-submission {
@@ -58,6 +58,10 @@
 
     .col-score {
         width: 5.5rem;
+    }
+
+    .col-rubric {
+        width: 12rem;
     }
 
     .col-feedback {
@@ -89,12 +93,12 @@
     }
 
     .thumb-cell {
-        width: 7.7rem;
+        width: 8.9rem;
     }
 
     .summary-thumb {
-        width: 6.35rem;
-        height: 6.35rem;
+        width: 7.5rem;
+        height: 7.5rem;
         display: block;
         object-fit: cover;
         border: 1px solid var(--line);
@@ -104,7 +108,7 @@
 
     .photo-id {
         display: block;
-        width: 6.35rem;
+        width: 7.5rem;
         margin-top: 0.35rem;
         color: #455166;
         font-size: 0.68rem;
@@ -175,6 +179,11 @@
         width: 5.5rem;
     }
 
+    .rubric-cell {
+        width: 12rem;
+        min-width: 12rem;
+    }
+
     .feedback-cell {
         min-width: 18rem;
     }
@@ -185,17 +194,32 @@
 
     .rubric-breakdown {
         display: grid;
-        gap: 0.16rem;
-        margin-top: 0.3rem;
-        color: var(--muted);
-        font-size: 0.66rem;
+        gap: 0.32rem;
+        color: #314158;
+        font-size: 0.7rem;
         font-weight: 750;
-        line-height: 1.25;
+        line-height: 1.3;
         white-space: normal;
     }
 
     .rubric-breakdown span {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.45rem;
+        padding-bottom: 0.22rem;
+        border-bottom: 1px solid rgba(217, 225, 236, 0.75);
         overflow-wrap: anywhere;
+    }
+
+    .rubric-breakdown span:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+
+    .rubric-points {
+        color: var(--ink);
+        font-weight: 900;
+        white-space: nowrap;
     }
 
     .judge-comment {
@@ -253,12 +277,12 @@
         }
 
         .summary-thumb {
-            width: 4.75rem;
-            height: 4.75rem;
+            width: 5.4rem;
+            height: 5.4rem;
         }
 
         .photo-id {
-            width: 4.75rem;
+            width: 5.4rem;
             font-size: 0.52rem;
         }
 
@@ -274,6 +298,10 @@
             max-width: 5.75rem;
         }
 
+        .rubric-cell {
+            min-width: 8rem;
+        }
+
         .feedback-cell {
             min-width: 10rem;
         }
@@ -281,11 +309,11 @@
 
     @media (max-width: 900px) {
         .summary-table-private {
-            min-width: 58rem;
+            min-width: 66rem;
         }
 
         .summary-table-shareable {
-            min-width: 42rem;
+            min-width: 50rem;
         }
 
         .judge-cell {
@@ -345,6 +373,7 @@
                         <col class="col-average">
                         <col class="col-judge">
                         <col class="col-score">
+                        <col class="col-rubric">
                         <col class="col-feedback">
                     </colgroup>
                     <thead>
@@ -367,6 +396,9 @@
                                 {% if max_score %}<span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Max: {{ max_score|floatformat:"-2" }})</span>{% endif %}
                             </th>
                             <th>
+                                Rubric points
+                            </th>
+                            <th>
                                 Feedback
                             </th>
                         </tr>
@@ -378,7 +410,7 @@
                                     <tr>
                                         {% if forloop.first %}
                                             <td class="thumb-cell" rowspan="{{ row.score_rowspan }}">
-                                                <img src="{{ row.thumbnail_url }}" width="84" height="84" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
+                                                <img src="{{ row.thumbnail_url }}" width="120" height="120" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
                                                 <span class="photo-id">SJ #{{ row.photo.id }}</span>
                                             </td>
                                             <td class="submission-cell" rowspan="{{ row.score_rowspan }}">
@@ -423,15 +455,21 @@
                                         <td class="score-cell">
                                             {% if cell.score %}
                                                 <span class="judge-score">{{ cell.score.display_total|floatformat:2 }}</span>
-                                                {% if cell.score.rubric_breakdown %}
-                                                    <span class="rubric-breakdown">
-                                                        {% for item in cell.score.rubric_breakdown %}
-                                                            <span>{{ item.name }} {{ item.score|floatformat:"-2" }}/{{ item.max_score|floatformat:"-2" }}</span>
-                                                        {% endfor %}
-                                                    </span>
-                                                {% endif %}
                                             {% else %}
                                                 <span class="judge-score empty-score">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="rubric-cell">
+                                            {% if cell.score and cell.score.rubric_breakdown %}
+                                                <span class="rubric-breakdown">
+                                                    {% for item in cell.score.rubric_breakdown %}
+                                                        <span>{{ item.name }} <strong class="rubric-points">{{ item.score|floatformat:"-2" }}/{{ item.max_score|floatformat:"-2" }}</strong></span>
+                                                    {% endfor %}
+                                                </span>
+                                            {% elif cell.score %}
+                                                <span class="empty-score">No rubric detail.</span>
+                                            {% else %}
+                                                <span class="empty-score">-</span>
                                             {% endif %}
                                         </td>
                                         <td class="feedback-cell">
@@ -450,7 +488,7 @@
                             {% else %}
                                 <tr>
                                     <td class="thumb-cell">
-                                        <img src="{{ row.thumbnail_url }}" width="84" height="84" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
+                                        <img src="{{ row.thumbnail_url }}" width="120" height="120" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
                                         <span class="photo-id">SJ #{{ row.photo.id }}</span>
                                     </td>
                                     <td class="submission-cell">
@@ -478,6 +516,7 @@
                                     <td class="average-cell"><span class="empty-score">No scores</span></td>
                                     <td class="judge-cell"><span class="empty-score">-</span></td>
                                     <td class="score-cell"><span class="empty-score">-</span></td>
+                                    <td class="rubric-cell"><span class="empty-score">-</span></td>
                                     <td class="feedback-cell"><span class="empty-score">Not scored.</span></td>
                                 </tr>
                             {% endif %}
