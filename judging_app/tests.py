@@ -309,6 +309,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Amina Jacobs')
         self.assertContains(response, 'Shortlisted')
         self.assertContains(response, 'Save as PDF')
+        self.assertNotContains(response, '1 submission = 1 PDF page')
         self.assertNotContains(response, 'Category/section')
         self.assertNotContains(response, 'Photo reference')
         self.assertContains(response, '(Max Score: 15)')
