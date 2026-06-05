@@ -829,7 +829,7 @@ def split_entrant_name(full_name):
 def judge_display_name(user):
     return user.get_full_name() or user.username or user.email or f'Judge {user.id}'
 
-def score_report_thumbnail_url(photo, width=128, height=128):
+def score_report_thumbnail_url(photo, width=640, height=480):
     if not photo.image:
         return '/media/competition_photos/placeholder.jpg'
     try:
@@ -839,7 +839,7 @@ def score_report_thumbnail_url(photo, width=128, height=128):
 
     if 'res.cloudinary.com' in image_url and '/upload/' in image_url:
         prefix, asset_path = image_url.split('/upload/', 1)
-        transformation = f'c_fill,w_{width},h_{height},q_auto:eco,f_auto'
+        transformation = f'c_fit,w_{width},h_{height},q_auto:good,f_auto'
         return f'{prefix}/upload/{transformation}/{asset_path}'
 
     return image_url

@@ -374,7 +374,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertNotContains(response, 'amina@example.com')
         self.assertNotContains(response, 'Shortlisted')
 
-    def test_score_report_thumbnail_url_uses_small_cloudinary_transformation(self):
+    def test_score_report_thumbnail_url_uses_report_sized_cloudinary_transformation(self):
         photo = SimpleNamespace(
             image=SimpleNamespace(
                 url='https://res.cloudinary.com/demo/image/upload/v123/youth-poty/full-size-image.jpg'
@@ -385,7 +385,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(
             thumbnail_url,
-            'https://res.cloudinary.com/demo/image/upload/c_fill,w_128,h_128,q_auto:eco,f_auto/v123/youth-poty/full-size-image.jpg',
+            'https://res.cloudinary.com/demo/image/upload/c_fit,w_640,h_480,q_auto:good,f_auto/v123/youth-poty/full-size-image.jpg',
         )
 
     def test_non_organizer_cannot_view_shareable_score_summary_pdf_page(self):

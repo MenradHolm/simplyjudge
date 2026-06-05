@@ -6,7 +6,7 @@
 <style>
     @page {
         size: A4 landscape;
-        margin: 10mm;
+        margin: 8mm;
     }
 
     .summary-meta {
@@ -16,151 +16,164 @@
         margin-top: 0.8rem;
     }
 
-    .summary-table-wrap {
-        overflow-x: auto;
+    .score-pages {
+        display: grid;
+        gap: 1rem;
     }
 
-    .summary-table {
-        width: 100%;
-        table-layout: auto;
-        border-collapse: collapse;
-        font-size: 0.78rem;
-    }
-
-    .summary-table-private {
-        min-width: 70rem;
-    }
-
-    .summary-table-shareable {
-        min-width: 54rem;
-    }
-
-    .col-photo {
-        width: 9rem;
-    }
-
-    .col-submission {
-        width: 6.75rem;
-    }
-
-    .col-entrant {
-        width: 11rem;
-    }
-
-    .col-status,
-    .col-average {
-        width: 5.75rem;
-    }
-
-    .col-judge {
-        width: 8rem;
-    }
-
-    .col-score {
-        width: 5.5rem;
-    }
-
-    .col-rubric {
-        width: 12rem;
-    }
-
-    .col-feedback {
-        width: auto;
-    }
-
-    .summary-table th,
-    .summary-table td {
-        padding: 0.55rem;
+    .score-page {
+        background: #fff;
         border: 1px solid var(--line);
-        vertical-align: top;
-        text-align: left;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        break-after: page;
+        page-break-after: always;
     }
 
-    .summary-table th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
+    .score-page:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    .score-page-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: start;
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfe;
+    }
+
+    .score-page-title {
+        margin: 0;
+        font-size: 1.05rem;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .score-page-layout {
+        display: grid;
+        grid-template-columns: minmax(17rem, 0.8fr) minmax(0, 1.2fr);
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .photo-panel {
+        display: grid;
+        gap: 0.65rem;
+        align-content: start;
+    }
+
+    .summary-thumb {
+        width: 100%;
+        max-height: 28rem;
+        object-fit: contain;
+        border: 1px solid var(--line);
+        border-radius: 0.45rem;
+        background: #eef3f9;
+    }
+
+    .photo-id {
+        display: inline-flex;
+        justify-self: start;
+        padding: 0.25rem 0.55rem;
+        border-radius: 999px;
         color: #455166;
-        background: #f5f7fb;
+        background: #eef3f9;
+        font-size: 0.76rem;
+        font-weight: 900;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+    }
+
+    .submission-meta {
+        display: grid;
+        gap: 0.22rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 750;
+        line-height: 1.35;
+    }
+
+    .score-panel {
+        display: grid;
+        gap: 0.75rem;
+        align-content: start;
+        min-width: 0;
+    }
+
+    .score-summary-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        align-items: center;
+    }
+
+    .average-box {
+        display: inline-grid;
+        gap: 0.12rem;
+        min-width: 8rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.45rem;
+        background: #fbfcfe;
+    }
+
+    .average-label {
+        color: var(--muted);
         font-size: 0.68rem;
         font-weight: 850;
         letter-spacing: 0.06em;
         text-transform: uppercase;
     }
 
-    .summary-table tbody tr:nth-child(even) {
-        background: #fbfcfe;
-    }
-
-    .thumb-cell {
-        width: 8.9rem;
-    }
-
-    .summary-thumb {
-        width: 7.5rem;
-        height: 7.5rem;
-        display: block;
-        object-fit: cover;
-        border: 1px solid var(--line);
-        border-radius: 0.35rem;
-        background: #eef3f9;
-    }
-
-    .photo-id {
-        display: block;
-        width: 7.5rem;
-        margin-top: 0.35rem;
-        color: #455166;
-        font-size: 0.68rem;
-        font-weight: 900;
-        letter-spacing: 0.03em;
-        text-align: center;
-        white-space: nowrap;
-    }
-
-    .submission-cell {
-        width: 6.75rem;
-        max-width: 7rem;
-    }
-
-    .submission-title {
-        display: block;
-        margin-top: 0.35rem;
-        color: var(--ink);
-        font-size: 0.9rem;
-        font-weight: 900;
-        line-height: 1.25;
-        overflow-wrap: anywhere;
-    }
-
-    .compact-meta {
-        display: grid;
-        gap: 0.18rem;
-        margin-top: 0.4rem;
-        color: var(--muted);
-        font-size: 0.72rem;
-        font-weight: 700;
-        line-height: 1.3;
-    }
-
-    .entrant-cell {
-        width: 12rem;
-        max-width: 12rem;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-    }
-
-    .average-cell,
-    .status-cell {
-        width: 6.5rem;
-        white-space: nowrap;
-    }
-
     .average-number {
-        display: block;
         color: var(--ink);
-        font-size: 1rem;
+        font-size: 1.45rem;
         font-weight: 900;
+        line-height: 1;
+    }
+
+    .judge-detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 0.76rem;
+    }
+
+    .judge-detail-table th,
+    .judge-detail-table td {
+        padding: 0.5rem;
+        border: 1px solid var(--line);
+        vertical-align: top;
+        text-align: left;
+    }
+
+    .judge-detail-table th {
+        color: #455166;
+        background: #f5f7fb;
+        font-size: 0.66rem;
+        font-weight: 850;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .judge-col {
+        width: 15%;
+    }
+
+    .score-col {
+        width: 11%;
+    }
+
+    .rubric-col {
+        width: 30%;
+    }
+
+    .feedback-col {
+        width: 44%;
     }
 
     .judge-name,
@@ -170,43 +183,20 @@
         font-weight: 850;
     }
 
-    .judge-cell {
-        width: 8rem;
-        max-width: 8rem;
-    }
-
-    .score-cell {
-        width: 5.5rem;
-    }
-
-    .rubric-cell {
-        width: 12rem;
-        min-width: 12rem;
-    }
-
-    .feedback-cell {
-        min-width: 18rem;
-    }
-
-    .judge-score {
-        white-space: nowrap;
-    }
-
     .rubric-breakdown {
         display: grid;
-        gap: 0.32rem;
+        gap: 0.28rem;
         color: #314158;
         font-size: 0.7rem;
         font-weight: 750;
-        line-height: 1.3;
-        white-space: normal;
+        line-height: 1.25;
     }
 
     .rubric-breakdown span {
         display: flex;
         justify-content: space-between;
         gap: 0.45rem;
-        padding-bottom: 0.22rem;
+        padding-bottom: 0.2rem;
         border-bottom: 1px solid rgba(217, 225, 236, 0.75);
         overflow-wrap: anywhere;
     }
@@ -235,7 +225,8 @@
 
     @media print {
         .topbar,
-        .no-print {
+        .no-print,
+        .legal-footer {
             display: none !important;
         }
 
@@ -249,75 +240,70 @@
             padding: 0;
         }
 
-        .panel {
+        .score-pages {
+            gap: 0;
+        }
+
+        .score-page {
+            height: 190mm;
             border: 0;
+            border-radius: 0;
             box-shadow: none;
+            overflow: hidden;
         }
 
-        .summary-table-wrap {
-            overflow: visible;
+        .score-page-header {
+            padding: 4mm 5mm;
         }
 
-        .summary-table {
-            min-width: 0;
-            font-size: 0.62rem;
+        .score-page-title {
+            font-size: 12pt;
         }
 
-        .submission-cell {
-            max-width: 5.75rem;
-        }
-
-        .summary-table th {
-            position: static;
-        }
-
-        .summary-table th,
-        .summary-table td {
-            padding: 0.32rem;
+        .score-page-layout {
+            grid-template-columns: 83mm minmax(0, 1fr);
+            gap: 5mm;
+            padding: 5mm;
         }
 
         .summary-thumb {
-            width: 5.4rem;
-            height: 5.4rem;
+            max-height: 118mm;
+        }
+
+        .submission-meta {
+            font-size: 7.2pt;
         }
 
         .photo-id {
-            width: 5.4rem;
-            font-size: 0.52rem;
+            font-size: 7.2pt;
         }
 
-        .submission-title {
-            font-size: 0.68rem;
+        .average-box {
+            padding: 3mm;
         }
 
-        .compact-meta {
-            font-size: 0.58rem;
+        .average-number {
+            font-size: 16pt;
         }
 
-        .judge-cell {
-            max-width: 5.75rem;
+        .judge-detail-table {
+            font-size: 7.2pt;
         }
 
-        .rubric-cell {
-            min-width: 8rem;
+        .judge-detail-table th,
+        .judge-detail-table td {
+            padding: 2.2mm;
         }
 
-        .feedback-cell {
-            min-width: 10rem;
+        .rubric-breakdown {
+            font-size: 6.8pt;
+            gap: 0.2rem;
         }
     }
 
     @media (max-width: 900px) {
-        .summary-table-private {
-            min-width: 66rem;
-        }
-
-        .summary-table-shareable {
-            min-width: 50rem;
-        }
-
-        .judge-cell {
-            max-width: 7rem;
+        .score-page-layout {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -325,7 +311,7 @@
 
 {% block content %}
 <main class="shell shell-wide">
-    <div class="page-head">
+    <div class="page-head no-print">
         <div>
             <p class="eyebrow">{% if is_shareable_report %}Shareable group report{% else %}Private organiser report{% endif %}</p>
             <h2 class="page-title">{{ competition.name }} Score Summary</h2>
@@ -340,7 +326,7 @@
                 </span>
             </div>
         </div>
-        <div class="actions no-print">
+        <div class="actions">
             <button onclick="printScoreSheet(this)" class="button button-accent">Save as PDF</button>
             {% if not is_shareable_report %}
                 <a href="{% url 'shareable_score_summary_pdf' competition.slug %}" class="button button-secondary">Open anonymous share sheet</a>
@@ -350,187 +336,130 @@
         </div>
     </div>
 
-    <section class="panel">
-        <div class="panel-header no-print">
-            <p class="panel-title">All judge scores and feedback</p>
-            {% if is_shareable_report %}
-                <span class="tag tag-neutral">Judge names hidden</span>
-            {% else %}
-                <span class="tag tag-warning">Private organiser view</span>
-            {% endif %}
-        </div>
+    {% if rows %}
+        <section class="score-pages">
+            {% for row in rows %}
+                <article class="score-page">
+                    <header class="score-page-header">
+                        <div>
+                            <p class="eyebrow">{% if is_shareable_report %}Anonymous participant score sheet{% else %}Internal judge audit sheet{% endif %}</p>
+                            <h3 class="score-page-title">{{ row.photo.title }}</h3>
+                        </div>
+                        <span class="tag tag-neutral">
+                            Average
+                            {% if max_score %}(Max Score: {{ max_score|floatformat:"-2" }}){% endif %}
+                        </span>
+                    </header>
 
-        {% if rows %}
-            <div class="summary-table-wrap">
-                <table class="summary-table {% if is_shareable_report %}summary-table-shareable{% else %}summary-table-private{% endif %}">
-                    <colgroup>
-                        <col class="col-photo">
-                        <col class="col-submission">
-                        {% if not is_shareable_report %}
-                            <col class="col-entrant">
-                            <col class="col-status">
-                        {% endif %}
-                        <col class="col-average">
-                        <col class="col-judge">
-                        <col class="col-score">
-                        <col class="col-rubric">
-                        <col class="col-feedback">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>Photo</th>
-                            <th>Submission</th>
-                            {% if not is_shareable_report %}
-                                <th>Entrant</th>
-                                <th>Status</th>
-                            {% endif %}
-                            <th>
-                                Average
-                                {% if max_score %}<br><span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Max Score: {{ max_score|floatformat:"-2" }})</span>{% endif %}
-                            </th>
-                            <th>
-                                Judge
-                            </th>
-                            <th>
-                                Score
-                                {% if max_score %}<span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Max: {{ max_score|floatformat:"-2" }})</span>{% endif %}
-                            </th>
-                            <th>
-                                Rubric points
-                            </th>
-                            <th>
-                                Feedback
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in rows %}
-                            {% if row.judge_cells %}
-                                {% for cell in row.judge_cells %}
+                    <div class="score-page-layout">
+                        <aside class="photo-panel">
+                            <img src="{{ row.thumbnail_url }}" width="640" height="480" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
+                            <span class="photo-id">SJ #{{ row.photo.id }}</span>
+                            <div class="submission-meta">
+                                {% if row.photo.category %}<span>{{ row.photo.category }}</span>{% endif %}
+                                {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
+                                {% if not is_shareable_report %}
+                                    {% if row.entrant_name %}<span>Entrant: {{ row.entrant_name }}</span>{% endif %}
+                                    {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
+                                    <span>Status: {{ row.photo.get_status_display }}</span>
+                                {% endif %}
+                            </div>
+                        </aside>
+
+                        <section class="score-panel">
+                            <div class="score-summary-strip">
+                                <div class="average-box">
+                                    <span class="average-label">Average</span>
+                                    {% if row.average_score != None %}
+                                        <span class="average-number">{{ row.average_score|floatformat:2 }}</span>
+                                    {% else %}
+                                        <span class="empty-score">No scores</span>
+                                    {% endif %}
+                                </div>
+                                {% if is_shareable_report %}
+                                    <span class="tag tag-neutral">Judge names hidden</span>
+                                {% else %}
+                                    <span class="tag tag-warning">Private organiser view</span>
+                                {% endif %}
+                            </div>
+
+                            <table class="judge-detail-table">
+                                <thead>
                                     <tr>
-                                        {% if forloop.first %}
-                                            <td class="thumb-cell" rowspan="{{ row.score_rowspan }}">
-                                                <img src="{{ row.thumbnail_url }}" width="120" height="120" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
-                                                <span class="photo-id">SJ #{{ row.photo.id }}</span>
-                                            </td>
-                                            <td class="submission-cell" rowspan="{{ row.score_rowspan }}">
-                                                {% if row.photo.title %}
-                                                    <span class="submission-title">{{ row.photo.title }}</span>
-                                                {% endif %}
-                                                <span class="compact-meta">
-                                                    {% if row.photo.category %}<span>{{ row.photo.category }}</span>{% endif %}
-                                                    {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
-                                                </span>
-                                            </td>
-                                            {% if not is_shareable_report %}
-                                                <td class="entrant-cell" rowspan="{{ row.score_rowspan }}">
-                                                    {% if row.entrant_name %}
-                                                        <strong>{{ row.entrant_name }}</strong>
+                                        <th class="judge-col">Judge</th>
+                                        <th class="score-col">
+                                            Score
+                                            {% if max_score %}<span style="font-weight: normal; font-size: 0.85em; opacity: 0.7;">(Max: {{ max_score|floatformat:"-2" }})</span>{% endif %}
+                                        </th>
+                                        <th class="rubric-col">Rubric points</th>
+                                        <th class="feedback-col">Feedback</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cell in row.judge_cells %}
+                                        <tr>
+                                            <td>
+                                                <span class="judge-name">
+                                                    {% if is_shareable_report %}
+                                                        Judge {{ forloop.counter }}
+                                                    {% else %}
+                                                        {{ cell.judge_name }}
                                                     {% endif %}
-                                                    <span class="compact-meta">
-                                                        {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
-                                                    </span>
-                                                </td>
-                                                <td class="status-cell" rowspan="{{ row.score_rowspan }}">
-                                                    <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
-                                                </td>
-                                            {% endif %}
-                                            <td class="average-cell" rowspan="{{ row.score_rowspan }}">
-                                                {% if row.average_score != None %}
-                                                    <span class="average-number">{{ row.average_score|floatformat:2 }}</span>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if cell.score %}
+                                                    <span class="judge-score">{{ cell.score.display_total|floatformat:2 }}</span>
                                                 {% else %}
-                                                    <span class="empty-score">No scores</span>
+                                                    <span class="empty-score">-</span>
                                                 {% endif %}
                                             </td>
-                                        {% endif %}
-                                        <td class="judge-cell">
-                                            <span class="judge-name">
-                                                {% if is_shareable_report %}
-                                                    Judge {{ forloop.counter }}
-                                                {% else %}
-                                                    {{ cell.judge_name }}
-                                                {% endif %}
-                                            </span>
-                                        </td>
-                                        <td class="score-cell">
-                                            {% if cell.score %}
-                                                <span class="judge-score">{{ cell.score.display_total|floatformat:2 }}</span>
-                                            {% else %}
-                                                <span class="judge-score empty-score">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="rubric-cell">
-                                            {% if cell.score and cell.score.rubric_breakdown %}
-                                                <span class="rubric-breakdown">
-                                                    {% for item in cell.score.rubric_breakdown %}
-                                                        <span>{{ item.name }} <strong class="rubric-points">{{ item.score|floatformat:"-2" }}/{{ item.max_score|floatformat:"-2" }}</strong></span>
-                                                    {% endfor %}
-                                                </span>
-                                            {% elif cell.score %}
-                                                <span class="empty-score">No rubric detail.</span>
-                                            {% else %}
-                                                <span class="empty-score">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="feedback-cell">
-                                            <span class="judge-comment">
-                                                {% if cell.score and cell.score.comment %}
-                                                    {{ cell.score.comment }}
+                                            <td>
+                                                {% if cell.score and cell.score.rubric_breakdown %}
+                                                    <span class="rubric-breakdown">
+                                                        {% for item in cell.score.rubric_breakdown %}
+                                                            <span>{{ item.name }} <strong class="rubric-points">{{ item.score|floatformat:"-2" }}/{{ item.max_score|floatformat:"-2" }}</strong></span>
+                                                        {% endfor %}
+                                                    </span>
                                                 {% elif cell.score %}
-                                                    <span class="empty-score">No comment.</span>
+                                                    <span class="empty-score">No rubric detail.</span>
                                                 {% else %}
                                                     <span class="empty-score">Not scored.</span>
                                                 {% endif %}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td class="thumb-cell">
-                                        <img src="{{ row.thumbnail_url }}" width="120" height="120" alt="{{ row.photo.title }}" class="summary-thumb" decoding="async">
-                                        <span class="photo-id">SJ #{{ row.photo.id }}</span>
-                                    </td>
-                                    <td class="submission-cell">
-                                        {% if row.photo.title %}
-                                            <span class="submission-title">{{ row.photo.title }}</span>
-                                        {% endif %}
-                                        <span class="compact-meta">
-                                            {% if row.photo.category %}<span>{{ row.photo.category }}</span>{% endif %}
-                                            {% if row.photo.entry_code %}<span>Reference: {{ row.photo.entry_code }}</span>{% endif %}
-                                        </span>
-                                    </td>
-                                    {% if not is_shareable_report %}
-                                        <td class="entrant-cell">
-                                            {% if row.entrant_name %}
-                                                <strong>{{ row.entrant_name }}</strong>
-                                            {% endif %}
-                                            <span class="compact-meta">
-                                                {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
-                                            </span>
-                                        </td>
-                                        <td class="status-cell">
-                                            <span class="tag tag-neutral">{{ row.photo.get_status_display }}</span>
-                                        </td>
-                                    {% endif %}
-                                    <td class="average-cell"><span class="empty-score">No scores</span></td>
-                                    <td class="judge-cell"><span class="empty-score">-</span></td>
-                                    <td class="score-cell"><span class="empty-score">-</span></td>
-                                    <td class="rubric-cell"><span class="empty-score">-</span></td>
-                                    <td class="feedback-cell"><span class="empty-score">Not scored.</span></td>
-                                </tr>
-                            {% endif %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="empty-state">
-                <h3>No submissions yet</h3>
-                <p class="page-copy">Scores will appear here once judging starts.</p>
-            </div>
-        {% endif %}
-    </section>
+                                            </td>
+                                            <td>
+                                                <span class="judge-comment">
+                                                    {% if cell.score and cell.score.comment %}
+                                                        {{ cell.score.comment }}
+                                                    {% elif cell.score %}
+                                                        <span class="empty-score">No comment.</span>
+                                                    {% else %}
+                                                        <span class="empty-score">Not scored.</span>
+                                                    {% endif %}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td><span class="empty-score">-</span></td>
+                                            <td><span class="empty-score">-</span></td>
+                                            <td><span class="empty-score">Not scored.</span></td>
+                                            <td><span class="empty-score">Not scored.</span></td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </section>
+                    </div>
+                </article>
+            {% endfor %}
+        </section>
+    {% else %}
+        <div class="empty-state">
+            <h3>No submissions yet</h3>
+            <p class="page-copy">Scores will appear here once judging starts.</p>
+        </div>
+    {% endif %}
 </main>
 <script>
     function printScoreSheet(button) {
