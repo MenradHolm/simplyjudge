@@ -183,6 +183,21 @@
         white-space: nowrap;
     }
 
+    .rubric-breakdown {
+        display: grid;
+        gap: 0.16rem;
+        margin-top: 0.3rem;
+        color: var(--muted);
+        font-size: 0.66rem;
+        font-weight: 750;
+        line-height: 1.25;
+        white-space: normal;
+    }
+
+    .rubric-breakdown span {
+        overflow-wrap: anywhere;
+    }
+
     .judge-comment {
         color: #455166;
         line-height: 1.35;
@@ -408,6 +423,13 @@
                                         <td class="score-cell">
                                             {% if cell.score %}
                                                 <span class="judge-score">{{ cell.score.display_total|floatformat:2 }}</span>
+                                                {% if cell.score.rubric_breakdown %}
+                                                    <span class="rubric-breakdown">
+                                                        {% for item in cell.score.rubric_breakdown %}
+                                                            <span>{{ item.name }} {{ item.score|floatformat:"-2" }}/{{ item.max_score|floatformat:"-2" }}</span>
+                                                        {% endfor %}
+                                                    </span>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="judge-score empty-score">-</span>
                                             {% endif %}

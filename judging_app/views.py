@@ -212,6 +212,21 @@ def attach_score_display_values(scores, rubric, max_score):
     for score in scores:
         score.display_total = score_raw_total(score, rubric_by_id)
         score.display_percentage = (score.display_total / max_score * 100) if max_score else None
+        score.rubric_breakdown = []
+        for criterion in rubric:
+            raw_value = score.criteria_scores.get(str(criterion.id)) if score.criteria_scores else None
+            if raw_value in (None, ''):
+                continue
+            try:
+                criterion_score = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            criterion_score = max(0.0, min(criterion_score, float(criterion.score_out_of)))
+            score.rubric_breakdown.append({
+                'name': criterion.name,
+                'score': criterion_score,
+                'max_score': float(criterion.score_out_of),
+            })
     return scores
 
 def attach_photo_average_values(photos, scores, max_score):
