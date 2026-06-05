@@ -440,7 +440,6 @@
             <div class="summary-meta">
                 <span class="tag tag-neutral">{{ rows|length }} image{{ rows|length|pluralize }}</span>
                 <span class="tag tag-neutral">{{ judges|length }} judge{{ judges|length|pluralize }}</span>
-                <span class="tag tag-neutral">Judge names hidden</span>
                 <span class="tag tag-neutral">
                     Generated
                     <time data-local-datetime="{{ generated_at|date:'c' }}" data-local-format="datetime">
@@ -470,8 +469,6 @@
                                 <h3 class="score-sheet-title">{{ row.photo.title }}</h3>
                                 <p class="score-sheet-subtitle">
                                     SimplyJudge ID: #{{ row.photo.id }}
-                                    {% if row.photo.category %} · {{ row.photo.category }}{% endif %}
-                                    {% if row.photo.entry_code %} · Reference: {{ row.photo.entry_code }}{% endif %}
                                 </p>
                             </div>
                             <span class="tag tag-neutral">1 submission = 1 PDF page</span>
@@ -499,14 +496,11 @@
 
                             <div class="submission-details">
                                 <span class="detail-title">{{ row.photo.title }}</span>
-                                {% if row.photo.category %}<span>Category/section: {{ row.photo.category }}</span>{% endif %}
-                                {% if row.photo.entry_code %}<span>Photo reference: {{ row.photo.entry_code }}</span>{% endif %}
                                 {% if not is_shareable_report %}
                                     {% if row.entrant_name %}<span>Entrant: {{ row.entrant_name }}</span>{% endif %}
                                     {% if row.photo.photographer_email %}<span>{{ row.photo.photographer_email }}</span>{% endif %}
                                     <span>Status: {{ row.photo.get_status_display }}</span>
                                 {% endif %}
-                                <span>Judge names hidden for privacy.</span>
                             </div>
                         </section>
 
