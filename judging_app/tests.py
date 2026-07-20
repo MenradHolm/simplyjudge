@@ -937,6 +937,56 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 77)
         self.assertEqual(photo.status_votes.get(voter=self.internal_judge).decision, PhotoStatusVote.Decision.ROUND_1)
 
+    def test_csv_photo_corrections_update_metadata_without_resetting_judging(self):
+        photo = self.create_photo(
+            'Wrong title',
+            Photo.Status.ROUND_1,
+            photographer_name='Wrong Photographer',
+            category='Wrong Category',
+            description='Wrong story.',
+            camera_settings='Wrong settings.',
+            image='competition_photos/youth-poty/current-image.jpg',
+        )
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=81)
+
+        with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as export_file:
+            export_path = export_file.name
+        with tempfile.NamedTemporaryFile(suffix='.csv', mode='w', newline='', encoding='utf-8', delete=False) as corrections_file:
+            corrections_path = corrections_file.name
+            writer = csv.writer(corrections_file)
+            writer.writerow([
+                'photo_id', 'image_name', 'image_url', 'entry_code', 'title', 'photographer_name',
+                'photographer_email', 'category', 'description', 'camera_settings',
+            ])
+            writer.writerow([
+                photo.id, '', '', 'FIX001', 'Correct title', 'Correct Photographer',
+                'correct@example.com', 'General', 'Correct story', 'Correct settings',
+            ])
+
+        call_command('export_photo_corrections', self.competition.slug, export_path)
+        with open(export_path, newline='', encoding='utf-8-sig') as exported:
+            exported_rows = list(csv.DictReader(exported))
+        self.assertEqual(exported_rows[0]['photo_id'], str(photo.id))
+        self.assertEqual(exported_rows[0]['image_name'], 'competition_photos/youth-poty/current-image.jpg')
+
+        call_command('apply_photo_corrections', self.competition.slug, corrections_path)
+        photo.refresh_from_db()
+        self.assertEqual(photo.title, 'Wrong title')
+
+        call_command('apply_photo_corrections', self.competition.slug, corrections_path, '--apply')
+        photo.refresh_from_db()
+
+        self.assertEqual(photo.entry_code, 'FIX001')
+        self.assertEqual(photo.title, 'Correct title')
+        self.assertEqual(photo.photographer_name, 'Correct Photographer')
+        self.assertEqual(photo.photographer_email, 'correct@example.com')
+        self.assertEqual(photo.category, 'General')
+        self.assertEqual(photo.description, 'Correct story')
+        self.assertEqual(photo.camera_settings, 'Correct settings')
+        self.assertEqual(photo.status, Photo.Status.ROUND_1)
+        self.assertEqual(photo.image.name, 'competition_photos/youth-poty/current-image.jpg')
+        self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 81)
+
     def test_leaderboard_is_public(self):
         private_judge = User.objects.create_user(username='private_reviewer_name')
         photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)
