@@ -1515,7 +1515,7 @@ def expand_participant_entry_row(row):
             'Description': stories_10.get(index) or stories_15.get(index) or '',
             'Camera Settings': camera_settings.get(index, ''),
             'Image': upload_ref,
-            'Filename': raw_title or '',
+            'Filename': '',
             'Entry Code': '',
         })
     return expanded
@@ -1565,12 +1565,15 @@ def image_key_matches_photographer(image_key, photographer):
         return True
     return any(token in image_key for token in photographer_tokens(photographer))
 
-def find_matching_image(images, candidates, photographer=''):
+def find_matching_image(images, candidates, photographer='', allow_suffix=True):
     candidate_keys = [normalize_match_key(candidate) for candidate in candidates if candidate]
 
     for key in candidate_keys:
         if key in images:
             return images[key]
+
+    if not allow_suffix:
+        return None
 
     for key in candidate_keys:
         if not key or key.isdigit():
@@ -1697,8 +1700,9 @@ def process_entry_zip_job(job_id):
                         description = clean_cell(row, 'Description', 'description', 'Story', 'story')
                         camera_settings = clean_cell(row, 'Camera Settings', 'camera settings', 'Settings', 'settings')
 
-                        match_candidates = [*image_references, entry_code, title]
-                        image_info = find_matching_image(images, match_candidates, photographer=photographer)
+                        image_info = find_matching_image(images, [*image_references, entry_code], photographer=photographer)
+                        if not image_info:
+                            image_info = find_matching_image(images, [title], allow_suffix=False)
                         if image_info:
                             image_payload = {
                                 'filename': truncate_filename(image_info.filename),

@@ -18,7 +18,7 @@ from .admin import CompetitionAdmin
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
-from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job, score_report_thumbnail_url
+from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, decode_csv_bytes, expand_participant_entry_row, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_entry_zip_job, process_photos_only_zip_job, score_report_thumbnail_url
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -856,6 +856,39 @@ class PhotoStatusWorkflowTests(TestCase):
         report_response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
         self.assertContains(report_response, 'Photo reference: SS001')
 
+    def test_entry_zip_does_not_suffix_match_title_without_image_reference(self):
+        image = Image.new('RGB', (20, 20), color='white')
+        image_payload = io.BytesIO()
+        image.save(image_payload, format='JPEG')
+        image_bytes = image_payload.getvalue()
+        csv_payload = (
+            'Title,Photographer,Category,Description\n'
+            'Susp Rhythm,Jacqueline Ribeiro,General,Story intended for a specific image.\n'
+        )
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+            temp_path = temp_zip.name
+
+        with zipfile.ZipFile(temp_path, 'w') as package:
+            package.writestr('EntryForm.csv', csv_payload)
+            package.writestr('photos/RSA_JacquelineRibeiro__Susp Rhythm.jpg', image_bytes)
+
+        job = ZipImportJob.objects.create(
+            competition=self.competition,
+            uploaded_by=self.organizer,
+            source_name='entries.zip',
+            temp_path=temp_path,
+        )
+
+        process_entry_zip_job(job.id)
+        job.refresh_from_db()
+        photo = Photo.objects.get(competition=self.competition, title='Susp Rhythm')
+
+        self.assertEqual(job.status, ZipImportJob.Status.COMPLETED)
+        self.assertEqual(job.matched_images, 0)
+        self.assertEqual(photo.image.name, 'competition_photos/placeholder.jpg')
+        self.assertIn('No matching image file found', photo.rule_flags)
+
     def test_leaderboard_is_public(self):
         private_judge = User.objects.create_user(username='private_reviewer_name')
         photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)
@@ -1502,11 +1535,12 @@ class ZipImageMatchingTests(TestCase):
             'rsarubensteynthegreatescape',
         )
 
-    def test_find_matching_image_allows_prefixed_title_filename(self):
+    def test_find_matching_image_allows_prefixed_explicit_filename(self):
         image = SimpleNamespace(filename='ZA_CalvinSeverin_RisingTide.jpeg')
         images = {normalize_match_key(image.filename): image}
 
         self.assertIs(find_matching_image(images, ['Rising Tide']), image)
+        self.assertIsNone(find_matching_image(images, ['Rising Tide'], allow_suffix=False))
 
     def test_find_matching_image_uses_photographer_for_duplicate_titles(self):
         calvin = SimpleNamespace(filename='ZA_Calvin_TheHunt.jpeg')
@@ -1517,6 +1551,19 @@ class ZipImageMatchingTests(TestCase):
         }
 
         self.assertIs(find_matching_image(images, ['The Hunt'], photographer='Yehuda Rabin'), yehuda)
+
+    def test_participant_entry_expansion_does_not_use_title_as_filename_reference(self):
+        rows = expand_participant_entry_row({
+            'First name': 'Jacqueline',
+            'Last Name': 'Ribeiro',
+            'How many are you planning to submit': '1',
+            'Picture titles': '1. Susp Rhythm',
+            "10 Story's & Context's": '1. Story for the kite image.',
+        })
+
+        self.assertEqual(rows[0]['Title'], 'Susp Rhythm')
+        self.assertEqual(rows[0]['Filename'], '')
+        self.assertEqual(rows[0]['Image'], '')
 
 
 class CloudinaryCompressionTests(TestCase):
