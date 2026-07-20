@@ -1040,6 +1040,16 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(photo.image.name, 'competition_photos/youth-poty/current-image.jpg')
         self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 82)
 
+    def test_competition_admin_change_page_links_to_photo_corrections(self):
+        admin_user = User.objects.create_superuser(username='admin-link-user', password='test-pass')
+        self.client.force_login(admin_user)
+
+        response = self.client.get(reverse('admin:judging_app_competition_change', args=[self.competition.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Photo correction tools')
+        self.assertContains(response, reverse('admin:judging_app_competition_photo_corrections', args=[self.competition.id]))
+
     def test_leaderboard_is_public(self):
         private_judge = User.objects.create_user(username='private_reviewer_name')
         photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)

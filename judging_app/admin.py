@@ -5,6 +5,7 @@ from django.contrib import admin, messages
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
+from django.utils.html import format_html
 
 from .models import Competition, CompetitionMembership, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
 from .utils import send_automated_email
@@ -33,6 +34,23 @@ class CompetitionAdmin(admin.ModelAdmin):
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     exclude = ('judges',)
+    readonly_fields = ('photo_corrections_link',)
+    fieldsets = (
+        (None, {
+            'fields': (
+                'name',
+                'slug',
+                'workflow',
+                'entry_fee',
+                'emails_enabled',
+                'results_published',
+                'is_active',
+                'judge_invite_token',
+                'tie_breaker_criterion',
+                'photo_corrections_link',
+            ),
+        }),
+    )
     inlines = (CompetitionMembershipInline,)
     actions = ('publish_competition_results',)
 
@@ -54,6 +72,13 @@ class CompetitionAdmin(admin.ModelAdmin):
             args=[object_id],
         )
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    @admin.display(description='Photo correction tools')
+    def photo_corrections_link(self, obj):
+        if not obj or not obj.pk:
+            return '-'
+        url = reverse('admin:judging_app_competition_photo_corrections', args=[obj.pk])
+        return format_html('<a class="button" href="{}">Open photo corrections</a>', url)
 
     def photo_corrections_view(self, request, competition_id):
         competition = get_object_or_404(Competition, id=competition_id)
