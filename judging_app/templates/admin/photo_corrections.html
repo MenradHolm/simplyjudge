@@ -1,0 +1,73 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module">
+        <h2>Photo metadata corrections</h2>
+        <div style="padding: 1rem;">
+            <p>
+                Export the current photo rows, correct metadata in the CSV, then upload it here.
+                This updates metadata only and does not touch photo IDs, image files, statuses, scores, votes, or comments.
+            </p>
+            <p>
+                <a class="button" href="{{ export_url }}">Export correction CSV</a>
+            </p>
+        </div>
+    </div>
+
+    <div class="module" style="margin-top: 1rem;">
+        <h2>Upload corrected CSV</h2>
+        <form method="post" enctype="multipart/form-data" style="padding: 1rem;">
+            {% csrf_token %}
+            <div class="form-row">
+                <label for="id_corrections_file">Corrections CSV:</label>
+                <input id="id_corrections_file" type="file" name="corrections_file" accept=".csv,text/csv" required>
+            </div>
+            <div class="submit-row">
+                <button class="button" type="submit" name="dry_run" value="1">Dry run</button>
+                <button class="button default" type="submit" name="apply" value="1">Apply corrections</button>
+            </div>
+        </form>
+    </div>
+
+    {% if result %}
+        <div class="module" style="margin-top: 1rem;">
+            <h2>{% if result.apply %}Applied changes{% else %}Dry-run changes{% endif %}</h2>
+            <div style="padding: 1rem;">
+                <p>{{ result.update_count }} photo{{ result.update_count|pluralize }} would change.</p>
+                {% if result.updates %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Photo ID</th>
+                                <th>Row</th>
+                                <th>Fields</th>
+                                <th>Title change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for update in result.updates %}
+                                <tr>
+                                    <td>{{ update.photo.id }}</td>
+                                    <td>{{ update.row_number }}</td>
+                                    <td>{{ update.changes.keys|join:", " }}</td>
+                                    <td>
+                                        {% if update.changes.title %}
+                                            {{ update.changes.title.0 }} &rarr; {{ update.changes.title.1 }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if result.truncated_count %}
+                        <p>Showing first 50 changes. {{ result.truncated_count }} additional change{{ result.truncated_count|pluralize }} not shown.</p>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

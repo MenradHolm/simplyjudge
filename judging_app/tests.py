@@ -987,6 +987,59 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(photo.image.name, 'competition_photos/youth-poty/current-image.jpg')
         self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 81)
 
+    def test_admin_photo_corrections_export_and_apply_metadata_only(self):
+        admin_user = User.objects.create_superuser(username='admin-user', password='test-pass')
+        photo = self.create_photo(
+            'Wrong title',
+            Photo.Status.ROUND_1,
+            photographer_name='Wrong Photographer',
+            category='Wrong Category',
+            image='competition_photos/youth-poty/current-image.jpg',
+        )
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=82)
+        self.client.force_login(admin_user)
+        url = reverse('admin:judging_app_competition_photo_corrections', args=[self.competition.id])
+
+        export_response = self.client.get(f'{url}?export=1')
+
+        self.assertEqual(export_response.status_code, 200)
+        self.assertContains(export_response, 'photo_id')
+        self.assertContains(export_response, 'current-image.jpg')
+
+        corrections = (
+            'photo_id,image_name,image_url,entry_code,title,photographer_name,photographer_email,category,description,camera_settings\n'
+            f'{photo.id},,,,Correct title,Correct Photographer,correct@example.com,General,Correct story,Correct settings\n'
+        )
+
+        dry_run_response = self.client.post(
+            url,
+            {'corrections_file': SimpleUploadedFile('corrections.csv', corrections.encode('utf-8'), content_type='text/csv')},
+        )
+        photo.refresh_from_db()
+
+        self.assertEqual(dry_run_response.status_code, 200)
+        self.assertContains(dry_run_response, 'Dry-run changes')
+        self.assertEqual(photo.title, 'Wrong title')
+
+        apply_response = self.client.post(
+            url,
+            {
+                'apply': '1',
+                'corrections_file': SimpleUploadedFile('corrections.csv', corrections.encode('utf-8'), content_type='text/csv'),
+            },
+        )
+        photo.refresh_from_db()
+
+        self.assertEqual(apply_response.status_code, 200)
+        self.assertEqual(photo.title, 'Correct title')
+        self.assertEqual(photo.photographer_name, 'Correct Photographer')
+        self.assertEqual(photo.photographer_email, 'correct@example.com')
+        self.assertEqual(photo.description, 'Correct story')
+        self.assertEqual(photo.camera_settings, 'Correct settings')
+        self.assertEqual(photo.status, Photo.Status.ROUND_1)
+        self.assertEqual(photo.image.name, 'competition_photos/youth-poty/current-image.jpg')
+        self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 82)
+
     def test_leaderboard_is_public(self):
         private_judge = User.objects.create_user(username='private_reviewer_name')
         photo = self.create_photo('Public ranked image', Photo.Status.SHORTLISTED)

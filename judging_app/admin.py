@@ -1,6 +1,14 @@
-from django.contrib import admin
+import csv
+import io
+
+from django.contrib import admin, messages
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
+
 from .models import Competition, CompetitionMembership, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
 from .utils import send_automated_email
+from .views import truncate_text
 
 # --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
 admin.site.site_header = "SimplyJudge Admin Engine"
@@ -27,6 +35,171 @@ class CompetitionAdmin(admin.ModelAdmin):
     exclude = ('judges',)
     inlines = (CompetitionMembershipInline,)
     actions = ('publish_competition_results',)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:competition_id>/photo-corrections/',
+                self.admin_site.admin_view(self.photo_corrections_view),
+                name='judging_app_competition_photo_corrections',
+            ),
+        ]
+        return custom_urls + urls
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['photo_corrections_url'] = reverse(
+            'admin:judging_app_competition_photo_corrections',
+            args=[object_id],
+        )
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def photo_corrections_view(self, request, competition_id):
+        competition = get_object_or_404(Competition, id=competition_id)
+
+        if request.method == 'GET' and request.GET.get('export') == '1':
+            return self.export_photo_corrections_csv(competition)
+
+        result = None
+        if request.method == 'POST':
+            corrections_file = request.FILES.get('corrections_file')
+            apply_changes = request.POST.get('apply') == '1'
+            if not corrections_file:
+                messages.error(request, 'Choose a corrections CSV before running the repair.')
+            else:
+                result = self.process_photo_corrections_csv(competition, corrections_file, apply_changes)
+                level = messages.SUCCESS if apply_changes else messages.WARNING
+                messages.add_message(
+                    request,
+                    level,
+                    (
+                        f"{'Applied' if apply_changes else 'Dry run complete'}: "
+                        f"{result['update_count']} photo(s) with metadata changes."
+                    ),
+                )
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Photo metadata corrections: {competition.name}',
+            'competition': competition,
+            'export_url': f"{reverse('admin:judging_app_competition_photo_corrections', args=[competition.id])}?export=1",
+            'result': result,
+        }
+        return render(request, 'admin/photo_corrections.html', context)
+
+    def export_photo_corrections_csv(self, competition):
+        fields = [
+            'photo_id',
+            'image_name',
+            'image_url',
+            'entry_code',
+            'title',
+            'photographer_name',
+            'photographer_email',
+            'category',
+            'description',
+            'camera_settings',
+        ]
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{competition.slug}-photo-corrections.csv"'
+        writer = csv.DictWriter(response, fieldnames=fields)
+        writer.writeheader()
+        for photo in Photo.objects.filter(competition=competition).order_by('id'):
+            try:
+                image_url = photo.image.url if photo.image else ''
+            except ValueError:
+                image_url = ''
+            writer.writerow({
+                'photo_id': photo.id,
+                'image_name': photo.image.name if photo.image else '',
+                'image_url': image_url,
+                'entry_code': photo.entry_code or '',
+                'title': photo.title or '',
+                'photographer_name': photo.photographer_name or '',
+                'photographer_email': photo.photographer_email or '',
+                'category': photo.category or '',
+                'description': photo.description or '',
+                'camera_settings': photo.camera_settings or '',
+            })
+        return response
+
+    def process_photo_corrections_csv(self, competition, corrections_file, apply_changes):
+        text = corrections_file.read().decode('utf-8-sig')
+        reader = csv.DictReader(io.StringIO(text))
+        if not reader.fieldnames or 'photo_id' not in reader.fieldnames:
+            raise ValueError('Corrections CSV must include a photo_id column.')
+
+        rows = list(enumerate(reader, start=2))
+        photo_ids = []
+        for row_number, row in rows:
+            raw_photo_id = (row.get('photo_id') or '').strip()
+            if not raw_photo_id.isdigit():
+                raise ValueError(f'Row {row_number}: photo_id is required and must be numeric.')
+            photo_ids.append(int(raw_photo_id))
+
+        duplicate_ids = sorted({photo_id for photo_id in photo_ids if photo_ids.count(photo_id) > 1})
+        if duplicate_ids:
+            raise ValueError(f'Duplicate photo_id value(s): {", ".join(map(str, duplicate_ids[:10]))}')
+
+        photos_by_id = {
+            photo.id: photo
+            for photo in Photo.objects.filter(competition=competition, id__in=photo_ids)
+        }
+        missing_ids = sorted(set(photo_ids) - set(photos_by_id))
+        if missing_ids:
+            raise ValueError(f'Photo ID(s) not found in this competition: {", ".join(map(str, missing_ids[:10]))}')
+
+        updates = []
+        fields = [
+            'entry_code',
+            'title',
+            'photographer_name',
+            'photographer_email',
+            'category',
+            'description',
+            'camera_settings',
+        ]
+        for row_number, row in rows:
+            photo = photos_by_id[int((row.get('photo_id') or '').strip())]
+            changes = {}
+            for field in fields:
+                if field not in row:
+                    continue
+                incoming = self.clean_correction_value(field, row.get(field))
+                current = getattr(photo, field) or ''
+                if current != incoming:
+                    changes[field] = (current, incoming)
+            if changes:
+                updates.append({'photo': photo, 'row_number': row_number, 'changes': changes})
+
+        if apply_changes:
+            for update in updates:
+                photo = update['photo']
+                update_fields = []
+                for field, (_old, new) in update['changes'].items():
+                    setattr(photo, field, new)
+                    update_fields.append(field)
+                photo.save(update_fields=update_fields)
+
+        return {
+            'apply': apply_changes,
+            'update_count': len(updates),
+            'updates': updates[:50],
+            'truncated_count': max(len(updates) - 50, 0),
+        }
+
+    def clean_correction_value(self, field, value):
+        value = str(value or '').strip()
+        if field == 'entry_code':
+            return truncate_text(value, 120)
+        if field == 'title':
+            return truncate_text(value or 'Untitled', 200)
+        if field == 'photographer_name':
+            return truncate_text(value or 'Unknown', 200)
+        if field == 'category':
+            return truncate_text(value or 'General', 100)
+        return value
 
     @admin.action(description='Publish results and email shortlisted photographers')
     def publish_competition_results(self, request, queryset):
