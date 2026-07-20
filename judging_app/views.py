@@ -167,6 +167,44 @@ def collect_photo_rule_flags(competition, image_bytes):
         return []
     return audit_photo_metadata(image_bytes)['flags']
 
+def anonymize_camera_settings(value):
+    value = str(value or '').strip()
+    if not value:
+        return ''
+
+    cleaned_blocks = []
+    for block in re.split(r'\n\s*\n', value):
+        cleaned = block.strip()
+        label_match = re.match(
+            r'camera settings?\s*\d{0,2}\s*\[(?P<label>[^\]]+)\]',
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+
+        if label_match:
+            cleaned = label_match.group('label').strip()
+            if ' - ' in cleaned:
+                cleaned = cleaned.split(' - ', 1)[1].strip()
+        else:
+            cleaned = re.sub(
+                r'^camera settings?\s*\d{1,2}\s*[:.)-]\s*',
+                '',
+                cleaned,
+                flags=re.IGNORECASE,
+            ).strip()
+
+        cleaned = re.sub(
+            r'\s*images? shot with these settings:\s*nr\s*\d{1,2}\s*$',
+            '',
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip()
+        cleaned = re.sub(r'\s*\bnr\s*\d{1,2}\s*$', '', cleaned, flags=re.IGNORECASE).strip(' -:;')
+        if cleaned:
+            cleaned_blocks.append(cleaned)
+
+    return '\n\n'.join(cleaned_blocks)
+
 def judging_photo_queryset(competition, user):
     queryset = Photo.objects.filter(competition=competition).order_by('entry_code', 'id')
     if user.is_superuser or is_feedback_portal(competition):
@@ -443,6 +481,7 @@ def round_1_review(request, comp_slug):
             'photo': current_photo,
             'counts': counts,
             'score_range': range(1, 11),
+            'anonymous_camera_settings': anonymize_camera_settings(current_photo.camera_settings) if current_photo else '',
         },
     )
 
@@ -539,6 +578,7 @@ def judge_photo(request, comp_slug, photo_id):
         'next_photo_id': next_photo_id,
         'existing_score': existing_score,
         'return_to': return_to,
+        'anonymous_camera_settings': anonymize_camera_settings(photo.camera_settings),
     }
     return render(request, 'judging_app/judge.html', context)
 

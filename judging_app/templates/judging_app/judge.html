@@ -412,8 +412,8 @@
 
                     <div>
                         <span class="field-label">Camera settings and metadata</span>
-                        {% if photo.camera_settings %}
-                            <p class="metadata-block">{{ photo.camera_settings }}</p>
+                        {% if anonymous_camera_settings %}
+                            <p class="metadata-block">{{ anonymous_camera_settings }}</p>
                         {% else %}
                             <p class="muted">Metadata unlisted or stripped by editing software.</p>
                         {% endif %}

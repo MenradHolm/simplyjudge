@@ -18,7 +18,7 @@ from .admin import CompetitionAdmin
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
-from .views import collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job, score_report_thumbnail_url
+from .views import anonymize_camera_settings, collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job, score_report_thumbnail_url
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -601,22 +601,25 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, '122 entries did not match an image file')
         self.assertContains(response, 'not shown in triage')
 
-    def test_internal_round_1_review_displays_full_context_and_records_score(self):
+    def test_internal_round_1_review_hides_identity_and_records_score(self):
         photo = self.create_photo(
-            'Context image',
+            'RSA_JacquelineRibeiro__Susp Rhythm',
             Photo.Status.ROUND_1,
             category='Portrait',
             description='A full story for the photo.',
-            camera_settings='50mm, f/2.8, ISO 400',
+            camera_settings='Camera settings 2 [Jacqueline Ribeiro - Aperture: f/8, Exposure: 1/250, ISO: 320] images shot with these settings: Nr 2',
         )
 
         self.client.force_login(self.internal_judge)
         response = self.client.get(reverse('round_1_review', args=[self.competition.slug]))
 
-        self.assertContains(response, 'Context image')
+        self.assertContains(response, 'Anonymous entry')
+        self.assertContains(response, f'SimplyJudge ID: #{photo.id}')
         self.assertContains(response, 'Portrait')
         self.assertContains(response, 'A full story for the photo.')
-        self.assertContains(response, '50mm, f/2.8, ISO 400')
+        self.assertContains(response, 'Aperture: f/8, Exposure: 1/250, ISO: 320')
+        self.assertNotContains(response, 'RSA_JacquelineRibeiro__Susp Rhythm')
+        self.assertNotContains(response, 'Jacqueline Ribeiro')
 
         response = self.client.post(
             reverse('round_1_review', args=[self.competition.slug]),
@@ -625,6 +628,17 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertRedirects(response, reverse('round_1_review', args=[self.competition.slug]))
         self.assertEqual(photo.round_1_scores.get(judge=self.internal_judge).score, 8)
+
+    def test_anonymize_camera_settings_removes_imported_label_names(self):
+        settings = (
+            'Camera settings 2 [Jacqueline Ribeiro - Aperture: f/8, Exposure: 1/250, ISO: 320] '
+            'images shot with these settings: Nr 2'
+        )
+
+        self.assertEqual(
+            anonymize_camera_settings(settings),
+            'Aperture: f/8, Exposure: 1/250, ISO: 320',
+        )
 
     def test_finalize_shortlist_uses_top_ten_percent_of_round_1_scores(self):
         photos = [
