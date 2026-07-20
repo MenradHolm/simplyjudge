@@ -205,6 +205,30 @@ def anonymize_camera_settings(value):
 
     return '\n\n'.join(cleaned_blocks)
 
+def anonymize_photo_title(value, fallback='Untitled entry'):
+    cleaned = strip_number_prefix(value)
+    if not cleaned or cleaned in {'-', 'â€”'}:
+        return fallback
+
+    basename = os.path.basename(cleaned)
+    stem, ext = os.path.splitext(basename)
+    if ext.lower() in IMAGE_EXTENSIONS:
+        cleaned = stem or fallback
+
+    if '__' in cleaned:
+        cleaned = cleaned.rsplit('__', 1)[1].strip()
+    elif '_' in cleaned:
+        parts = [part.strip() for part in re.split(r'_+', cleaned) if part.strip()]
+        if len(parts) >= 3 and re.fullmatch(r'[A-Z]{2,3}', parts[0]):
+            cleaned = ' '.join(parts[2:]).strip()
+        elif len(parts) >= 2 and re.fullmatch(r'[A-Z]{2,3}', parts[0]):
+            cleaned = ' '.join(parts[1:]).strip()
+
+    if cleaned and ' ' not in cleaned and re.search(r'[a-z][A-Z]', cleaned):
+        cleaned = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', cleaned)
+
+    return cleaned or fallback
+
 def judging_photo_queryset(competition, user):
     queryset = Photo.objects.filter(competition=competition).order_by('entry_code', 'id')
     if user.is_superuser or is_feedback_portal(competition):
@@ -482,6 +506,7 @@ def round_1_review(request, comp_slug):
             'counts': counts,
             'score_range': range(1, 11),
             'anonymous_camera_settings': anonymize_camera_settings(current_photo.camera_settings) if current_photo else '',
+            'anonymous_photo_title': anonymize_photo_title(current_photo.title) if current_photo else '',
         },
     )
 
@@ -579,6 +604,7 @@ def judge_photo(request, comp_slug, photo_id):
         'existing_score': existing_score,
         'return_to': return_to,
         'anonymous_camera_settings': anonymize_camera_settings(photo.camera_settings),
+        'anonymous_photo_title': anonymize_photo_title(photo.title),
     }
     return render(request, 'judging_app/judge.html', context)
 

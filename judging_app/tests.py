@@ -18,7 +18,7 @@ from .admin import CompetitionAdmin
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
-from .views import anonymize_camera_settings, collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job, score_report_thumbnail_url
+from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, decode_csv_bytes, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_photos_only_zip_job, score_report_thumbnail_url
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -613,7 +613,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.internal_judge)
         response = self.client.get(reverse('round_1_review', args=[self.competition.slug]))
 
-        self.assertContains(response, 'Anonymous entry')
+        self.assertContains(response, 'Susp Rhythm')
         self.assertContains(response, f'SimplyJudge ID: #{photo.id}')
         self.assertContains(response, 'Portrait')
         self.assertContains(response, 'A full story for the photo.')
@@ -638,6 +638,16 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(
             anonymize_camera_settings(settings),
             'Aperture: f/8, Exposure: 1/250, ISO: 320',
+        )
+
+    def test_anonymize_photo_title_removes_filename_identity_prefix(self):
+        self.assertEqual(
+            anonymize_photo_title('RSA_JacquelineRibeiro__Susp Rhythm.jpg'),
+            'Susp Rhythm',
+        )
+        self.assertEqual(
+            anonymize_photo_title('Quiet Morning'),
+            'Quiet Morning',
         )
 
     def test_finalize_shortlist_uses_top_ten_percent_of_round_1_scores(self):
