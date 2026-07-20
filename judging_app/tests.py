@@ -6,6 +6,7 @@ import zipfile
 from decimal import Decimal
 from django.contrib import admin as django_admin
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -888,6 +889,53 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(job.matched_images, 0)
         self.assertEqual(photo.image.name, 'competition_photos/placeholder.jpg')
         self.assertIn('No matching image file found', photo.rule_flags)
+
+    def test_repair_photo_metadata_command_updates_metadata_without_resetting_judging(self):
+        photo = self.create_photo(
+            'Wrong title',
+            Photo.Status.ROUND_1,
+            photographer_name='Wrong Photographer',
+            category='Wrong Category',
+            description='Wrong story.',
+            camera_settings='Wrong settings.',
+            image='competition_photos/youth-poty/RSA_JacquelineRibeiro__Susp Rhythm.jpg',
+        )
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=77)
+        PhotoStatusVote.objects.create(photo=photo, voter=self.internal_judge, decision=PhotoStatusVote.Decision.ROUND_1)
+
+        image = Image.new('RGB', (20, 20), color='white')
+        image_payload = io.BytesIO()
+        image.save(image_payload, format='JPEG')
+        image_bytes = image_payload.getvalue()
+        csv_payload = (
+            'Title,Photographer,Photographer Email,Category,Description,Camera Settings,Image\n'
+            'Susp Rhythm,Jacqueline Ribeiro,jacqueline@example.com,General,Correct story,Correct settings,Susp Rhythm\n'
+        )
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+            temp_path = temp_zip.name
+
+        with zipfile.ZipFile(temp_path, 'w') as package:
+            package.writestr('EntryForm.csv', csv_payload)
+            package.writestr('photos/RSA_JacquelineRibeiro__Susp Rhythm.jpg', image_bytes)
+
+        call_command('repair_photo_metadata', self.competition.slug, temp_path)
+        photo.refresh_from_db()
+        self.assertEqual(photo.title, 'Wrong title')
+
+        call_command('repair_photo_metadata', self.competition.slug, temp_path, '--apply')
+        photo.refresh_from_db()
+
+        self.assertEqual(photo.title, 'Susp Rhythm')
+        self.assertEqual(photo.photographer_name, 'Jacqueline Ribeiro')
+        self.assertEqual(photo.photographer_email, 'jacqueline@example.com')
+        self.assertEqual(photo.category, 'General')
+        self.assertEqual(photo.description, 'Correct story')
+        self.assertEqual(photo.camera_settings, 'Correct settings')
+        self.assertEqual(photo.status, Photo.Status.ROUND_1)
+        self.assertEqual(photo.image.name, 'competition_photos/youth-poty/RSA_JacquelineRibeiro__Susp Rhythm.jpg')
+        self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 77)
+        self.assertEqual(photo.status_votes.get(voter=self.internal_judge).decision, PhotoStatusVote.Decision.ROUND_1)
 
     def test_leaderboard_is_public(self):
         private_judge = User.objects.create_user(username='private_reviewer_name')
