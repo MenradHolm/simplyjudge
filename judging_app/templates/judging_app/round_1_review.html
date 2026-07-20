@@ -91,6 +91,13 @@
         margin-top: 1rem;
     }
 
+    .round-review-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.65rem;
+    }
+
     @media (max-width: 900px) {
         .round-review-layout {
             grid-template-columns: 1fr;
@@ -109,7 +116,19 @@
             <h2 class="page-title">{{ competition.name }}</h2>
             <p class="page-copy">Score Round 1 entries from 1 to 10 using the full submission context.</p>
         </div>
-        <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
+        <div class="round-review-actions">
+            {% if previous_photo_id %}
+                <a class="button button-secondary" href="{% url 'round_1_review' competition.slug %}?photo_id={{ previous_photo_id }}">Previous Photo</a>
+            {% else %}
+                <button class="button button-secondary" type="button" disabled>Previous Photo</button>
+            {% endif %}
+            {% if next_photo_id %}
+                <a class="button button-secondary" href="{% url 'round_1_review' competition.slug %}?photo_id={{ next_photo_id }}">Next Photo</a>
+            {% else %}
+                <button class="button button-secondary" type="button" disabled>Next Photo</button>
+            {% endif %}
+            <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
+        </div>
     </div>
 
     {% if photo %}

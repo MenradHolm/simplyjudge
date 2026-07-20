@@ -484,16 +484,29 @@ def round_1_review(request, comp_slug):
             )
         return redirect('round_1_review', comp_slug=competition.slug)
 
-    current_photo = Photo.objects.filter(
+    unscored_photos = Photo.objects.filter(
         competition=competition,
         status=Photo.Status.ROUND_1,
-    ).exclude(round_1_scores__judge=request.user).order_by('id').first()
+    ).exclude(round_1_scores__judge=request.user).order_by('id')
+    unscored_photo_ids = list(unscored_photos.values_list('id', flat=True))
+    requested_photo_id = request.GET.get('photo_id', '')
+    current_photo = None
+    if requested_photo_id.isdigit() and int(requested_photo_id) in unscored_photo_ids:
+        current_photo = unscored_photos.filter(id=int(requested_photo_id)).first()
+    if current_photo is None:
+        current_photo = unscored_photos.first()
+
+    previous_photo_id = None
+    next_photo_id = None
+    if current_photo and len(unscored_photo_ids) > 1:
+        current_position = unscored_photo_ids.index(current_photo.id)
+        if current_position > 0:
+            previous_photo_id = unscored_photo_ids[current_position - 1]
+        if current_position < len(unscored_photo_ids) - 1:
+            next_photo_id = unscored_photo_ids[current_position + 1]
 
     counts = {
-        'for_you': Photo.objects.filter(
-            competition=competition,
-            status=Photo.Status.ROUND_1,
-        ).exclude(round_1_scores__judge=request.user).count(),
+        'for_you': len(unscored_photo_ids),
         'round_1': Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1).count(),
         'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
     }
@@ -507,6 +520,8 @@ def round_1_review(request, comp_slug):
             'score_range': range(1, 11),
             'anonymous_camera_settings': anonymize_camera_settings(current_photo.camera_settings) if current_photo else '',
             'anonymous_photo_title': anonymize_photo_title(current_photo.title) if current_photo else '',
+            'previous_photo_id': previous_photo_id,
+            'next_photo_id': next_photo_id,
         },
     )
 

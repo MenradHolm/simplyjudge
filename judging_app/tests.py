@@ -650,6 +650,35 @@ class PhotoStatusWorkflowTests(TestCase):
             'Quiet Morning',
         )
 
+    def test_internal_round_1_review_can_move_between_unscored_photos(self):
+        first_photo = self.create_photo('First Round Title', Photo.Status.ROUND_1)
+        middle_photo = self.create_photo('Middle Round Title', Photo.Status.ROUND_1)
+        last_photo = self.create_photo('Last Round Title', Photo.Status.ROUND_1)
+
+        self.client.force_login(self.internal_judge)
+        first_response = self.client.get(reverse('round_1_review', args=[self.competition.slug]))
+
+        self.assertContains(first_response, 'First Round Title')
+        self.assertContains(
+            first_response,
+            f'href="{reverse("round_1_review", args=[self.competition.slug])}?photo_id={middle_photo.id}"',
+        )
+        self.assertContains(first_response, '<button class="button button-secondary" type="button" disabled>Previous Photo</button>', html=True)
+
+        middle_response = self.client.get(
+            f'{reverse("round_1_review", args=[self.competition.slug])}?photo_id={middle_photo.id}'
+        )
+
+        self.assertContains(middle_response, 'Middle Round Title')
+        self.assertContains(
+            middle_response,
+            f'href="{reverse("round_1_review", args=[self.competition.slug])}?photo_id={first_photo.id}"',
+        )
+        self.assertContains(
+            middle_response,
+            f'href="{reverse("round_1_review", args=[self.competition.slug])}?photo_id={last_photo.id}"',
+        )
+
     def test_finalize_shortlist_uses_top_ten_percent_of_round_1_scores(self):
         photos = [
             self.create_photo(f'Round 1 image {index}', Photo.Status.ROUND_1)
