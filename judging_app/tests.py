@@ -1096,6 +1096,59 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(photo.title, 'Image restore target')
         self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 83)
 
+    def test_admin_photo_corrections_restores_images_with_explicit_map(self):
+        admin_user = User.objects.create_superuser(username='admin-image-map-user', password='test-pass')
+        photo = self.create_photo(
+            'Mapped image restore target',
+            Photo.Status.ROUND_1,
+            image='competition_photos/youth-poty/current-public-id-does-not-match.jpg',
+        )
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=84)
+        source_image = Image.new('RGB', (20, 20), color='white')
+        source_payload = io.BytesIO()
+        source_image.save(source_payload, format='JPEG')
+        zip_payload = io.BytesIO()
+        with zipfile.ZipFile(zip_payload, 'w') as package:
+            package.writestr('originals/ZA_YehudaRabin_GoldenHourFynbos.jpeg', source_payload.getvalue())
+        image_map_csv = f'photo_id,original_filename\n{photo.id},ZA_YehudaRabin_GoldenHourFynbos.jpeg\n'
+        url = reverse('admin:judging_app_competition_photo_corrections', args=[self.competition.id])
+        self.client.force_login(admin_user)
+
+        dry_run_response = self.client.post(
+            url,
+            {
+                'action': 'images',
+                'images_zip': SimpleUploadedFile('originals.zip', zip_payload.getvalue(), content_type='application/zip'),
+                'image_map_csv': SimpleUploadedFile('image-map.csv', image_map_csv.encode('utf-8'), content_type='text/csv'),
+            },
+        )
+        photo.refresh_from_db()
+
+        self.assertEqual(dry_run_response.status_code, 200)
+        self.assertContains(dry_run_response, 'Matched using uploaded image map CSV.')
+        self.assertContains(dry_run_response, 'ZA_YehudaRabin_GoldenHourFynbos.jpeg')
+        self.assertEqual(photo.image.name, 'competition_photos/youth-poty/current-public-id-does-not-match.jpg')
+
+        apply_zip_payload = io.BytesIO()
+        with zipfile.ZipFile(apply_zip_payload, 'w') as package:
+            package.writestr('originals/ZA_YehudaRabin_GoldenHourFynbos.jpeg', source_payload.getvalue())
+        apply_response = self.client.post(
+            url,
+            {
+                'action': 'images',
+                'apply': '1',
+                'images_zip': SimpleUploadedFile('originals.zip', apply_zip_payload.getvalue(), content_type='application/zip'),
+                'image_map_csv': SimpleUploadedFile('image-map.csv', image_map_csv.encode('utf-8'), content_type='text/csv'),
+            },
+        )
+        photo.refresh_from_db()
+
+        self.assertEqual(apply_response.status_code, 200)
+        self.assertIn('import_restore', photo.image.name)
+        self.assertIn('ZA_YehudaRabin_GoldenHourFynbos', photo.image.name)
+        self.assertEqual(photo.status, Photo.Status.ROUND_1)
+        self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 84)
+
     def test_admin_photo_corrections_bad_image_zip_returns_page_error(self):
         admin_user = User.objects.create_superuser(username='admin-bad-zip-user', password='test-pass')
         self.client.force_login(admin_user)

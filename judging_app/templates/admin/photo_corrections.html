@@ -43,9 +43,17 @@
             <p>
                 For large events, restore in smaller ZIP batches. Dry run each batch first, then apply that same batch if the matches look right.
             </p>
+            <p>
+                If files show as unmatched, upload an optional CSV with columns <code>photo_id,original_filename</code>
+                to map each original file to a specific Photo ID.
+            </p>
             <div class="form-row">
                 <label for="id_images_zip">Original images ZIP:</label>
                 <input id="id_images_zip" type="file" name="images_zip" accept=".zip,application/zip" required>
+            </div>
+            <div class="form-row">
+                <label for="id_image_map_csv">Optional image map CSV:</label>
+                <input id="id_image_map_csv" type="file" name="image_map_csv" accept=".csv,text/csv">
             </div>
             <div class="submit-row">
                 <button class="button" type="submit" name="dry_run" value="1">Dry run image restore</button>
@@ -60,6 +68,9 @@
             <div style="padding: 1rem;">
                 <p>{{ result.update_count }} photo{{ result.update_count|pluralize }} {% if result.apply %}changed{% else %}would change{% endif %}.</p>
                 {% if result.kind == "images" %}
+                    {% if result.used_explicit_map %}
+                        <p>Matched using uploaded image map CSV.</p>
+                    {% endif %}
                     {% if result.updates %}
                         <table>
                             <thead>

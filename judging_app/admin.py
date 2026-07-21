@@ -95,11 +95,12 @@ class CompetitionAdmin(admin.ModelAdmin):
             apply_changes = request.POST.get('apply') == '1'
             if action == 'images':
                 images_zip = request.FILES.get('images_zip')
+                image_map_csv = request.FILES.get('image_map_csv')
                 if not images_zip:
                     messages.error(request, 'Choose a ZIP of original images before running the image restore.')
                 else:
                     try:
-                        result = self.process_original_images_zip(competition, images_zip, apply_changes)
+                        result = self.process_original_images_zip(competition, images_zip, apply_changes, image_map_csv)
                     except Exception as exc:
                         messages.error(request, f'Image restore failed: {exc}')
                     else:
@@ -245,11 +246,12 @@ class CompetitionAdmin(admin.ModelAdmin):
             'truncated_count': max(len(updates) - 50, 0),
         }
 
-    def process_original_images_zip(self, competition, images_zip, apply_changes):
+    def process_original_images_zip(self, competition, images_zip, apply_changes, image_map_csv=None):
         image_members = {}
         unmatched_files = []
         duplicate_file_keys = set()
         updates = []
+        explicit_map = self.read_image_restore_map(image_map_csv) if image_map_csv else {}
 
         try:
             package = zipfile.ZipFile(images_zip)
@@ -277,23 +279,27 @@ class CompetitionAdmin(admin.ModelAdmin):
                 )
 
             photos = list(Photo.objects.filter(competition=competition).order_by('id'))
-            for key, info in image_members.items():
-                matches = [
-                    photo for photo in photos
-                    if self.photo_matches_original_image_key(photo, key)
-                ]
-                if len(matches) != 1:
-                    unmatched_files.append((info.filename, len(matches)))
-                    continue
-
-                photo = matches[0]
-                updates.append({
-                    'photo': photo,
-                    'source_filename': info.filename,
-                    'current_image_name': photo.image.name if photo.image else '',
-                    'new_filename': unique_import_filename(f'restore{competition.id}', photo.id, info.filename),
-                    'zip_info': info,
-                })
+            photos_by_id = {photo.id: photo for photo in photos}
+            if explicit_map:
+                missing_photo_ids = sorted(set(explicit_map.values()) - set(photos_by_id))
+                if missing_photo_ids:
+                    raise ValueError(f'Mapped Photo ID(s) not found in this competition: {", ".join(map(str, missing_photo_ids[:10]))}')
+                for key, photo_id in explicit_map.items():
+                    info = image_members.get(key)
+                    if info is None:
+                        unmatched_files.append((key, 0))
+                        continue
+                    self.add_image_restore_update(updates, photos_by_id[photo_id], info, competition)
+            else:
+                for key, info in image_members.items():
+                    matches = [
+                        photo for photo in photos
+                        if self.photo_matches_original_image_key(photo, key)
+                    ]
+                    if len(matches) != 1:
+                        unmatched_files.append((info.filename, len(matches)))
+                        continue
+                    self.add_image_restore_update(updates, matches[0], info, competition)
 
             if apply_changes:
                 for update in updates:
@@ -310,7 +316,44 @@ class CompetitionAdmin(admin.ModelAdmin):
             'truncated_count': max(len(updates) - 50, 0),
             'unmatched_files': unmatched_files[:50],
             'unmatched_truncated_count': max(len(unmatched_files) - 50, 0),
+            'used_explicit_map': bool(explicit_map),
         }
+
+    def add_image_restore_update(self, updates, photo, info, competition):
+        updates.append({
+            'photo': photo,
+            'source_filename': info.filename,
+            'current_image_name': photo.image.name if photo.image else '',
+            'new_filename': unique_import_filename(f'restore{competition.id}', photo.id, info.filename),
+            'zip_info': info,
+        })
+
+    def read_image_restore_map(self, image_map_csv):
+        text = image_map_csv.read().decode('utf-8-sig')
+        reader = csv.DictReader(io.StringIO(text))
+        if not reader.fieldnames or 'photo_id' not in reader.fieldnames or 'original_filename' not in reader.fieldnames:
+            raise ValueError('Image map CSV must include photo_id and original_filename columns.')
+
+        explicit_map = {}
+        mapped_photo_ids = []
+        for row_number, row in enumerate(reader, start=2):
+            raw_photo_id = (row.get('photo_id') or '').strip()
+            original_filename = (row.get('original_filename') or '').strip()
+            if not raw_photo_id.isdigit():
+                raise ValueError(f'Image map row {row_number}: photo_id must be numeric.')
+            if not original_filename:
+                raise ValueError(f'Image map row {row_number}: original_filename is required.')
+            photo_id = int(raw_photo_id)
+            key = normalize_match_key(original_filename)
+            if key in explicit_map:
+                raise ValueError(f'Image map row {row_number}: duplicate original filename key {original_filename}.')
+            explicit_map[key] = photo_id
+            mapped_photo_ids.append(photo_id)
+
+        duplicate_photo_ids = sorted({photo_id for photo_id in mapped_photo_ids if mapped_photo_ids.count(photo_id) > 1})
+        if duplicate_photo_ids:
+            raise ValueError(f'Image map has duplicate Photo ID value(s): {", ".join(map(str, duplicate_photo_ids[:10]))}')
+        return explicit_map
 
     def photo_matches_original_image_key(self, photo, original_key):
         image_name = photo.image.name if photo.image else ''
