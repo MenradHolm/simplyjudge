@@ -955,11 +955,11 @@ class PhotoStatusWorkflowTests(TestCase):
             corrections_path = corrections_file.name
             writer = csv.writer(corrections_file)
             writer.writerow([
-                'photo_id', 'image_name', 'image_url', 'entry_code', 'title', 'photographer_name',
+                'photo_id', 'image_name', 'image_url', 'image_preview_formula', 'entry_code', 'title', 'photographer_name',
                 'photographer_email', 'category', 'description', 'camera_settings',
             ])
             writer.writerow([
-                photo.id, '', '', 'FIX001', 'Correct title', 'Correct Photographer',
+                photo.id, '', '', '', 'FIX001', 'Correct title', 'Correct Photographer',
                 'correct@example.com', 'General', 'Correct story', 'Correct settings',
             ])
 
@@ -968,6 +968,7 @@ class PhotoStatusWorkflowTests(TestCase):
             exported_rows = list(csv.DictReader(exported))
         self.assertEqual(exported_rows[0]['photo_id'], str(photo.id))
         self.assertEqual(exported_rows[0]['image_name'], 'competition_photos/youth-poty/current-image.jpg')
+        self.assertIn('IMAGE(', exported_rows[0]['image_preview_formula'])
 
         call_command('apply_photo_corrections', self.competition.slug, corrections_path)
         photo.refresh_from_db()
@@ -1004,11 +1005,12 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(export_response.status_code, 200)
         self.assertContains(export_response, 'photo_id')
+        self.assertContains(export_response, 'image_preview_formula')
         self.assertContains(export_response, 'current-image.jpg')
 
         corrections = (
-            'photo_id,image_name,image_url,entry_code,title,photographer_name,photographer_email,category,description,camera_settings\n'
-            f'{photo.id},,,,Correct title,Correct Photographer,correct@example.com,General,Correct story,Correct settings\n'
+            'photo_id,image_name,image_url,image_preview_formula,entry_code,title,photographer_name,photographer_email,category,description,camera_settings\n'
+            f'{photo.id},,,,,Correct title,Correct Photographer,correct@example.com,General,Correct story,Correct settings\n'
         )
 
         dry_run_response = self.client.post(
