@@ -19,7 +19,7 @@ from .admin import CompetitionAdmin
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
-from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, decode_csv_bytes, expand_participant_entry_row, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_entry_zip_job, process_photos_only_zip_job, score_report_thumbnail_url
+from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, decode_csv_bytes, expand_participant_entry_row, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_entry_zip_job, process_photos_only_zip_job, score_report_thumbnail_url, unique_import_filename
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -853,6 +853,8 @@ class PhotoStatusWorkflowTests(TestCase):
             list(Photo.objects.filter(competition=feedback_competition).order_by('entry_code').values_list('title', flat=True)),
             ['SS001', 'SS002', 'SS010'],
         )
+        for photo in Photo.objects.filter(competition=feedback_competition):
+            self.assertIn('import_', photo.image.name)
 
         report_response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
         self.assertContains(report_response, 'Photo reference: SS001')
@@ -1727,6 +1729,14 @@ class ZipImageMatchingTests(TestCase):
         self.assertEqual(rows[0]['Title'], 'Susp Rhythm')
         self.assertEqual(rows[0]['Filename'], '')
         self.assertEqual(rows[0]['Image'], '')
+
+    def test_unique_import_filename_keeps_original_name_but_adds_unique_prefix(self):
+        first = unique_import_filename(12, 3, 'photos/RSA_JacquelineRibeiro__Susp Rhythm.jpg')
+        second = unique_import_filename(12, 3, 'photos/RSA_JacquelineRibeiro__Susp Rhythm.jpg')
+
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.endswith('_RSA_JacquelineRibeiro__Susp Rhythm.jpg'))
+        self.assertLessEqual(len(first), 180)
 
 
 class CloudinaryCompressionTests(TestCase):

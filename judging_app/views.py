@@ -1543,6 +1543,11 @@ def truncate_filename(filename, max_length=180):
     allowed_stem_length = max_length - len(ext)
     return f'{stem[:allowed_stem_length].rstrip()}{ext}'
 
+def unique_import_filename(job_id, row_identifier, filename):
+    filename = truncate_filename(filename)
+    safe_prefix = re.sub(r'[^a-zA-Z0-9_-]', '_', f'import_{job_id}_{row_identifier}_{uuid.uuid4().hex[:10]}')
+    return truncate_filename(f'{safe_prefix}_{filename}')
+
 def normalize_match_key(value):
     stem = os.path.splitext(os.path.basename(str(value).strip()))[0]
     while True:
@@ -1705,7 +1710,7 @@ def process_entry_zip_job(job_id):
                             image_info = find_matching_image(images, [title], allow_suffix=False)
                         if image_info:
                             image_payload = {
-                                'filename': truncate_filename(image_info.filename),
+                                'filename': unique_import_filename(job.id, row_number, image_info.filename),
                                 'bytes': package.read(image_info.filename),
                             }
 
@@ -1819,7 +1824,7 @@ def process_photos_only_zip_job(job_id):
 
             with transaction.atomic():
                 imported = 0
-                for info, entry_code in zip(image_members, entry_codes):
+                for row_number, (info, entry_code) in enumerate(zip(image_members, entry_codes), start=1):
                     image_bytes = None
                     storage_image = None
                     defaults = None
@@ -1827,7 +1832,7 @@ def process_photos_only_zip_job(job_id):
                         image_bytes = package.read(info.filename)
                         storage_image = prepare_image_for_cloudinary(
                             image_bytes,
-                            truncate_filename(info.filename),
+                            unique_import_filename(job.id, row_number, info.filename),
                         )
                         flags = collect_photo_rule_flags(job.competition, image_bytes)
                         if storage_image['compressed']:
