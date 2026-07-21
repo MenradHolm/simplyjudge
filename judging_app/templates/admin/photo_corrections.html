@@ -19,6 +19,7 @@
         <h2>Upload corrected CSV</h2>
         <form method="post" enctype="multipart/form-data" style="padding: 1rem;">
             {% csrf_token %}
+            <input type="hidden" name="action" value="metadata">
             <div class="form-row">
                 <label for="id_corrections_file">Corrections CSV:</label>
                 <input id="id_corrections_file" type="file" name="corrections_file" accept=".csv,text/csv" required>
@@ -30,12 +31,77 @@
         </form>
     </div>
 
+    <div class="module" style="margin-top: 1rem;">
+        <h2>Restore original images</h2>
+        <form method="post" enctype="multipart/form-data" style="padding: 1rem;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="images">
+            <p>
+                Upload a ZIP containing the original image files. Files are matched to existing photo rows by original filename.
+                This updates image files only and does not touch photo IDs, statuses, scores, votes, comments, or metadata.
+            </p>
+            <div class="form-row">
+                <label for="id_images_zip">Original images ZIP:</label>
+                <input id="id_images_zip" type="file" name="images_zip" accept=".zip,application/zip" required>
+            </div>
+            <div class="submit-row">
+                <button class="button" type="submit" name="dry_run" value="1">Dry run image restore</button>
+                <button class="button default" type="submit" name="apply" value="1">Apply image restore</button>
+            </div>
+        </form>
+    </div>
+
     {% if result %}
         <div class="module" style="margin-top: 1rem;">
             <h2>{% if result.apply %}Applied changes{% else %}Dry-run changes{% endif %}</h2>
             <div style="padding: 1rem;">
-                <p>{{ result.update_count }} photo{{ result.update_count|pluralize }} would change.</p>
-                {% if result.updates %}
+                <p>{{ result.update_count }} photo{{ result.update_count|pluralize }} {% if result.apply %}changed{% else %}would change{% endif %}.</p>
+                {% if result.kind == "images" %}
+                    {% if result.updates %}
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Photo ID</th>
+                                    <th>Current image</th>
+                                    <th>Original file</th>
+                                    <th>New upload name</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for update in result.updates %}
+                                    <tr>
+                                        <td>{{ update.photo.id }}</td>
+                                        <td>{{ update.current_image_name }}</td>
+                                        <td>{{ update.source_filename }}</td>
+                                        <td>{{ update.new_filename }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% if result.truncated_count %}
+                            <p>Showing first 50 image matches. {{ result.truncated_count }} additional match{{ result.truncated_count|pluralize:"es" }} not shown.</p>
+                        {% endif %}
+                    {% endif %}
+                    {% if result.unmatched_files %}
+                        <h3>Unmatched files</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>File</th>
+                                    <th>Match count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for filename, match_count in result.unmatched_files %}
+                                    <tr>
+                                        <td>{{ filename }}</td>
+                                        <td>{{ match_count }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                {% elif result.updates %}
                     <table>
                         <thead>
                             <tr>

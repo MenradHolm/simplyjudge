@@ -1044,6 +1044,58 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(photo.image.name, 'competition_photos/youth-poty/current-image.jpg')
         self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 82)
 
+    def test_admin_photo_corrections_restores_original_images_only(self):
+        admin_user = User.objects.create_superuser(username='admin-image-user', password='test-pass')
+        photo = self.create_photo(
+            'Image restore target',
+            Photo.Status.ROUND_1,
+            image='competition_photos/youth-poty/RSA_JacquelineRibeiro__Susp Rhythm.jpg',
+        )
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=83)
+        source_image = Image.new('RGB', (20, 20), color='white')
+        source_payload = io.BytesIO()
+        source_image.save(source_payload, format='JPEG')
+        zip_payload = io.BytesIO()
+        with zipfile.ZipFile(zip_payload, 'w') as package:
+            package.writestr('originals/RSA_JacquelineRibeiro__Susp Rhythm.jpg', source_payload.getvalue())
+        url = reverse('admin:judging_app_competition_photo_corrections', args=[self.competition.id])
+        self.client.force_login(admin_user)
+
+        dry_run_response = self.client.post(
+            url,
+            {
+                'action': 'images',
+                'images_zip': SimpleUploadedFile('originals.zip', zip_payload.getvalue(), content_type='application/zip'),
+            },
+        )
+        photo.refresh_from_db()
+
+        self.assertEqual(dry_run_response.status_code, 200)
+        self.assertContains(dry_run_response, 'Dry-run changes')
+        self.assertContains(dry_run_response, 'RSA_JacquelineRibeiro__Susp Rhythm.jpg')
+        self.assertEqual(photo.image.name, 'competition_photos/youth-poty/RSA_JacquelineRibeiro__Susp Rhythm.jpg')
+
+        apply_zip_payload = io.BytesIO()
+        with zipfile.ZipFile(apply_zip_payload, 'w') as package:
+            package.writestr('originals/RSA_JacquelineRibeiro__Susp Rhythm.jpg', source_payload.getvalue())
+        apply_response = self.client.post(
+            url,
+            {
+                'action': 'images',
+                'apply': '1',
+                'images_zip': SimpleUploadedFile('originals.zip', apply_zip_payload.getvalue(), content_type='application/zip'),
+            },
+        )
+        photo.refresh_from_db()
+
+        self.assertEqual(apply_response.status_code, 200)
+        self.assertIn('import_restore', photo.image.name)
+        self.assertIn('RSA_JacquelineRibeiro__Susp', photo.image.name)
+        self.assertTrue(photo.image.name.endswith('.jpg'))
+        self.assertEqual(photo.status, Photo.Status.ROUND_1)
+        self.assertEqual(photo.title, 'Image restore target')
+        self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 83)
+
     def test_competition_admin_change_page_links_to_photo_corrections(self):
         admin_user = User.objects.create_superuser(username='admin-link-user', password='test-pass')
         self.client.force_login(admin_user)

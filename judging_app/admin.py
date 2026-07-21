@@ -1,7 +1,10 @@
 import csv
 import io
+import os
+import zipfile
 
 from django.contrib import admin, messages
+from django.core.files.base import ContentFile
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
@@ -9,7 +12,7 @@ from django.utils.html import format_html
 
 from .models import Competition, CompetitionMembership, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
 from .utils import send_automated_email
-from .views import truncate_text
+from .views import IMAGE_EXTENSIONS, normalize_match_key, prepare_image_for_cloudinary, truncate_text, unique_import_filename
 
 # --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
 admin.site.site_header = "SimplyJudge Admin Engine"
@@ -88,21 +91,38 @@ class CompetitionAdmin(admin.ModelAdmin):
 
         result = None
         if request.method == 'POST':
-            corrections_file = request.FILES.get('corrections_file')
+            action = request.POST.get('action', 'metadata')
             apply_changes = request.POST.get('apply') == '1'
-            if not corrections_file:
-                messages.error(request, 'Choose a corrections CSV before running the repair.')
+            if action == 'images':
+                images_zip = request.FILES.get('images_zip')
+                if not images_zip:
+                    messages.error(request, 'Choose a ZIP of original images before running the image restore.')
+                else:
+                    result = self.process_original_images_zip(competition, images_zip, apply_changes)
+                    level = messages.SUCCESS if apply_changes else messages.WARNING
+                    messages.add_message(
+                        request,
+                        level,
+                        (
+                            f"{'Restored' if apply_changes else 'Image restore dry run complete'}: "
+                            f"{result['update_count']} photo image(s) matched."
+                        ),
+                    )
             else:
-                result = self.process_photo_corrections_csv(competition, corrections_file, apply_changes)
-                level = messages.SUCCESS if apply_changes else messages.WARNING
-                messages.add_message(
-                    request,
-                    level,
-                    (
-                        f"{'Applied' if apply_changes else 'Dry run complete'}: "
-                        f"{result['update_count']} photo(s) with metadata changes."
-                    ),
-                )
+                corrections_file = request.FILES.get('corrections_file')
+                if not corrections_file:
+                    messages.error(request, 'Choose a corrections CSV before running the repair.')
+                else:
+                    result = self.process_photo_corrections_csv(competition, corrections_file, apply_changes)
+                    level = messages.SUCCESS if apply_changes else messages.WARNING
+                    messages.add_message(
+                        request,
+                        level,
+                        (
+                            f"{'Applied' if apply_changes else 'Dry run complete'}: "
+                            f"{result['update_count']} photo(s) with metadata changes."
+                        ),
+                    )
 
         context = {
             **self.admin_site.each_context(request),
@@ -210,11 +230,81 @@ class CompetitionAdmin(admin.ModelAdmin):
                 photo.save(update_fields=update_fields)
 
         return {
+            'kind': 'metadata',
             'apply': apply_changes,
             'update_count': len(updates),
             'updates': updates[:50],
             'truncated_count': max(len(updates) - 50, 0),
         }
+
+    def process_original_images_zip(self, competition, images_zip, apply_changes):
+        image_members = {}
+        unmatched_files = []
+        duplicate_file_keys = set()
+        updates = []
+
+        with zipfile.ZipFile(images_zip) as package:
+            for info in package.infolist():
+                filename = os.path.basename(info.filename)
+                if info.is_dir() or not filename or filename.startswith('.'):
+                    continue
+                _stem, ext = os.path.splitext(filename)
+                if ext.lower() not in IMAGE_EXTENSIONS:
+                    continue
+                key = normalize_match_key(filename)
+                if key in image_members:
+                    duplicate_file_keys.add(key)
+                    continue
+                image_members[key] = info
+
+            if duplicate_file_keys:
+                raise ValueError(
+                    'The ZIP has duplicate image filename keys: '
+                    f'{", ".join(sorted(duplicate_file_keys)[:10])}'
+                )
+
+            photos = list(Photo.objects.filter(competition=competition).order_by('id'))
+            for key, info in image_members.items():
+                matches = [
+                    photo for photo in photos
+                    if self.photo_matches_original_image_key(photo, key)
+                ]
+                if len(matches) != 1:
+                    unmatched_files.append((info.filename, len(matches)))
+                    continue
+
+                photo = matches[0]
+                updates.append({
+                    'photo': photo,
+                    'source_filename': info.filename,
+                    'current_image_name': photo.image.name if photo.image else '',
+                    'new_filename': unique_import_filename(f'restore{competition.id}', photo.id, info.filename),
+                    'zip_info': info,
+                })
+
+            if apply_changes:
+                for update in updates:
+                    image_bytes = package.read(update['zip_info'].filename)
+                    storage_image = prepare_image_for_cloudinary(image_bytes, update['new_filename'])
+                    update['photo'].image = ContentFile(storage_image['bytes'], name=storage_image['filename'])
+                    update['photo'].save(update_fields=['image'])
+
+        return {
+            'kind': 'images',
+            'apply': apply_changes,
+            'update_count': len(updates),
+            'updates': updates[:50],
+            'truncated_count': max(len(updates) - 50, 0),
+            'unmatched_files': unmatched_files[:50],
+            'unmatched_truncated_count': max(len(unmatched_files) - 50, 0),
+        }
+
+    def photo_matches_original_image_key(self, photo, original_key):
+        image_name = photo.image.name if photo.image else ''
+        if not image_name:
+            return False
+        photo_key = normalize_match_key(image_name)
+        return photo_key == original_key or photo_key.endswith(original_key)
 
     def clean_correction_value(self, field, value):
         value = str(value or '').strip()
