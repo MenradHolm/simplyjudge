@@ -1096,6 +1096,23 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(photo.title, 'Image restore target')
         self.assertEqual(photo.score_set.get(judge=self.guest_judge).total_score, 83)
 
+    def test_admin_photo_corrections_bad_image_zip_returns_page_error(self):
+        admin_user = User.objects.create_superuser(username='admin-bad-zip-user', password='test-pass')
+        self.client.force_login(admin_user)
+        url = reverse('admin:judging_app_competition_photo_corrections', args=[self.competition.id])
+
+        response = self.client.post(
+            url,
+            {
+                'action': 'images',
+                'images_zip': SimpleUploadedFile('not-a-zip.zip', b'not a zip', content_type='application/zip'),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Image restore failed')
+        self.assertContains(response, 'not a readable ZIP archive')
+
     def test_competition_admin_change_page_links_to_photo_corrections(self):
         admin_user = User.objects.create_superuser(username='admin-link-user', password='test-pass')
         self.client.force_login(admin_user)

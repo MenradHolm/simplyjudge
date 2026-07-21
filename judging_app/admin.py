@@ -98,31 +98,39 @@ class CompetitionAdmin(admin.ModelAdmin):
                 if not images_zip:
                     messages.error(request, 'Choose a ZIP of original images before running the image restore.')
                 else:
-                    result = self.process_original_images_zip(competition, images_zip, apply_changes)
-                    level = messages.SUCCESS if apply_changes else messages.WARNING
-                    messages.add_message(
-                        request,
-                        level,
-                        (
-                            f"{'Restored' if apply_changes else 'Image restore dry run complete'}: "
-                            f"{result['update_count']} photo image(s) matched."
-                        ),
-                    )
+                    try:
+                        result = self.process_original_images_zip(competition, images_zip, apply_changes)
+                    except Exception as exc:
+                        messages.error(request, f'Image restore failed: {exc}')
+                    else:
+                        level = messages.SUCCESS if apply_changes else messages.WARNING
+                        messages.add_message(
+                            request,
+                            level,
+                            (
+                                f"{'Restored' if apply_changes else 'Image restore dry run complete'}: "
+                                f"{result['update_count']} photo image(s) matched."
+                            ),
+                        )
             else:
                 corrections_file = request.FILES.get('corrections_file')
                 if not corrections_file:
                     messages.error(request, 'Choose a corrections CSV before running the repair.')
                 else:
-                    result = self.process_photo_corrections_csv(competition, corrections_file, apply_changes)
-                    level = messages.SUCCESS if apply_changes else messages.WARNING
-                    messages.add_message(
-                        request,
-                        level,
-                        (
-                            f"{'Applied' if apply_changes else 'Dry run complete'}: "
-                            f"{result['update_count']} photo(s) with metadata changes."
-                        ),
-                    )
+                    try:
+                        result = self.process_photo_corrections_csv(competition, corrections_file, apply_changes)
+                    except Exception as exc:
+                        messages.error(request, f'CSV correction failed: {exc}')
+                    else:
+                        level = messages.SUCCESS if apply_changes else messages.WARNING
+                        messages.add_message(
+                            request,
+                            level,
+                            (
+                                f"{'Applied' if apply_changes else 'Dry run complete'}: "
+                                f"{result['update_count']} photo(s) with metadata changes."
+                            ),
+                        )
 
         context = {
             **self.admin_site.each_context(request),
@@ -243,7 +251,12 @@ class CompetitionAdmin(admin.ModelAdmin):
         duplicate_file_keys = set()
         updates = []
 
-        with zipfile.ZipFile(images_zip) as package:
+        try:
+            package = zipfile.ZipFile(images_zip)
+        except zipfile.BadZipFile as exc:
+            raise ValueError('The uploaded file is not a readable ZIP archive.') from exc
+
+        with package:
             for info in package.infolist():
                 filename = os.path.basename(info.filename)
                 if info.is_dir() or not filename or filename.startswith('.'):

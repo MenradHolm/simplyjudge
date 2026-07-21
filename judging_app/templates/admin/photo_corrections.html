@@ -40,6 +40,9 @@
                 Upload a ZIP containing the original image files. Files are matched to existing photo rows by original filename.
                 This updates image files only and does not touch photo IDs, statuses, scores, votes, comments, or metadata.
             </p>
+            <p>
+                For large events, restore in smaller ZIP batches. Dry run each batch first, then apply that same batch if the matches look right.
+            </p>
             <div class="form-row">
                 <label for="id_images_zip">Original images ZIP:</label>
                 <input id="id_images_zip" type="file" name="images_zip" accept=".zip,application/zip" required>
