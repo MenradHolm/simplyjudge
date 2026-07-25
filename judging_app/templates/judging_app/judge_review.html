@@ -49,8 +49,8 @@
                     <div class="rank">#{{ forloop.counter }}</div>
                     <img class="thumb" src="{{ score.photo.image.url }}" alt="Anonymous scored submission">
                     <div>
-                        <h3 class="competition-name">SimplyJudge ID: #{{ score.photo.id }}</h3>
-                        <p class="card-meta">{{ score.photo.category }}</p>
+                        <h3 class="competition-name">Scored submission</h3>
+                        <p class="card-meta">Photo details hidden for judging</p>
                         {% if score.comment %}
                             <p class="muted" style="margin: 0.45rem 0 0;">{{ score.comment|truncatechars:120 }}</p>
                         {% endif %}

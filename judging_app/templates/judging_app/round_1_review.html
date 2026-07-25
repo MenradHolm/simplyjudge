@@ -114,7 +114,7 @@
         <div>
             <p class="eyebrow">Round 1 review</p>
             <h2 class="page-title">{{ competition.name }}</h2>
-            <p class="page-copy">Score Round 1 entries from 1 to 10 using the full submission context.</p>
+            <p class="page-copy">Score Round 1 entries from 1 to 10.</p>
         </div>
         <div class="round-review-actions">
             {% if previous_photo_id %}
@@ -138,23 +138,9 @@
             </div>
 
             <aside class="panel panel-padded">
-                <p class="eyebrow">SimplyJudge ID: #{{ photo.id }}</p>
-                <h2 class="page-title">{{ anonymous_photo_title }}</h2>
                 <div class="round-review-stats">
-                    <span class="tag">{{ photo.category }}</span>
                     <span class="tag tag-neutral">{{ counts.for_you }} left for you</span>
                     <span class="tag tag-neutral">{{ counts.round_1 }} in Round 1</span>
-                </div>
-
-                <div class="context-list">
-                    <div class="context-item">
-                        <h3>Story</h3>
-                        <p>{{ photo.description|default:"No story supplied." }}</p>
-                    </div>
-                    <div class="context-item">
-                        <h3>Camera settings</h3>
-                        <p>{{ anonymous_camera_settings|default:"No camera settings supplied." }}</p>
-                    </div>
                 </div>
 
                 <form method="POST" style="margin-top: 1.25rem;">

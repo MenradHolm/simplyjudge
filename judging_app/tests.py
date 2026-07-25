@@ -429,8 +429,10 @@ class PhotoStatusWorkflowTests(TestCase):
         review_response = self.client.get(reverse('judge_review', args=[self.competition.slug]))
 
         self.assertContains(review_response, 'My submitted scores')
-        self.assertContains(review_response, 'SimplyJudge ID: #')
+        self.assertContains(review_response, 'Photo details hidden for judging')
         self.assertContains(review_response, 'Edit Score')
+        self.assertNotContains(review_response, 'SimplyJudge ID: #')
+        self.assertNotContains(review_response, 'Shortlisted image')
         self.assertNotContains(review_response, 'PRIVATE-FILE-001')
 
         edit_response = self.client.get(
@@ -441,6 +443,9 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(edit_response, 'Initial calibration note.')
         self.assertContains(edit_response, 'Update Evaluation')
         self.assertContains(edit_response, 'Image zoom controls')
+        self.assertContains(edit_response, 'Photo details hidden for judging')
+        self.assertNotContains(edit_response, 'Shortlisted image')
+        self.assertNotContains(edit_response, 'SimplyJudge ID: #')
         self.assertNotContains(edit_response, 'PRIVATE-FILE-001')
 
         post_response = self.client.post(
@@ -579,10 +584,10 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.internal_judge)
         response = self.client.get(reverse('elimination_mode', args=[self.competition.slug]))
 
-        self.assertContains(response, f'SimplyJudge ID: #{ready.id}')
         self.assertContains(response, '1 for you')
         self.assertContains(response, '1 pending')
         self.assertContains(response, '1 missing images')
+        self.assertNotContains(response, f'SimplyJudge ID: #{ready.id}')
         self.assertNotContains(response, f'SimplyJudge ID: #{missing.id}')
 
     def test_completed_zip_status_warns_when_rows_have_no_matching_images(self):
@@ -602,7 +607,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, '122 entries did not match an image file')
         self.assertContains(response, 'not shown in triage')
 
-    def test_internal_round_1_review_hides_identity_and_records_score(self):
+    def test_internal_round_1_review_hides_photo_details_and_records_score(self):
         photo = self.create_photo(
             'RSA_JacquelineRibeiro__Susp Rhythm',
             Photo.Status.ROUND_1,
@@ -614,11 +619,12 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.internal_judge)
         response = self.client.get(reverse('round_1_review', args=[self.competition.slug]))
 
-        self.assertContains(response, 'Susp Rhythm')
-        self.assertContains(response, f'SimplyJudge ID: #{photo.id}')
-        self.assertContains(response, 'Portrait')
-        self.assertContains(response, 'A full story for the photo.')
-        self.assertContains(response, 'Aperture: f/8, Exposure: 1/250, ISO: 320')
+        self.assertContains(response, 'Round 1 score')
+        self.assertNotContains(response, 'Susp Rhythm')
+        self.assertNotContains(response, f'SimplyJudge ID: #{photo.id}')
+        self.assertNotContains(response, 'Portrait')
+        self.assertNotContains(response, 'A full story for the photo.')
+        self.assertNotContains(response, 'Aperture: f/8, Exposure: 1/250, ISO: 320')
         self.assertNotContains(response, 'RSA_JacquelineRibeiro__Susp Rhythm')
         self.assertNotContains(response, 'Jacqueline Ribeiro')
 
@@ -659,7 +665,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.internal_judge)
         first_response = self.client.get(reverse('round_1_review', args=[self.competition.slug]))
 
-        self.assertContains(first_response, 'First Round Title')
+        self.assertNotContains(first_response, 'First Round Title')
         self.assertContains(
             first_response,
             f'href="{reverse("round_1_review", args=[self.competition.slug])}?photo_id={middle_photo.id}"',
@@ -670,7 +676,7 @@ class PhotoStatusWorkflowTests(TestCase):
             f'{reverse("round_1_review", args=[self.competition.slug])}?photo_id={middle_photo.id}'
         )
 
-        self.assertContains(middle_response, 'Middle Round Title')
+        self.assertNotContains(middle_response, 'Middle Round Title')
         self.assertContains(
             middle_response,
             f'href="{reverse("round_1_review", args=[self.competition.slug])}?photo_id={first_photo.id}"',
