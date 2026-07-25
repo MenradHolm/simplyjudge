@@ -656,7 +656,7 @@ class PhotoStatusWorkflowTests(TestCase):
             'Quiet Morning',
         )
 
-    def test_internal_round_1_review_can_move_between_unscored_photos(self):
+    def test_internal_round_1_review_can_move_between_photos(self):
         first_photo = self.create_photo('First Round Title', Photo.Status.ROUND_1)
         middle_photo = self.create_photo('Middle Round Title', Photo.Status.ROUND_1)
         last_photo = self.create_photo('Last Round Title', Photo.Status.ROUND_1)
@@ -684,6 +684,36 @@ class PhotoStatusWorkflowTests(TestCase):
             middle_response,
             f'href="{reverse("round_1_review", args=[self.competition.slug])}?photo_id={last_photo.id}"',
         )
+
+    def test_internal_round_1_review_can_revisit_and_update_scores(self):
+        first_photo = self.create_photo('First Round Title', Photo.Status.ROUND_1)
+        second_photo = self.create_photo('Second Round Title', Photo.Status.ROUND_1)
+        RoundOneScore.objects.create(photo=first_photo, judge=self.internal_judge, score=6)
+
+        self.client.force_login(self.internal_judge)
+        response = self.client.get(
+            f'{reverse("round_1_review", args=[self.competition.slug])}?photo_id={first_photo.id}'
+        )
+
+        self.assertContains(response, f'SimplyJudge ID: #{first_photo.id}')
+        self.assertContains(response, 'Update Round 1 score')
+        self.assertContains(response, 'class="score-button is-selected" type="submit" name="score" value="6"', html=False)
+        self.assertContains(
+            response,
+            f'href="{reverse("round_1_review", args=[self.competition.slug])}?photo_id={second_photo.id}"',
+        )
+
+        post_response = self.client.post(
+            reverse('round_1_review', args=[self.competition.slug]),
+            {'photo_id': first_photo.id, 'score': '9'},
+        )
+
+        self.assertRedirects(
+            post_response,
+            f'{reverse("round_1_review", args=[self.competition.slug])}?photo_id={second_photo.id}',
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(first_photo.round_1_scores.get(judge=self.internal_judge).score, 9)
 
     def test_finalize_shortlist_uses_top_ten_percent_of_round_1_scores(self):
         photos = [

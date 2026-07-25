@@ -84,6 +84,12 @@
         box-shadow: 0 0 0 3px rgba(37, 87, 167, 0.12);
     }
 
+    .score-button.is-selected {
+        border-color: var(--brand);
+        background: #eaf2ff;
+        box-shadow: 0 0 0 3px rgba(37, 87, 167, 0.16);
+    }
+
     .round-review-stats {
         display: flex;
         flex-wrap: wrap;
@@ -147,10 +153,12 @@
                 <form method="POST" style="margin-top: 1.25rem;">
                     {% csrf_token %}
                     <input type="hidden" name="photo_id" value="{{ photo.id }}">
-                    <label class="field-label">Round 1 score</label>
+                    <label class="field-label">
+                        {% if existing_round_1_score %}Update Round 1 score{% else %}Round 1 score{% endif %}
+                    </label>
                     <div class="score-grid" aria-label="Choose a score from 1 to 10">
                         {% for score in score_range %}
-                            <button class="score-button" type="submit" name="score" value="{{ score }}">{{ score }}</button>
+                            <button class="score-button{% if existing_round_1_score and existing_round_1_score.score == score %} is-selected{% endif %}" type="submit" name="score" value="{{ score }}">{{ score }}</button>
                         {% endfor %}
                     </div>
                 </form>

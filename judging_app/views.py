@@ -470,6 +470,7 @@ def round_1_review(request, comp_slug):
         except ValueError:
             score = 0
 
+        next_photo_id = None
         if photo_id.isdigit() and 1 <= score <= 10:
             photo = get_object_or_404(
                 Photo,
@@ -482,32 +483,52 @@ def round_1_review(request, comp_slug):
                 judge=request.user,
                 defaults={'score': score},
             )
+            round_1_photo_ids = list(
+                Photo.objects.filter(
+                    competition=competition,
+                    status=Photo.Status.ROUND_1,
+                ).order_by('id').values_list('id', flat=True)
+            )
+            if photo.id in round_1_photo_ids and len(round_1_photo_ids) > 1:
+                current_position = round_1_photo_ids.index(photo.id)
+                next_photo_id = round_1_photo_ids[(current_position + 1) % len(round_1_photo_ids)]
+
+        if next_photo_id:
+            return redirect(f"{reverse('round_1_review', args=[competition.slug])}?photo_id={next_photo_id}")
         return redirect('round_1_review', comp_slug=competition.slug)
 
-    unscored_photos = Photo.objects.filter(
+    round_1_photos = Photo.objects.filter(
         competition=competition,
         status=Photo.Status.ROUND_1,
-    ).exclude(round_1_scores__judge=request.user).order_by('id')
+    ).order_by('id')
+    unscored_photos = round_1_photos.exclude(round_1_scores__judge=request.user)
+    round_1_photo_ids = list(round_1_photos.values_list('id', flat=True))
     unscored_photo_ids = list(unscored_photos.values_list('id', flat=True))
     requested_photo_id = request.GET.get('photo_id', '')
     current_photo = None
-    if requested_photo_id.isdigit() and int(requested_photo_id) in unscored_photo_ids:
-        current_photo = unscored_photos.filter(id=int(requested_photo_id)).first()
+    if requested_photo_id.isdigit() and int(requested_photo_id) in round_1_photo_ids:
+        current_photo = round_1_photos.filter(id=int(requested_photo_id)).first()
     if current_photo is None:
         current_photo = unscored_photos.first()
+    if current_photo is None:
+        current_photo = round_1_photos.first()
 
     previous_photo_id = None
     next_photo_id = None
-    if current_photo and len(unscored_photo_ids) > 1:
-        current_position = unscored_photo_ids.index(current_photo.id)
+    existing_round_1_score = None
+    if current_photo:
+        existing_round_1_score = RoundOneScore.objects.filter(photo=current_photo, judge=request.user).first()
+
+    if current_photo and len(round_1_photo_ids) > 1:
+        current_position = round_1_photo_ids.index(current_photo.id)
         if current_position > 0:
-            previous_photo_id = unscored_photo_ids[current_position - 1]
-        if current_position < len(unscored_photo_ids) - 1:
-            next_photo_id = unscored_photo_ids[current_position + 1]
+            previous_photo_id = round_1_photo_ids[current_position - 1]
+        if current_position < len(round_1_photo_ids) - 1:
+            next_photo_id = round_1_photo_ids[current_position + 1]
 
     counts = {
         'for_you': len(unscored_photo_ids),
-        'round_1': Photo.objects.filter(competition=competition, status=Photo.Status.ROUND_1).count(),
+        'round_1': len(round_1_photo_ids),
         'shortlisted': Photo.objects.filter(competition=competition, status=Photo.Status.SHORTLISTED).count(),
     }
     return render(
@@ -522,6 +543,7 @@ def round_1_review(request, comp_slug):
             'anonymous_photo_title': anonymize_photo_title(current_photo.title) if current_photo else '',
             'previous_photo_id': previous_photo_id,
             'next_photo_id': next_photo_id,
+            'existing_round_1_score': existing_round_1_score,
         },
     )
 
