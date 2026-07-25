@@ -431,7 +431,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(review_response, 'My submitted scores')
         self.assertContains(review_response, 'Photo details hidden for judging')
         self.assertContains(review_response, 'Edit Score')
-        self.assertNotContains(review_response, 'SimplyJudge ID: #')
+        self.assertContains(review_response, f'SimplyJudge ID: #{photo.id}')
         self.assertNotContains(review_response, 'Shortlisted image')
         self.assertNotContains(review_response, 'PRIVATE-FILE-001')
 
@@ -443,9 +443,8 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(edit_response, 'Initial calibration note.')
         self.assertContains(edit_response, 'Update Evaluation')
         self.assertContains(edit_response, 'Image zoom controls')
-        self.assertContains(edit_response, 'Photo details hidden for judging')
+        self.assertContains(edit_response, f'SimplyJudge ID: #{photo.id}')
         self.assertNotContains(edit_response, 'Shortlisted image')
-        self.assertNotContains(edit_response, 'SimplyJudge ID: #')
         self.assertNotContains(edit_response, 'PRIVATE-FILE-001')
 
         post_response = self.client.post(
@@ -587,7 +586,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, '1 for you')
         self.assertContains(response, '1 pending')
         self.assertContains(response, '1 missing images')
-        self.assertNotContains(response, f'SimplyJudge ID: #{ready.id}')
+        self.assertContains(response, f'SimplyJudge ID: #{ready.id}')
         self.assertNotContains(response, f'SimplyJudge ID: #{missing.id}')
 
     def test_completed_zip_status_warns_when_rows_have_no_matching_images(self):
@@ -621,7 +620,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertContains(response, 'Round 1 score')
         self.assertNotContains(response, 'Susp Rhythm')
-        self.assertNotContains(response, f'SimplyJudge ID: #{photo.id}')
+        self.assertContains(response, f'SimplyJudge ID: #{photo.id}')
         self.assertNotContains(response, 'Portrait')
         self.assertNotContains(response, 'A full story for the photo.')
         self.assertNotContains(response, 'Aperture: f/8, Exposure: 1/250, ISO: 320')

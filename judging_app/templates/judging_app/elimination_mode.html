@@ -172,11 +172,16 @@
         <div>
             <p class="eyebrow">Triage review</p>
             <h1 class="elimination-title">{{ competition.name }}</h1>
-            {% if photo and vote_summary %}
-                <p class="vote-progress">
-                    Round 1 {{ vote_summary.round_1_votes }} / {{ vote_summary.threshold }}
-                    &middot; Reject {{ vote_summary.reject_votes }} / {{ vote_summary.threshold }}
+            {% if photo %}
+                <p class="elimination-meta">
+                    SimplyJudge ID: #{{ photo.id }}
                 </p>
+                {% if vote_summary %}
+                    <p class="vote-progress">
+                        Round 1 {{ vote_summary.round_1_votes }} / {{ vote_summary.threshold }}
+                        &middot; Reject {{ vote_summary.reject_votes }} / {{ vote_summary.threshold }}
+                    </p>
+                {% endif %}
             {% endif %}
         </div>
         <div class="elimination-stats" aria-label="Elimination totals">
