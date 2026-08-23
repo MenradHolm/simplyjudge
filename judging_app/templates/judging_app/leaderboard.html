@@ -6,9 +6,15 @@
 <main class="shell">
     <div class="page-head">
         <div>
-            <p class="eyebrow">Live leaderboard</p>
+            <p class="eyebrow">{% if leaderboard_stage == 'round_1' %}Round 1 leaderboard{% else %}Live leaderboard{% endif %}</p>
             <h2 class="page-title">{{ competition.name }}</h2>
-            <p class="page-copy">Rankings update as judges submit scores.</p>
+            <p class="page-copy">
+                {% if leaderboard_stage == 'round_1' %}
+                    Rankings are using Round 1 scores until final judging scores are available.
+                {% else %}
+                    Rankings update as judges submit scores.
+                {% endif %}
+            </p>
         </div>
         <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
     </div>
@@ -33,7 +39,7 @@
                         <p class="card-meta">Photo details hidden for judging</p>
                     </div>
                     <div class="leaderboard-score">
-                        <span class="metric-label">Avg score</span>
+                        <span class="metric-label">{% if leaderboard_stage == 'round_1' %}Round 1 avg{% else %}Avg score{% endif %}</span>
                         {% if photo.max_score %}
                             <span class="score-value">{{ photo.average_score|floatformat:1 }} / {{ photo.max_score|floatformat:"-2" }}</span>
                             <span class="metric-label">{{ photo.average_percentage|floatformat:1 }}%</span>

@@ -701,7 +701,24 @@ def leaderboard(request, comp_slug):
     photos = list(Photo.objects.filter(competition=competition))
     attach_photo_average_values(photos, scores, max_score)
     ranked_photos = [photo for photo in photos if photo.average_score is not None]
-    if tie_criterion:
+    leaderboard_stage = 'final'
+    if not ranked_photos and is_full_competition(competition):
+        round_1_photos = list(
+            Photo.objects.filter(
+                competition=competition,
+                status__in=[Photo.Status.ROUND_1, Photo.Status.SHORTLISTED],
+            )
+            .annotate(round_1_average=Avg('round_1_scores__score'))
+            .filter(round_1_average__isnull=False)
+            .order_by('-round_1_average', 'id')
+        )
+        for photo in round_1_photos:
+            photo.average_score = photo.round_1_average
+            photo.average_percentage = (photo.average_score / 10 * 100) if photo.average_score is not None else None
+            photo.max_score = 10
+        ranked_photos = round_1_photos
+        leaderboard_stage = 'round_1'
+    elif tie_criterion:
         for photo in ranked_photos:
             tie_scores = []
             for score in photo.judge_scores:
@@ -721,6 +738,7 @@ def leaderboard(request, comp_slug):
             'photos': ranked_photos,
             'tie_criterion': tie_criterion,
             'max_score': max_score,
+            'leaderboard_stage': leaderboard_stage,
         },
     )
 

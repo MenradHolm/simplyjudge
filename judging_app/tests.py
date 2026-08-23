@@ -1223,6 +1223,32 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, '87.5')
         self.assertNotContains(response, private_judge.username)
 
+    def test_full_competition_leaderboard_uses_round_1_scores_until_final_scores_exist(self):
+        first_photo = self.create_photo('Round 1 first image', Photo.Status.ROUND_1)
+        second_photo = self.create_photo('Round 1 second image', Photo.Status.ROUND_1)
+        RoundOneScore.objects.create(photo=first_photo, judge=self.internal_judge, score=5)
+        RoundOneScore.objects.create(photo=second_photo, judge=self.internal_judge, score=9)
+
+        response = self.client.get(reverse('leaderboard', args=[self.competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Round 1 leaderboard')
+        self.assertContains(response, 'SimplyJudge ID: #{}'.format(second_photo.id))
+        self.assertContains(response, '9.0 / 10')
+        self.assertContains(response, '90.0%')
+        self.assertNotContains(response, 'Round 1 second image')
+
+    def test_full_competition_leaderboard_prefers_final_scores_when_available(self):
+        photo = self.create_photo('Final ranked image', Photo.Status.SHORTLISTED)
+        RoundOneScore.objects.create(photo=photo, judge=self.internal_judge, score=9)
+        Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=87.5)
+
+        response = self.client.get(reverse('leaderboard', args=[self.competition.slug]))
+
+        self.assertContains(response, 'Live leaderboard')
+        self.assertContains(response, '87.5')
+        self.assertNotContains(response, 'Round 1 leaderboard')
+
     def test_reports_show_average_score_out_of_rubric_total_and_percentage(self):
         feedback_competition = Competition.objects.create(
             name='Shutter Society',
