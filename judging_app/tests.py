@@ -15,7 +15,7 @@ from PIL import Image
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from .admin import CompetitionAdmin
+from .admin import CompetitionAdmin, PhotoAdmin
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
@@ -1651,6 +1651,92 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         self.assertIn('Shortlisted photos: 2', message)
         self.assertIn('Emails sent: 1', message)
         self.assertIn('Skipped without photographer email: 1', message)
+
+
+class PhotoAdminActionTests(TestCase):
+    def test_mark_selected_as_shortlisted_updates_photo_statuses(self):
+        competition = Competition.objects.create(
+            name='Youth POTY',
+            slug='youth-poty',
+        )
+        first = Photo.objects.create(
+            competition=competition,
+            title='First Finalist',
+            photographer_name='Photographer One',
+            category='Wildlife',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.ROUND_1,
+        )
+        second = Photo.objects.create(
+            competition=competition,
+            title='Second Finalist',
+            photographer_name='Photographer Two',
+            category='Landscape',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.PENDING,
+        )
+        request = RequestFactory().post('/admin/judging_app/photo/')
+        request.user = User.objects.create_superuser(
+            username='platform-admin',
+            email='admin@example.com',
+            password='test-pass',
+        )
+        model_admin = PhotoAdmin(Photo, django_admin.site)
+
+        with patch.object(model_admin, 'message_user') as message_mock:
+            model_admin.mark_selected_as_shortlisted(
+                request,
+                Photo.objects.filter(id__in=[first.id, second.id]),
+            )
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, Photo.Status.SHORTLISTED)
+        self.assertEqual(second.status, Photo.Status.SHORTLISTED)
+        message = message_mock.call_args.args[1]
+        self.assertIn('Marked 2 photo(s) as shortlisted', message)
+
+    def test_mark_selected_as_round_1_updates_photo_statuses(self):
+        competition = Competition.objects.create(
+            name='Youth POTY',
+            slug='youth-poty',
+        )
+        first = Photo.objects.create(
+            competition=competition,
+            title='First Extra Shortlisted',
+            photographer_name='Photographer One',
+            category='Wildlife',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+        second = Photo.objects.create(
+            competition=competition,
+            title='Second Extra Shortlisted',
+            photographer_name='Photographer Two',
+            category='Landscape',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+        request = RequestFactory().post('/admin/judging_app/photo/')
+        request.user = User.objects.create_superuser(
+            username='platform-admin-reset',
+            email='admin-reset@example.com',
+            password='test-pass',
+        )
+        model_admin = PhotoAdmin(Photo, django_admin.site)
+
+        with patch.object(model_admin, 'message_user') as message_mock:
+            model_admin.mark_selected_as_round_1(
+                request,
+                Photo.objects.filter(id__in=[first.id, second.id]),
+            )
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, Photo.Status.ROUND_1)
+        self.assertEqual(second.status, Photo.Status.ROUND_1)
+        message = message_mock.call_args.args[1]
+        self.assertIn('Marked 2 photo(s) as Round 1', message)
 
 
 class UserTimezoneMiddlewareTests(TestCase):

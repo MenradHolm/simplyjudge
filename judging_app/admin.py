@@ -454,6 +454,25 @@ class PhotoAdmin(admin.ModelAdmin):
     list_filter = ('competition', 'category', 'status', 'is_raw_verified')
     search_fields = ('entry_code', 'title', 'photographer_name', 'photographer_email', 'rule_flags', 'exif_warning_flag')
     inlines = (PhotoStatusVoteInline, RoundOneScoreInline)
+    actions = ('mark_selected_as_shortlisted', 'mark_selected_as_round_1')
+
+    @admin.action(description='Mark selected photos as shortlisted')
+    def mark_selected_as_shortlisted(self, request, queryset):
+        updated_count = queryset.update(status=Photo.Status.SHORTLISTED)
+        self.message_user(
+            request,
+            f'Marked {updated_count} photo(s) as shortlisted for final judging.',
+            messages.SUCCESS,
+        )
+
+    @admin.action(description='Mark selected photos as Round 1')
+    def mark_selected_as_round_1(self, request, queryset):
+        updated_count = queryset.update(status=Photo.Status.ROUND_1)
+        self.message_user(
+            request,
+            f'Marked {updated_count} photo(s) as Round 1.',
+            messages.SUCCESS,
+        )
 
 @admin.register(PhotoStatusVote)
 class PhotoStatusVoteAdmin(admin.ModelAdmin):
