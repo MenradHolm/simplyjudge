@@ -388,7 +388,26 @@
                 <button class="zoom-button" type="button" data-zoom-action="reset" aria-label="Reset zoom">1:1</button>
             </div>
             <div class="jury-photo-stage" id="photo-zoom-stage">
-                <img id="judge-photo" src="{{ photo.image.url }}" alt="Anonymous competition submission" draggable="false">
+                <img id="judge-photo" src="{{ photo.image.url }}" alt="{{ photo.title }}" draggable="false">
+            </div>
+            <div class="jury-context" aria-label="Submission details">
+                <div class="jury-meta-row">
+                    <div>
+                        <p class="eyebrow" style="margin-bottom: 0.35rem;">Submission details</p>
+                        <h3 class="competition-name" style="margin: 0;">{{ photo.title }}</h3>
+                    </div>
+                    <span class="tag tag-neutral">{{ photo.category }}</span>
+                </div>
+                <div class="jury-details">
+                    <div>
+                        <p class="field-label">Story / context</p>
+                        <p class="page-copy" style="margin: 0;">{{ photo.description|default:"No story supplied." }}</p>
+                    </div>
+                    <div>
+                        <p class="field-label">Settings</p>
+                        <div class="metadata-block">{{ photo.camera_settings|default:"No settings supplied."|linebreaksbr }}</div>
+                    </div>
+                </div>
             </div>
         </section>
 

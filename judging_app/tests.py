@@ -159,6 +159,28 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_guest_judge_final_scoring_page_shows_submission_details(self):
+        photo = self.create_photo(
+            'Golden Hour Fynbos',
+            Photo.Status.SHORTLISTED,
+            entry_code='PRIVATE-FILE-001',
+            category='Landscape',
+            description='The sun was setting behind the mountain, painting the sky orange and pink.',
+            camera_settings='Apple iPhone 13 Pro Max | ISO40 | f1.5 | 1/164s',
+        )
+        RubricCriterion.objects.create(competition=self.competition, name='Impact', score_out_of=10)
+
+        self.client.force_login(self.guest_judge)
+        response = self.client.get(reverse('judge_photo', args=[self.competition.slug, photo.id]))
+
+        self.assertContains(response, 'Submission details')
+        self.assertContains(response, 'Golden Hour Fynbos')
+        self.assertContains(response, 'Landscape')
+        self.assertContains(response, 'The sun was setting behind the mountain')
+        self.assertContains(response, 'Apple iPhone 13 Pro Max')
+        self.assertNotContains(response, 'PRIVATE-FILE-001')
+        self.assertNotContains(response, 'Hidden Entrant')
+
     def test_judge_photo_arrow_navigation_hooks_are_photo_links(self):
         first_photo = self.create_photo('First shortlisted image', Photo.Status.SHORTLISTED)
         current_photo = self.create_photo('Current shortlisted image', Photo.Status.SHORTLISTED)
@@ -444,7 +466,6 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(edit_response, 'Update Evaluation')
         self.assertContains(edit_response, 'Image zoom controls')
         self.assertContains(edit_response, f'SimplyJudge ID: #{photo.id}')
-        self.assertNotContains(edit_response, 'Shortlisted image')
         self.assertNotContains(edit_response, 'PRIVATE-FILE-001')
 
         post_response = self.client.post(
