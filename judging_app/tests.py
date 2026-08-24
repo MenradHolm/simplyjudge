@@ -1772,6 +1772,45 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         self.assertIn('Failed/not sent: 1', message)
         self.assertIn(f'#{shortlisted.id}: SMTP unavailable', message)
 
+    def test_email_raw_file_requests_stops_after_first_delivery_error(self):
+        competition = Competition.objects.create(
+            name='World Class Photo Awards',
+            slug='world-class-photo-awards',
+            emails_enabled=True,
+        )
+        for index in range(3):
+            Photo.objects.create(
+                competition=competition,
+                title=f'Finalist Image {index}',
+                photographer_name=f'Finalist {index}',
+                photographer_email=f'finalist-{index}@example.com',
+                category='Open',
+                image='competition_photos/placeholder.jpg',
+                status=Photo.Status.SHORTLISTED,
+            )
+        request = RequestFactory().post('/admin/judging_app/competition/')
+        request.user = User.objects.create_superuser(
+            username='platform-admin-raw-stop',
+            email='admin-raw-stop@example.com',
+            password='test-pass',
+        )
+        model_admin = CompetitionAdmin(Competition, django_admin.site)
+
+        with patch.object(model_admin, 'message_user') as message_mock:
+            with patch('judging_app.admin.send_automated_email', side_effect=TimeoutError('SMTP timed out')) as email_mock:
+                model_admin.email_raw_file_requests(
+                    request,
+                    Competition.objects.filter(id=competition.id),
+                )
+
+        message = message_mock.call_args.args[1]
+        self.assertEqual(email_mock.call_count, 1)
+        self.assertIn('Shortlisted photos: 3', message)
+        self.assertIn('Emails sent: 0', message)
+        self.assertIn('Failed/not sent: 3', message)
+        self.assertIn('stopped after first delivery error', message)
+        self.assertIn('2 remaining not attempted', message)
+
 
 class PhotoAdminActionTests(TestCase):
     def test_mark_selected_as_shortlisted_updates_photo_statuses(self):

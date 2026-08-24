@@ -419,51 +419,59 @@ class CompetitionAdmin(admin.ModelAdmin):
 
     @admin.action(description='Email RAW file requests to shortlisted photographers')
     def email_raw_file_requests(self, request, queryset):
-        total_shortlisted = 0
         sent_count = 0
         skipped_without_email = 0
         suppressed_count = 0
         failed_count = 0
+        not_attempted_count = 0
         failed_photos = []
 
-        for competition in queryset:
-            shortlisted_photos = Photo.objects.filter(
-                competition=competition,
-                status=Photo.Status.SHORTLISTED,
-            )
-            for photo in shortlisted_photos:
-                total_shortlisted += 1
-                if not photo.photographer_email:
-                    skipped_without_email += 1
-                    continue
+        shortlisted_photos = Photo.objects.filter(
+            competition__in=queryset,
+            status=Photo.Status.SHORTLISTED,
+        ).select_related('competition').order_by('id')
+        total_shortlisted = shortlisted_photos.count()
 
-                try:
-                    result = send_automated_email(
-                        competition=competition,
-                        subject=f'RAW file request for {competition.name}',
-                        template_name='emails/raw_file_request.txt',
-                        context={'photo': photo},
-                        recipient_list=[photo.photographer_email],
-                        fail_silently=False,
-                    )
-                except Exception as exc:
-                    failed_count += 1
-                    failed_photos.append(f'#{photo.id}: {exc}')
-                    continue
-                if result:
-                    sent_count += 1
-                elif competition.emails_enabled:
-                    failed_count += 1
-                    failed_photos.append(f'#{photo.id}: email backend returned 0 sent')
-                else:
-                    suppressed_count += 1
+        for photo in shortlisted_photos:
+            if not photo.photographer_email:
+                skipped_without_email += 1
+                continue
+
+            try:
+                result = send_automated_email(
+                    competition=photo.competition,
+                    subject=f'RAW file request for {photo.competition.name}',
+                    template_name='emails/raw_file_request.txt',
+                    context={'photo': photo},
+                    recipient_list=[photo.photographer_email],
+                    fail_silently=False,
+                )
+            except Exception as exc:
+                failed_count += 1
+                failed_photos.append(f'#{photo.id}: {exc}')
+                handled_count = sent_count + skipped_without_email + suppressed_count + failed_count
+                not_attempted_count = max(total_shortlisted - handled_count, 0)
+                break
+            if result:
+                sent_count += 1
+            elif photo.competition.emails_enabled:
+                failed_count += 1
+                failed_photos.append(f'#{photo.id}: email backend returned 0 sent')
+            else:
+                suppressed_count += 1
 
         failure_note = ''
-        if failed_photos:
+        not_sent_count = failed_count + not_attempted_count
+        if failed_photos or not_attempted_count:
             sample_failures = '; '.join(failed_photos[:5])
             if len(failed_photos) > 5:
                 sample_failures += f'; plus {len(failed_photos) - 5} more'
-            failure_note = f' Failed/not sent: {failed_count}. {sample_failures}.'
+            if not_attempted_count:
+                sample_failures += (
+                    f'; stopped after first delivery error; '
+                    f'{not_attempted_count} remaining not attempted'
+                )
+            failure_note = f' Failed/not sent: {not_sent_count}. {sample_failures}.'
 
         self.message_user(
             request,
@@ -474,7 +482,7 @@ class CompetitionAdmin(admin.ModelAdmin):
                 f'Skipped without photographer email: {skipped_without_email}.'
                 f'{failure_note}'
             ),
-            messages.ERROR if failed_count else messages.SUCCESS,
+            messages.ERROR if not_sent_count else messages.SUCCESS,
         )
 
 @admin.register(CompetitionMembership)
