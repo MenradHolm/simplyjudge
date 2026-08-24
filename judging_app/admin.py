@@ -5,6 +5,7 @@ import zipfile
 
 from django.contrib import admin, messages
 from django.core.files.base import ContentFile
+from django.db.models import Avg
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
@@ -55,7 +56,7 @@ class CompetitionAdmin(admin.ModelAdmin):
         }),
     )
     inlines = (CompetitionMembershipInline,)
-    actions = ('publish_competition_results', 'email_raw_file_requests')
+    actions = ('export_shortlisted_photos_csv', 'publish_competition_results', 'email_raw_file_requests')
 
     def get_urls(self):
         urls = super().get_urls()
@@ -179,6 +180,77 @@ class CompetitionAdmin(admin.ModelAdmin):
                 'camera_settings': photo.camera_settings or '',
             })
         return response
+
+    @admin.action(description='Export shortlisted photos CSV')
+    def export_shortlisted_photos_csv(self, request, queryset):
+        fields = [
+            'competition',
+            'photo_id',
+            'entry_code',
+            'title',
+            'photographer_name',
+            'photographer_email',
+            'category',
+            'status',
+            'round_1_average',
+            'image_name',
+            'image_url',
+            'image_preview_formula',
+            'story_context',
+            'camera_settings',
+            'raw_file_uploaded',
+            'raw_file_url',
+            'raw_verified',
+            'raw_verification_notes',
+        ]
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="shortlisted-photos.csv"'
+        writer = csv.DictWriter(response, fieldnames=fields)
+        writer.writeheader()
+
+        shortlisted_photos = (
+            Photo.objects.filter(
+                competition__in=queryset,
+                status=Photo.Status.SHORTLISTED,
+            )
+            .select_related('competition')
+            .annotate(round_1_average=Avg('round_1_scores__score'))
+            .order_by('competition__name', 'category', 'id')
+        )
+
+        for photo in shortlisted_photos:
+            image_url = self.file_url(photo.image)
+            raw_file_url = self.file_url(photo.raw_file)
+            round_1_average = photo.round_1_average
+            writer.writerow({
+                'competition': photo.competition.name,
+                'photo_id': photo.id,
+                'entry_code': photo.entry_code or '',
+                'title': photo.title or '',
+                'photographer_name': photo.photographer_name or '',
+                'photographer_email': photo.photographer_email or '',
+                'category': photo.category or '',
+                'status': photo.get_status_display(),
+                'round_1_average': f'{round_1_average:.2f}' if round_1_average is not None else '',
+                'image_name': photo.image.name if photo.image else '',
+                'image_url': image_url,
+                'image_preview_formula': f'=IMAGE("{image_url}")' if image_url else '',
+                'story_context': photo.description or '',
+                'camera_settings': photo.camera_settings or '',
+                'raw_file_uploaded': 'Yes' if photo.raw_file else 'No',
+                'raw_file_url': raw_file_url,
+                'raw_verified': 'Yes' if photo.is_raw_verified else 'No',
+                'raw_verification_notes': photo.exif_warning_flag or '',
+            })
+        return response
+
+    def file_url(self, file_field):
+        if not file_field:
+            return ''
+        try:
+            return file_field.url
+        except ValueError:
+            return ''
 
     def process_photo_corrections_csv(self, competition, corrections_file, apply_changes):
         text = corrections_file.read().decode('utf-8-sig')

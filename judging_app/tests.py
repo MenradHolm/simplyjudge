@@ -1612,6 +1612,61 @@ class EntryOrderSignalTests(TestCase):
 
 
 class PublishCompetitionResultsAdminActionTests(TestCase):
+    def test_export_shortlisted_photos_csv_includes_finalist_details(self):
+        competition = Competition.objects.create(
+            name='World Class Photo Awards',
+            slug='world-class-photo-awards',
+            emails_enabled=True,
+        )
+        judge = User.objects.create_user(username='round-one-judge', password='test-pass')
+        shortlisted = Photo.objects.create(
+            competition=competition,
+            entry_code='A001',
+            title='Finalist Image',
+            photographer_name='Finalist One',
+            photographer_email='finalist@example.com',
+            category='Wildlife',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+            description='A quiet moment in the field.',
+            camera_settings='1/500s f/5.6 ISO 400',
+        )
+        RoundOneScore.objects.create(photo=shortlisted, judge=judge, score=8)
+        Photo.objects.create(
+            competition=competition,
+            title='Round One Image',
+            photographer_name='Round One Entrant',
+            photographer_email='round-one@example.com',
+            category='Wildlife',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.ROUND_1,
+        )
+        request = RequestFactory().post('/admin/judging_app/competition/')
+        request.user = User.objects.create_superuser(
+            username='platform-admin-export-shortlist',
+            email='admin-export-shortlist@example.com',
+            password='test-pass',
+        )
+        model_admin = CompetitionAdmin(Competition, django_admin.site)
+
+        response = model_admin.export_shortlisted_photos_csv(
+            request,
+            Competition.objects.filter(id=competition.id),
+        )
+
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn('shortlisted-photos.csv', response['Content-Disposition'])
+        rows = list(csv.DictReader(io.StringIO(response.content.decode())))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['photo_id'], str(shortlisted.id))
+        self.assertEqual(rows[0]['title'], 'Finalist Image')
+        self.assertEqual(rows[0]['photographer_email'], 'finalist@example.com')
+        self.assertEqual(rows[0]['category'], 'Wildlife')
+        self.assertEqual(rows[0]['round_1_average'], '8.00')
+        self.assertEqual(rows[0]['story_context'], 'A quiet moment in the field.')
+        self.assertEqual(rows[0]['camera_settings'], '1/500s f/5.6 ISO 400')
+        self.assertEqual(rows[0]['raw_file_uploaded'], 'No')
+
     def test_publish_competition_results_emails_shortlisted_photographers(self):
         competition = Competition.objects.create(
             name='World Class Photo Awards',
