@@ -423,6 +423,8 @@ class CompetitionAdmin(admin.ModelAdmin):
         sent_count = 0
         skipped_without_email = 0
         suppressed_count = 0
+        failed_count = 0
+        failed_photos = []
 
         for competition in queryset:
             shortlisted_photos = Photo.objects.filter(
@@ -435,17 +437,33 @@ class CompetitionAdmin(admin.ModelAdmin):
                     skipped_without_email += 1
                     continue
 
-                result = send_automated_email(
-                    competition=competition,
-                    subject=f'RAW file request for {competition.name}',
-                    template_name='emails/raw_file_request.txt',
-                    context={'photo': photo},
-                    recipient_list=[photo.photographer_email],
-                )
+                try:
+                    result = send_automated_email(
+                        competition=competition,
+                        subject=f'RAW file request for {competition.name}',
+                        template_name='emails/raw_file_request.txt',
+                        context={'photo': photo},
+                        recipient_list=[photo.photographer_email],
+                        fail_silently=True,
+                    )
+                except Exception as exc:
+                    failed_count += 1
+                    failed_photos.append(f'#{photo.id}: {exc}')
+                    continue
                 if result:
                     sent_count += 1
+                elif competition.emails_enabled:
+                    failed_count += 1
+                    failed_photos.append(f'#{photo.id}: email backend returned 0 sent')
                 else:
                     suppressed_count += 1
+
+        failure_note = ''
+        if failed_photos:
+            sample_failures = '; '.join(failed_photos[:5])
+            if len(failed_photos) > 5:
+                sample_failures += f'; plus {len(failed_photos) - 5} more'
+            failure_note = f' Failed/not sent: {failed_count}. {sample_failures}.'
 
         self.message_user(
             request,
@@ -454,7 +472,9 @@ class CompetitionAdmin(admin.ModelAdmin):
                 f'Emails sent: {sent_count}. '
                 f'Suppressed by email safety switch: {suppressed_count}. '
                 f'Skipped without photographer email: {skipped_without_email}.'
+                f'{failure_note}'
             ),
+            messages.ERROR if failed_count else messages.SUCCESS,
         )
 
 @admin.register(CompetitionMembership)
