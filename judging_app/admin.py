@@ -444,7 +444,7 @@ class CompetitionAdmin(admin.ModelAdmin):
                         template_name='emails/raw_file_request.txt',
                         context={'photo': photo},
                         recipient_list=[photo.photographer_email],
-                        fail_silently=True,
+                        fail_silently=False,
                     )
                 except Exception as exc:
                     failed_count += 1

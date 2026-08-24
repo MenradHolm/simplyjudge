@@ -1728,7 +1728,7 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
             template_name='emails/raw_file_request.txt',
             context={'photo': shortlisted},
             recipient_list=['finalist@example.com'],
-            fail_silently=True,
+            fail_silently=False,
         )
         message = message_mock.call_args.args[1]
         self.assertIn('RAW request emails processed', message)
