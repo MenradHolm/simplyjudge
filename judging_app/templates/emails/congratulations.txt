@@ -2,4 +2,12 @@ Hello {{ photo.photographer_name }},
 
 Congratulations. Your image "{{ photo.title }}" has been shortlisted for {{ competition.name }}.
 
-Thank you for being part of the event.
+To complete the finalist verification process, please upload the original RAW file for this image using the link below:
+
+{{ raw_upload_url }}
+
+Please upload the original camera RAW file for the shortlisted image, not an edited export or resized JPEG. If your camera did not produce a RAW file for this image, please contact the competition organiser as soon as possible.
+
+You may need to sign in with the same email address used for your entry before the upload page will open.
+
+Thank you for being part of the event, and congratulations again on being shortlisted.

@@ -397,9 +397,14 @@ class CompetitionAdmin(admin.ModelAdmin):
 
                 result = send_automated_email(
                     competition=competition,
-                    subject=f'Congratulations from {competition.name}',
+                    subject=f'RAW file request for {competition.name}',
                     template_name='emails/congratulations.txt',
-                    context={'photo': photo},
+                    context={
+                        'photo': photo,
+                        'raw_upload_url': request.build_absolute_uri(
+                            reverse('upload_raw_file', args=[competition.slug, photo.id])
+                        ),
+                    },
                     recipient_list=[photo.photographer_email],
                 )
                 if result:

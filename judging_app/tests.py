@@ -1663,9 +1663,14 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         self.assertTrue(competition.results_published)
         email_mock.assert_called_once_with(
             competition=competition,
-            subject='Congratulations from World Class Photo Awards',
+            subject='RAW file request for World Class Photo Awards',
             template_name='emails/congratulations.txt',
-            context={'photo': shortlisted},
+            context={
+                'photo': shortlisted,
+                'raw_upload_url': request.build_absolute_uri(
+                    reverse('upload_raw_file', args=[competition.slug, shortlisted.id])
+                ),
+            },
             recipient_list=['finalist@example.com'],
         )
         message = message_mock.call_args.args[1]
