@@ -1663,17 +1663,74 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         self.assertTrue(competition.results_published)
         email_mock.assert_called_once_with(
             competition=competition,
-            subject='RAW file request for World Class Photo Awards',
+            subject='Congratulations from World Class Photo Awards',
             template_name='emails/congratulations.txt',
-            context={
-                'photo': shortlisted,
-                'raw_upload_url': request.build_absolute_uri(
-                    reverse('upload_raw_file', args=[competition.slug, shortlisted.id])
-                ),
-            },
+            context={'photo': shortlisted},
             recipient_list=['finalist@example.com'],
         )
         message = message_mock.call_args.args[1]
+        self.assertIn('Shortlisted photos: 2', message)
+        self.assertIn('Emails sent: 1', message)
+        self.assertIn('Skipped without photographer email: 1', message)
+
+    def test_email_raw_file_requests_does_not_publish_results(self):
+        competition = Competition.objects.create(
+            name='World Class Photo Awards',
+            slug='world-class-photo-awards',
+            emails_enabled=True,
+        )
+        shortlisted = Photo.objects.create(
+            competition=competition,
+            title='Finalist Image',
+            photographer_name='Finalist One',
+            photographer_email='finalist@example.com',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+        Photo.objects.create(
+            competition=competition,
+            title='Shortlisted Without Email',
+            photographer_name='Finalist Two',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+        Photo.objects.create(
+            competition=competition,
+            title='Round 1 Image',
+            photographer_name='Round 1 Entrant',
+            photographer_email='round1@example.com',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.ROUND_1,
+        )
+        request = RequestFactory().post('/admin/judging_app/competition/')
+        request.user = User.objects.create_superuser(
+            username='platform-admin-raw',
+            email='admin-raw@example.com',
+            password='test-pass',
+        )
+        model_admin = CompetitionAdmin(Competition, django_admin.site)
+
+        with patch.object(model_admin, 'message_user') as message_mock:
+            with patch('judging_app.admin.send_automated_email', return_value=1) as email_mock:
+                model_admin.email_raw_file_requests(
+                    request,
+                    Competition.objects.filter(id=competition.id),
+                )
+
+        competition.refresh_from_db()
+        self.assertFalse(competition.results_published)
+        email_mock.assert_called_once_with(
+            competition=competition,
+            subject='RAW file request for World Class Photo Awards',
+            template_name='emails/raw_file_request.txt',
+            context={'photo': shortlisted},
+            recipient_list=['finalist@example.com'],
+        )
+        message = message_mock.call_args.args[1]
+        self.assertIn('RAW request emails processed', message)
         self.assertIn('Shortlisted photos: 2', message)
         self.assertIn('Emails sent: 1', message)
         self.assertIn('Skipped without photographer email: 1', message)

@@ -1,0 +1,13 @@
+Hello {{ photo.photographer_name }},
+
+Congratulations. Your image "{{ photo.title }}" has been shortlisted for {{ competition.name }}.
+
+As part of the finalist verification process, please send us the original RAW file for this shortlisted image.
+
+Because entries were submitted through our website rather than SimplyJudge, you do not need to create a SimplyJudge account or upload anything there. Please reply to this email with a download link to the original RAW file, for example a Google Drive, Dropbox, WeTransfer, OneDrive, or similar link.
+
+Please make sure the link allows us to download the file. The file should be the original camera RAW file, not an edited export, resized JPEG, screenshot, or social-media download.
+
+If your camera did not produce a RAW file for this image, please reply and let us know as soon as possible.
+
+Thank you, and congratulations again on being shortlisted.

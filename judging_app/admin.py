@@ -55,7 +55,7 @@ class CompetitionAdmin(admin.ModelAdmin):
         }),
     )
     inlines = (CompetitionMembershipInline,)
-    actions = ('publish_competition_results',)
+    actions = ('publish_competition_results', 'email_raw_file_requests')
 
     def get_urls(self):
         urls = super().get_urls()
@@ -397,14 +397,9 @@ class CompetitionAdmin(admin.ModelAdmin):
 
                 result = send_automated_email(
                     competition=competition,
-                    subject=f'RAW file request for {competition.name}',
+                    subject=f'Congratulations from {competition.name}',
                     template_name='emails/congratulations.txt',
-                    context={
-                        'photo': photo,
-                        'raw_upload_url': request.build_absolute_uri(
-                            reverse('upload_raw_file', args=[competition.slug, photo.id])
-                        ),
-                    },
+                    context={'photo': photo},
                     recipient_list=[photo.photographer_email],
                 )
                 if result:
@@ -416,6 +411,46 @@ class CompetitionAdmin(admin.ModelAdmin):
             request,
             (
                 f'Results published. Shortlisted photos: {total_shortlisted}. '
+                f'Emails sent: {sent_count}. '
+                f'Suppressed by email safety switch: {suppressed_count}. '
+                f'Skipped without photographer email: {skipped_without_email}.'
+            ),
+        )
+
+    @admin.action(description='Email RAW file requests to shortlisted photographers')
+    def email_raw_file_requests(self, request, queryset):
+        total_shortlisted = 0
+        sent_count = 0
+        skipped_without_email = 0
+        suppressed_count = 0
+
+        for competition in queryset:
+            shortlisted_photos = Photo.objects.filter(
+                competition=competition,
+                status=Photo.Status.SHORTLISTED,
+            )
+            for photo in shortlisted_photos:
+                total_shortlisted += 1
+                if not photo.photographer_email:
+                    skipped_without_email += 1
+                    continue
+
+                result = send_automated_email(
+                    competition=competition,
+                    subject=f'RAW file request for {competition.name}',
+                    template_name='emails/raw_file_request.txt',
+                    context={'photo': photo},
+                    recipient_list=[photo.photographer_email],
+                )
+                if result:
+                    sent_count += 1
+                else:
+                    suppressed_count += 1
+
+        self.message_user(
+            request,
+            (
+                f'RAW request emails processed. Shortlisted photos: {total_shortlisted}. '
                 f'Emails sent: {sent_count}. '
                 f'Suppressed by email safety switch: {suppressed_count}. '
                 f'Skipped without photographer email: {skipped_without_email}.'
