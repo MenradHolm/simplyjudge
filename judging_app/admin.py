@@ -1,8 +1,10 @@
 import csv
 import io
 import os
+import socket
 import zipfile
 
+from django.conf import settings
 from django.contrib import admin, messages
 from django.core.files.base import ContentFile
 from django.db.models import Avg
@@ -503,12 +505,22 @@ class CompetitionAdmin(admin.ModelAdmin):
             status=Photo.Status.SHORTLISTED,
         ).select_related('competition').order_by('id')
         total_shortlisted = shortlisted_photos.count()
+        photos_to_email = []
 
         for photo in shortlisted_photos:
             if not photo.photographer_email:
                 skipped_without_email += 1
                 continue
+            photos_to_email.append(photo)
 
+        if photos_to_email:
+            smtp_error = self.email_server_connection_error()
+            if smtp_error:
+                failed_count = len(photos_to_email)
+                failed_photos.append(smtp_error)
+                photos_to_email = []
+
+        for photo in photos_to_email:
             try:
                 result = send_automated_email(
                     competition=photo.competition,
@@ -556,6 +568,19 @@ class CompetitionAdmin(admin.ModelAdmin):
             ),
             messages.ERROR if not_sent_count else messages.SUCCESS,
         )
+
+    def email_server_connection_error(self):
+        host = getattr(settings, 'EMAIL_HOST', '')
+        port = getattr(settings, 'EMAIL_PORT', None)
+        if not host or not port:
+            return 'Email server is not configured. Check EMAIL_HOST and EMAIL_PORT.'
+
+        timeout = min(getattr(settings, 'EMAIL_TIMEOUT', 5) or 5, 3)
+        try:
+            with socket.create_connection((host, int(port)), timeout=timeout):
+                return ''
+        except OSError as exc:
+            return f'Cannot reach email server {host}:{port}: {exc}'
 
 @admin.register(CompetitionMembership)
 class CompetitionMembershipAdmin(admin.ModelAdmin):
