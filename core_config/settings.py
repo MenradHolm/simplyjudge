@@ -66,7 +66,7 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', False)
 EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', False)
-EMAIL_TIMEOUT = env_int('EMAIL_TIMEOUT', 20)
+EMAIL_TIMEOUT = env_int('EMAIL_TIMEOUT', 5)
 DEFAULT_FROM_EMAIL = os.environ.get(
     'DEFAULT_FROM_EMAIL',
     EMAIL_HOST_USER or 'webmaster@localhost',
