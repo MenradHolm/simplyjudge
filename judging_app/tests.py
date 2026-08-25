@@ -15,7 +15,7 @@ from PIL import Image
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from .admin import CompetitionAdmin, PhotoAdmin
+from .admin import CompetitionAdmin, PhotoAdmin, send_raw_file_request_email_batch
 from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
@@ -1705,7 +1705,7 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
             Competition.objects.filter(id=competition.id),
         )
 
-        self.assertNotIn('email_raw_file_requests', model_admin.actions)
+        self.assertIn('email_raw_file_requests', model_admin.actions)
         self.assertIn('export_raw_file_request_emails_csv', model_admin.actions)
         self.assertIn('raw-file-request-emails.csv', response['Content-Disposition'])
         rows = list(csv.DictReader(io.StringIO(response.content.decode())))
@@ -1778,7 +1778,7 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         self.assertIn('Emails sent: 1', message)
         self.assertIn('Skipped without photographer email: 1', message)
 
-    def test_email_raw_file_requests_does_not_publish_results(self):
+    def test_email_raw_file_requests_queues_background_send_without_publishing_results(self):
         competition = Competition.objects.create(
             name='World Class Photo Awards',
             slug='world-class-photo-awards',
@@ -1819,30 +1819,29 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         model_admin = CompetitionAdmin(Competition, django_admin.site)
 
         with patch.object(model_admin, 'message_user') as message_mock:
-            with patch.object(model_admin, 'email_server_connection_error', return_value=''):
-                with patch('judging_app.admin.send_automated_email', return_value=1) as email_mock:
-                    model_admin.email_raw_file_requests(
-                        request,
-                        Competition.objects.filter(id=competition.id),
-                    )
+            with patch('judging_app.admin.threading.Thread') as thread_class:
+                thread = Mock()
+                thread_class.return_value = thread
+                model_admin.email_raw_file_requests(
+                    request,
+                    Competition.objects.filter(id=competition.id),
+                )
 
         competition.refresh_from_db()
         self.assertFalse(competition.results_published)
-        email_mock.assert_called_once_with(
-            competition=competition,
-            subject='RAW file request for World Class Photo Awards',
-            template_name='emails/raw_file_request.txt',
-            context={'photo': shortlisted},
-            recipient_list=['finalist@example.com'],
-            fail_silently=False,
+        thread_class.assert_called_once_with(
+            target=send_raw_file_request_email_batch,
+            args=([shortlisted.id],),
+            daemon=True,
         )
+        thread.start.assert_called_once()
         message = message_mock.call_args.args[1]
-        self.assertIn('RAW request emails processed', message)
+        self.assertIn('RAW request email send started', message)
         self.assertIn('Shortlisted photos: 2', message)
-        self.assertIn('Emails sent: 1', message)
+        self.assertIn('Queued 1 email(s)', message)
         self.assertIn('Skipped without photographer email: 1', message)
 
-    def test_email_raw_file_requests_reports_unreachable_email_server_without_sending(self):
+    def test_email_raw_file_requests_warns_when_nothing_can_be_queued(self):
         competition = Competition.objects.create(
             name='World Class Photo Awards',
             slug='world-class-photo-awards',
@@ -1850,112 +1849,66 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         )
         Photo.objects.create(
             competition=competition,
-            title='Finalist Image',
-            photographer_name='Finalist One',
-            photographer_email='finalist@example.com',
+            title='Shortlisted Without Email',
+            photographer_name='Finalist Two',
             category='Open',
             image='competition_photos/placeholder.jpg',
             status=Photo.Status.SHORTLISTED,
         )
         request = RequestFactory().post('/admin/judging_app/competition/')
         request.user = User.objects.create_superuser(
-            username='platform-admin-raw-unreachable',
-            email='admin-raw-unreachable@example.com',
+            username='platform-admin-raw-empty',
+            email='admin-raw-empty@example.com',
             password='test-pass',
         )
         model_admin = CompetitionAdmin(Competition, django_admin.site)
 
         with patch.object(model_admin, 'message_user') as message_mock:
-            with patch.object(model_admin, 'email_server_connection_error', return_value='Cannot reach email server example:465'):
-                with patch('judging_app.admin.send_automated_email') as email_mock:
-                    model_admin.email_raw_file_requests(
-                        request,
-                        Competition.objects.filter(id=competition.id),
-                    )
+            with patch('judging_app.admin.threading.Thread') as thread_class:
+                model_admin.email_raw_file_requests(
+                    request,
+                    Competition.objects.filter(id=competition.id),
+                )
 
-        email_mock.assert_not_called()
+        thread_class.assert_not_called()
         message = message_mock.call_args.args[1]
-        self.assertIn('RAW request emails processed', message)
-        self.assertIn('Emails sent: 0', message)
-        self.assertIn('Failed/not sent: 1', message)
-        self.assertIn('Cannot reach email server example:465', message)
+        self.assertIn('No RAW request emails were queued', message)
+        self.assertIn('Skipped without photographer email: 1', message)
 
-    def test_email_raw_file_requests_reports_send_failures_without_crashing(self):
+    def test_raw_file_request_background_sender_sends_and_continues_after_failure(self):
         competition = Competition.objects.create(
             name='World Class Photo Awards',
             slug='world-class-photo-awards',
             emails_enabled=True,
         )
-        shortlisted = Photo.objects.create(
+        first = Photo.objects.create(
             competition=competition,
-            title='Finalist Image',
+            title='First Finalist',
             photographer_name='Finalist One',
-            photographer_email='finalist@example.com',
+            photographer_email='first@example.com',
             category='Open',
             image='competition_photos/placeholder.jpg',
             status=Photo.Status.SHORTLISTED,
         )
-        request = RequestFactory().post('/admin/judging_app/competition/')
-        request.user = User.objects.create_superuser(
-            username='platform-admin-raw-failure',
-            email='admin-raw-failure@example.com',
-            password='test-pass',
+        second = Photo.objects.create(
+            competition=competition,
+            title='Second Finalist',
+            photographer_name='Finalist Two',
+            photographer_email='second@example.com',
+            category='Open',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
         )
-        model_admin = CompetitionAdmin(Competition, django_admin.site)
 
-        with patch.object(model_admin, 'message_user') as message_mock:
-            with patch.object(model_admin, 'email_server_connection_error', return_value=''):
-                with patch('judging_app.admin.send_automated_email', side_effect=RuntimeError('SMTP unavailable')):
-                    model_admin.email_raw_file_requests(
-                        request,
-                        Competition.objects.filter(id=competition.id),
-                    )
+        with patch(
+            'judging_app.admin.send_automated_email',
+            side_effect=[RuntimeError('SMTP unavailable'), 1],
+        ) as email_mock:
+            send_raw_file_request_email_batch([first.id, second.id])
 
-        message = message_mock.call_args.args[1]
-        self.assertIn('RAW request emails processed', message)
-        self.assertIn('Emails sent: 0', message)
-        self.assertIn('Failed/not sent: 1', message)
-        self.assertIn(f'#{shortlisted.id}: SMTP unavailable', message)
-
-    def test_email_raw_file_requests_stops_after_first_delivery_error(self):
-        competition = Competition.objects.create(
-            name='World Class Photo Awards',
-            slug='world-class-photo-awards',
-            emails_enabled=True,
-        )
-        for index in range(3):
-            Photo.objects.create(
-                competition=competition,
-                title=f'Finalist Image {index}',
-                photographer_name=f'Finalist {index}',
-                photographer_email=f'finalist-{index}@example.com',
-                category='Open',
-                image='competition_photos/placeholder.jpg',
-                status=Photo.Status.SHORTLISTED,
-            )
-        request = RequestFactory().post('/admin/judging_app/competition/')
-        request.user = User.objects.create_superuser(
-            username='platform-admin-raw-stop',
-            email='admin-raw-stop@example.com',
-            password='test-pass',
-        )
-        model_admin = CompetitionAdmin(Competition, django_admin.site)
-
-        with patch.object(model_admin, 'message_user') as message_mock:
-            with patch.object(model_admin, 'email_server_connection_error', return_value=''):
-                with patch('judging_app.admin.send_automated_email', side_effect=TimeoutError('SMTP timed out')) as email_mock:
-                    model_admin.email_raw_file_requests(
-                        request,
-                        Competition.objects.filter(id=competition.id),
-                    )
-
-        message = message_mock.call_args.args[1]
-        self.assertEqual(email_mock.call_count, 1)
-        self.assertIn('Shortlisted photos: 3', message)
-        self.assertIn('Emails sent: 0', message)
-        self.assertIn('Failed/not sent: 3', message)
-        self.assertIn('stopped after first delivery error', message)
-        self.assertIn('2 remaining not attempted', message)
+        self.assertEqual(email_mock.call_count, 2)
+        self.assertEqual(email_mock.call_args_list[0].kwargs['recipient_list'], ['first@example.com'])
+        self.assertEqual(email_mock.call_args_list[1].kwargs['recipient_list'], ['second@example.com'])
 
 class PhotoAdminActionTests(TestCase):
     def test_mark_selected_as_shortlisted_updates_photo_statuses(self):

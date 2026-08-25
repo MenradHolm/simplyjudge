@@ -1,12 +1,13 @@
 import csv
 import io
+import logging
 import os
-import socket
+import threading
 import zipfile
 
-from django.conf import settings
 from django.contrib import admin, messages
 from django.core.files.base import ContentFile
+from django.db import close_old_connections
 from django.db.models import Avg
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -17,6 +18,8 @@ from django.utils.html import format_html
 from .models import Competition, CompetitionMembership, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
 from .utils import send_automated_email
 from .views import IMAGE_EXTENSIONS, normalize_match_key, prepare_image_for_cloudinary, truncate_text, unique_import_filename
+
+logger = logging.getLogger(__name__)
 
 # --- SIMPLYJUDGE ADMIN BRANDING OVERRIDES ---
 admin.site.site_header = "SimplyJudge Admin Engine"
@@ -29,6 +32,37 @@ def platform_admin_permission(request):
 
 
 admin.site.has_permission = platform_admin_permission
+
+
+def send_raw_file_request_email_batch(photo_ids):
+    close_old_connections()
+    try:
+        photos = (
+            Photo.objects.filter(id__in=photo_ids)
+            .select_related('competition')
+            .order_by('id')
+        )
+        for photo in photos:
+            if not photo.photographer_email:
+                continue
+            try:
+                result = send_automated_email(
+                    competition=photo.competition,
+                    subject=f'RAW file request for {photo.competition.name}',
+                    template_name='emails/raw_file_request.txt',
+                    context={'photo': photo},
+                    recipient_list=[photo.photographer_email],
+                    fail_silently=False,
+                )
+            except Exception:
+                logger.exception('RAW request email failed for photo #%s', photo.id)
+                continue
+            if result:
+                logger.info('RAW request email sent for photo #%s', photo.id)
+            else:
+                logger.warning('RAW request email suppressed for photo #%s', photo.id)
+    finally:
+        close_old_connections()
 
 class CompetitionMembershipInline(admin.TabularInline):
     model = CompetitionMembership
@@ -62,6 +96,7 @@ class CompetitionAdmin(admin.ModelAdmin):
     actions = (
         'export_shortlisted_photos_csv',
         'export_raw_file_request_emails_csv',
+        'email_raw_file_requests',
         'publish_competition_results',
     )
 
@@ -546,94 +581,44 @@ class CompetitionAdmin(admin.ModelAdmin):
 
     @admin.action(description='Email RAW file requests to shortlisted photographers')
     def email_raw_file_requests(self, request, queryset):
-        sent_count = 0
-        skipped_without_email = 0
-        suppressed_count = 0
-        failed_count = 0
-        not_attempted_count = 0
-        failed_photos = []
-
         shortlisted_photos = Photo.objects.filter(
             competition__in=queryset,
             status=Photo.Status.SHORTLISTED,
         ).select_related('competition').order_by('id')
         total_shortlisted = shortlisted_photos.count()
-        photos_to_email = []
+        skipped_without_email = shortlisted_photos.filter(photographer_email='').count()
+        skipped_disabled = shortlisted_photos.filter(
+            competition__emails_enabled=False,
+        ).exclude(photographer_email='').count()
+        photo_ids = list(
+            shortlisted_photos.filter(
+                competition__emails_enabled=True,
+            ).exclude(photographer_email='').values_list('id', flat=True)
+        )
 
-        for photo in shortlisted_photos:
-            if not photo.photographer_email:
-                skipped_without_email += 1
-                continue
-            photos_to_email.append(photo)
-
-        if photos_to_email:
-            smtp_error = self.email_server_connection_error()
-            if smtp_error:
-                failed_count = len(photos_to_email)
-                failed_photos.append(smtp_error)
-                photos_to_email = []
-
-        for photo in photos_to_email:
-            try:
-                result = send_automated_email(
-                    competition=photo.competition,
-                    subject=f'RAW file request for {photo.competition.name}',
-                    template_name='emails/raw_file_request.txt',
-                    context={'photo': photo},
-                    recipient_list=[photo.photographer_email],
-                    fail_silently=False,
-                )
-            except Exception as exc:
-                failed_count += 1
-                failed_photos.append(f'#{photo.id}: {exc}')
-                handled_count = sent_count + skipped_without_email + suppressed_count + failed_count
-                not_attempted_count = max(total_shortlisted - handled_count, 0)
-                break
-            if result:
-                sent_count += 1
-            elif photo.competition.emails_enabled:
-                failed_count += 1
-                failed_photos.append(f'#{photo.id}: email backend returned 0 sent')
-            else:
-                suppressed_count += 1
-
-        failure_note = ''
-        not_sent_count = failed_count + not_attempted_count
-        if failed_photos or not_attempted_count:
-            sample_failures = '; '.join(failed_photos[:5])
-            if len(failed_photos) > 5:
-                sample_failures += f'; plus {len(failed_photos) - 5} more'
-            if not_attempted_count:
-                sample_failures += (
-                    f'; stopped after first delivery error; '
-                    f'{not_attempted_count} remaining not attempted'
-                )
-            failure_note = f' Failed/not sent: {not_sent_count}. {sample_failures}.'
+        if photo_ids:
+            thread = threading.Thread(
+                target=send_raw_file_request_email_batch,
+                args=(photo_ids,),
+                daemon=True,
+            )
+            thread.start()
+            level = messages.SUCCESS
+            status_text = f'Queued {len(photo_ids)} email(s) for background sending.'
+        else:
+            level = messages.WARNING
+            status_text = 'No RAW request emails were queued.'
 
         self.message_user(
             request,
             (
-                f'RAW request emails processed. Shortlisted photos: {total_shortlisted}. '
-                f'Emails sent: {sent_count}. '
-                f'Suppressed by email safety switch: {suppressed_count}. '
+                f'RAW request email send started. Shortlisted photos: {total_shortlisted}. '
+                f'{status_text} '
+                f'Skipped because emails are disabled: {skipped_disabled}. '
                 f'Skipped without photographer email: {skipped_without_email}.'
-                f'{failure_note}'
             ),
-            messages.ERROR if not_sent_count else messages.SUCCESS,
+            level,
         )
-
-    def email_server_connection_error(self):
-        host = getattr(settings, 'EMAIL_HOST', '')
-        port = getattr(settings, 'EMAIL_PORT', None)
-        if not host or not port:
-            return 'Email server is not configured. Check EMAIL_HOST and EMAIL_PORT.'
-
-        timeout = min(getattr(settings, 'EMAIL_TIMEOUT', 5) or 5, 3)
-        try:
-            with socket.create_connection((host, int(port)), timeout=timeout):
-                return ''
-        except OSError as exc:
-            return f'Cannot reach email server {host}:{port}: {exc}'
 
 @admin.register(CompetitionMembership)
 class CompetitionMembershipAdmin(admin.ModelAdmin):
