@@ -10,6 +10,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Avg
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
+from django.template.loader import render_to_string
 from django.urls import path, reverse
 from django.utils.html import format_html
 
@@ -58,7 +59,11 @@ class CompetitionAdmin(admin.ModelAdmin):
         }),
     )
     inlines = (CompetitionMembershipInline,)
-    actions = ('export_shortlisted_photos_csv', 'publish_competition_results', 'email_raw_file_requests')
+    actions = (
+        'export_shortlisted_photos_csv',
+        'export_raw_file_request_emails_csv',
+        'publish_competition_results',
+    )
 
     def get_urls(self):
         urls = super().get_urls()
@@ -243,6 +248,54 @@ class CompetitionAdmin(admin.ModelAdmin):
                 'raw_file_url': raw_file_url,
                 'raw_verified': 'Yes' if photo.is_raw_verified else 'No',
                 'raw_verification_notes': photo.exif_warning_flag or '',
+            })
+        return response
+
+    @admin.action(description='Export RAW request email CSV')
+    def export_raw_file_request_emails_csv(self, request, queryset):
+        fields = [
+            'ready_to_send',
+            'recipient_email',
+            'photographer_name',
+            'competition',
+            'photo_id',
+            'entry_code',
+            'title',
+            'category',
+            'subject',
+            'message',
+        ]
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="raw-file-request-emails.csv"'
+        writer = csv.DictWriter(response, fieldnames=fields)
+        writer.writeheader()
+
+        shortlisted_photos = (
+            Photo.objects.filter(
+                competition__in=queryset,
+                status=Photo.Status.SHORTLISTED,
+            )
+            .select_related('competition')
+            .order_by('competition__name', 'category', 'id')
+        )
+
+        for photo in shortlisted_photos:
+            subject = f'RAW file request for {photo.competition.name}'
+            message = render_to_string(
+                'emails/raw_file_request.txt',
+                {'competition': photo.competition, 'photo': photo},
+            ).strip()
+            writer.writerow({
+                'ready_to_send': 'Yes' if photo.photographer_email else 'No - missing email',
+                'recipient_email': photo.photographer_email or '',
+                'photographer_name': photo.photographer_name or '',
+                'competition': photo.competition.name,
+                'photo_id': photo.id,
+                'entry_code': photo.entry_code or '',
+                'title': photo.title or '',
+                'category': photo.category or '',
+                'subject': subject,
+                'message': message,
             })
         return response
 

@@ -1667,6 +1667,56 @@ class PublishCompetitionResultsAdminActionTests(TestCase):
         self.assertEqual(rows[0]['camera_settings'], '1/500s f/5.6 ISO 400')
         self.assertEqual(rows[0]['raw_file_uploaded'], 'No')
 
+    def test_export_raw_file_request_emails_csv_includes_personalized_messages(self):
+        competition = Competition.objects.create(
+            name='World Class Photo Awards',
+            slug='world-class-photo-awards',
+            emails_enabled=True,
+        )
+        shortlisted = Photo.objects.create(
+            competition=competition,
+            entry_code='A001',
+            title='Finalist Image',
+            photographer_name='Finalist One',
+            photographer_email='finalist@example.com',
+            category='Wildlife',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+        Photo.objects.create(
+            competition=competition,
+            title='Round One Image',
+            photographer_name='Round One Entrant',
+            photographer_email='round-one@example.com',
+            category='Wildlife',
+            image='competition_photos/placeholder.jpg',
+            status=Photo.Status.ROUND_1,
+        )
+        request = RequestFactory().post('/admin/judging_app/competition/')
+        request.user = User.objects.create_superuser(
+            username='platform-admin-export-raw-emails',
+            email='admin-export-raw-emails@example.com',
+            password='test-pass',
+        )
+        model_admin = CompetitionAdmin(Competition, django_admin.site)
+
+        response = model_admin.export_raw_file_request_emails_csv(
+            request,
+            Competition.objects.filter(id=competition.id),
+        )
+
+        self.assertNotIn('email_raw_file_requests', model_admin.actions)
+        self.assertIn('export_raw_file_request_emails_csv', model_admin.actions)
+        self.assertIn('raw-file-request-emails.csv', response['Content-Disposition'])
+        rows = list(csv.DictReader(io.StringIO(response.content.decode())))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['recipient_email'], 'finalist@example.com')
+        self.assertEqual(rows[0]['subject'], 'RAW file request for World Class Photo Awards')
+        self.assertEqual(rows[0]['photo_id'], str(shortlisted.id))
+        self.assertIn('Hello Finalist One', rows[0]['message'])
+        self.assertIn('Your image "Finalist Image" has been shortlisted', rows[0]['message'])
+        self.assertIn('Please reply to this email with a download link', rows[0]['message'])
+
     def test_publish_competition_results_emails_shortlisted_photographers(self):
         competition = Competition.objects.create(
             name='World Class Photo Awards',
