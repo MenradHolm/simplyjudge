@@ -778,6 +778,96 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertRedirects(upload_response, reverse('home_hub'))
         self.assertRedirects(finalize_response, reverse('home_hub'))
 
+    def test_organizer_can_view_competition_progress_by_stage_and_judge(self):
+        second_internal_judge = User.objects.create_user(
+            username='second-reviewer',
+            password='test-pass',
+        )
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=second_internal_judge,
+            role=CompetitionMembership.Role.INTERNAL_JUDGE,
+        )
+        pending_photo = self.create_photo('Pending progress image', Photo.Status.PENDING)
+        round_1_photo = self.create_photo('Round 1 progress image', Photo.Status.ROUND_1)
+        shortlisted_photo = self.create_photo('Final progress image', Photo.Status.SHORTLISTED)
+        PhotoStatusVote.objects.create(
+            photo=pending_photo,
+            voter=self.internal_judge,
+            decision=PhotoStatusVote.Decision.ROUND_1,
+        )
+        RoundOneScore.objects.create(photo=round_1_photo, judge=self.internal_judge, score=8)
+        Score.objects.create(
+            photo=shortlisted_photo,
+            judge=self.guest_judge,
+            criteria_scores={},
+            total_score=8,
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('competition_progress', args=[self.competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Organizer overview')
+        self.assertContains(response, 'Stage progress')
+        self.assertContains(response, self.internal_judge.username)
+        self.assertContains(response, second_internal_judge.username)
+        self.assertContains(response, self.guest_judge.username)
+        self.assertEqual(response.context['status_counts']['total'], 3)
+        self.assertEqual(response.context['active_judge_count'], 3)
+        self.assertEqual(response.context['stages'][0]['covered_count'], 1)
+        self.assertEqual(response.context['stages'][1]['covered_count'], 1)
+        self.assertEqual(response.context['stages'][2]['covered_count'], 1)
+        self.assertEqual(response.context['internal_progress'][0]['triage_completed'], 1)
+        self.assertEqual(response.context['final_progress'][0]['completed'], 1)
+
+    def test_non_organizer_cannot_view_competition_progress(self):
+        self.client.force_login(self.guest_judge)
+
+        response = self.client.get(reverse('competition_progress', args=[self.competition.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
+
+    def test_feedback_progress_only_shows_photo_scoring_stage(self):
+        feedback_competition = Competition.objects.create(
+            name='Shutter Society Progress',
+            slug='shutter-society-progress',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        CompetitionMembership.objects.create(
+            competition=feedback_competition,
+            user=self.organizer,
+            role=CompetitionMembership.Role.ORGANIZER,
+        )
+        CompetitionMembership.objects.create(
+            competition=feedback_competition,
+            user=self.internal_judge,
+            role=CompetitionMembership.Role.INTERNAL_JUDGE,
+        )
+        Photo.objects.create(
+            competition=feedback_competition,
+            title='Feedback image',
+            photographer_name='Entrant',
+            category='General',
+            image='competition_photos/placeholder.jpg',
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('competition_progress', args=[feedback_competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([stage['name'] for stage in response.context['stages']], ['Photo scoring'])
+        self.assertNotContains(response, 'Triage review')
+        self.assertNotContains(response, 'Round 1 scoring')
+
+    def test_organizer_home_links_to_competition_progress(self):
+        self.client.force_login(self.organizer)
+
+        response = self.client.get(reverse('home_hub'))
+
+        self.assertContains(response, reverse('competition_progress', args=[self.competition.slug]))
+        self.assertContains(response, 'Competition progress')
+
     def test_completed_zip_import_points_organizer_to_workspace_next_steps(self):
         job = ZipImportJob.objects.create(
             competition=self.competition,

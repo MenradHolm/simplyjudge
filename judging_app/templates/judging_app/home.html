@@ -193,6 +193,10 @@
                                             </a>
                                         {% endif %}
                                         {% if competition.can_manage %}
+                                            <a class="action-link primary" href="{% url 'competition_progress' competition.slug %}">
+                                                Competition progress
+                                                <span aria-hidden="true">&gt;</span>
+                                            </a>
                                             <a class="action-link" href="{% url 'feedback_report' competition.slug %}">
                                                 Feedback ledger
                                                 <span aria-hidden="true">&gt;</span>

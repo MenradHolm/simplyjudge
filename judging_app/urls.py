@@ -16,6 +16,7 @@ urlpatterns = [
     path('competition/<slug:comp_slug>/my-scores/', views.judge_review, name='judge_review'),
     path('competition/<slug:comp_slug>/eliminate/', views.elimination_mode, name='elimination_mode'),
     path('competition/<slug:comp_slug>/round-1-review/', views.round_1_review, name='round_1_review'),
+    path('competition/<slug:comp_slug>/progress/', views.competition_progress, name='competition_progress'),
     path('competition/<slug:comp_slug>/finalize-shortlist/', views.finalize_shortlist, name='finalize_shortlist'),
     path('competition/<slug:comp_slug>/judge/<int:photo_id>/', views.judge_photo, name='judge_photo'),
     path('competition/<slug:comp_slug>/judge/<int:photo_id>/autosave/', views.autosave_judge_score, name='autosave_judge_score'),

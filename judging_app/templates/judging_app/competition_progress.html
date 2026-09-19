@@ -1,0 +1,305 @@
+{% extends "judging_app/base.html" %}
+
+{% block title %}Competition Progress - SimplyJudge{% endblock %}
+
+{% block extra_head %}
+<style>
+    .progress-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-bottom: 1rem;
+    }
+    .progress-summary .metric {
+        border-right: 1px solid var(--line);
+        border-bottom: 0;
+    }
+    .progress-summary .metric:last-child {
+        border-right: 0;
+    }
+    .progress-section {
+        margin-top: 1rem;
+    }
+    .progress-table-wrap {
+        overflow-x: auto;
+    }
+    .progress-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 48rem;
+    }
+    .progress-table th,
+    .progress-table td {
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: middle;
+    }
+    .progress-table th {
+        color: var(--muted);
+        background: #fbfcfe;
+        font-size: 0.72rem;
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+    .progress-table tr:last-child td {
+        border-bottom: 0;
+    }
+    .progress-person {
+        display: block;
+        font-weight: 850;
+    }
+    .progress-username,
+    .progress-detail {
+        color: var(--muted);
+        font-size: 0.78rem;
+    }
+    .progress-cell {
+        display: grid;
+        grid-template-columns: minmax(8rem, 1fr) auto;
+        gap: 0.45rem 0.75rem;
+        align-items: center;
+    }
+    .progress-track {
+        height: 0.45rem;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e8edf4;
+    }
+    .progress-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+    }
+    .progress-number {
+        font-size: 0.82rem;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+    .progress-note {
+        padding: 0.9rem 1rem;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.82rem;
+        line-height: 1.5;
+        border-top: 1px solid var(--line);
+    }
+    @media (max-width: 800px) {
+        .progress-summary {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .progress-summary .metric:nth-child(2) {
+            border-right: 0;
+        }
+        .progress-summary .metric:nth-child(-n + 2) {
+            border-bottom: 1px solid var(--line);
+        }
+    }
+    @media (max-width: 480px) {
+        .progress-summary {
+            grid-template-columns: 1fr;
+        }
+        .progress-summary .metric {
+            border-right: 0;
+            border-bottom: 1px solid var(--line);
+        }
+        .progress-summary .metric:last-child {
+            border-bottom: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="shell shell-wide">
+    <div class="page-head">
+        <div>
+            <p class="eyebrow">Organizer overview</p>
+            <h2 class="page-title">{{ competition.name }}</h2>
+            <p class="page-copy">Live judging progress across every active stage.</p>
+        </div>
+        <div class="actions">
+            <a href="{% url 'leaderboard' competition.slug %}" class="button button-secondary">Leaderboard</a>
+            <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
+        </div>
+    </div>
+
+    <section class="panel progress-summary" aria-label="Competition summary">
+        <div class="metric">
+            <span class="metric-value">{{ status_counts.total }}</span>
+            <span class="metric-label">Total photos</span>
+        </div>
+        <div class="metric">
+            <span class="metric-value">{{ active_judge_count }}</span>
+            <span class="metric-label">Active judges</span>
+        </div>
+        <div class="metric">
+            <span class="metric-value">{{ status_counts.round_1 }}</span>
+            <span class="metric-label">Currently in Round 1</span>
+        </div>
+        <div class="metric">
+            <span class="metric-value">{{ status_counts.shortlisted }}</span>
+            <span class="metric-label">Shortlisted</span>
+        </div>
+    </section>
+
+    <section class="panel progress-section">
+        <div class="panel-header">
+            <p class="panel-title">Stage progress</p>
+            <span class="tag">Live</span>
+        </div>
+        <div class="progress-table-wrap">
+            <table class="progress-table">
+                <thead>
+                    <tr>
+                        <th>Stage</th>
+                        <th>Photos scored or reviewed</th>
+                        <th>Judge submissions</th>
+                        <th>Panel</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stage in stages %}
+                        <tr>
+                            <td><span class="progress-person">{{ stage.name }}</span></td>
+                            <td>
+                                <div class="progress-cell">
+                                    <div class="progress-track"><span class="progress-fill" style="width: {{ stage.coverage_percentage }}%"></span></div>
+                                    <span class="progress-number">{{ stage.covered_count }} / {{ stage.photo_count }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="progress-cell">
+                                    <div class="progress-track"><span class="progress-fill" style="width: {{ stage.completion_percentage }}%"></span></div>
+                                    <span class="progress-number">{{ stage.submission_count }} / {{ stage.assignment_count }}</span>
+                                </div>
+                            </td>
+                            <td>{{ stage.judge_count }} judge{{ stage.judge_count|pluralize }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="progress-note">Photo coverage counts each photo once after at least one judge has acted. Judge submissions count every expected judge-photo assignment.</p>
+    </section>
+
+    {% if is_full_competition %}
+        <section class="panel progress-section">
+            <div class="panel-header">
+                <p class="panel-title">Internal reviewers</p>
+                <span class="tag tag-neutral">Triage and Round 1</span>
+            </div>
+            {% if internal_progress %}
+                <div class="progress-table-wrap">
+                    <table class="progress-table">
+                        <thead>
+                            <tr>
+                                <th>Reviewer</th>
+                                <th>Triage decisions</th>
+                                <th>Round 1 scores</th>
+                                <th>Remaining</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for judge in internal_progress %}
+                                <tr>
+                                    <td>
+                                        <span class="progress-person">{{ judge.name }}</span>
+                                        {% if judge.name != judge.username %}<span class="progress-username">{{ judge.username }}</span>{% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="progress-cell">
+                                            <div class="progress-track"><span class="progress-fill" style="width: {{ judge.triage_percentage }}%"></span></div>
+                                            <span class="progress-number">{{ judge.triage_completed }} / {{ triage_target }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="progress-cell">
+                                            <div class="progress-track"><span class="progress-fill" style="width: {{ judge.round_1_percentage }}%"></span></div>
+                                            <span class="progress-number">{{ judge.round_1_completed }} / {{ round_1_target }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="progress-person">{{ judge.triage_remaining }} triage</span>
+                                        <span class="progress-detail">{{ judge.round_1_remaining }} Round 1</span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state" style="border: 0; box-shadow: none;">
+                    <strong>No internal reviewers assigned.</strong>
+                    <p>Add active internal reviewer memberships to track triage and Round 1 progress.</p>
+                </div>
+            {% endif %}
+        </section>
+    {% endif %}
+
+    <section class="panel progress-section">
+        <div class="panel-header">
+            <p class="panel-title">{% if is_full_competition %}Final judges{% else %}Judges{% endif %}</p>
+            <span class="tag tag-neutral">{% if is_full_competition %}Shortlist scoring{% else %}Photo scoring{% endif %}</span>
+        </div>
+        {% if final_progress %}
+            <div class="progress-table-wrap">
+                <table class="progress-table">
+                    <thead>
+                        <tr>
+                            <th>Judge</th>
+                            <th>Scores submitted</th>
+                            <th>Remaining</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for judge in final_progress %}
+                            <tr>
+                                <td>
+                                    <span class="progress-person">{{ judge.name }}</span>
+                                    {% if judge.name != judge.username %}<span class="progress-username">{{ judge.username }}</span>{% endif %}
+                                </td>
+                                <td>
+                                    <div class="progress-cell">
+                                        <div class="progress-track"><span class="progress-fill" style="width: {{ judge.percentage }}%"></span></div>
+                                        <span class="progress-number">{{ judge.completed }} / {{ final_target }}</span>
+                                    </div>
+                                </td>
+                                <td>{{ judge.remaining }}</td>
+                                <td>
+                                    {% if judge.percentage == 100 and final_target %}
+                                        <span class="tag">Complete</span>
+                                    {% elif judge.completed %}
+                                        <span class="tag tag-warning">In progress</span>
+                                    {% else %}
+                                        <span class="tag tag-neutral">Not started</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state" style="border: 0; box-shadow: none;">
+                <strong>No judges assigned.</strong>
+                <p>Assign active judges to begin tracking scoring progress.</p>
+            </div>
+        {% endif %}
+    </section>
+
+    <section class="panel progress-section">
+        <div class="panel-header">
+            <p class="panel-title">Photo status</p>
+            <span class="tag tag-neutral">{{ status_counts.total }} total</span>
+        </div>
+        <div class="metric-grid">
+            <div class="metric"><span class="metric-value">{{ status_counts.pending }}</span><span class="metric-label">Pending triage</span></div>
+            <div class="metric"><span class="metric-value">{{ status_counts.rejected }}</span><span class="metric-label">Rejected</span></div>
+            <div class="metric"><span class="metric-value">{{ status_counts.round_1 }}</span><span class="metric-label">Round 1</span></div>
+            <div class="metric"><span class="metric-value">{{ status_counts.shortlisted }}</span><span class="metric-label">Shortlisted</span></div>
+        </div>
+    </section>
+</main>
+{% endblock %}

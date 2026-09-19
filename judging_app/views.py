@@ -26,7 +26,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.db import close_old_connections, transaction
-from django.db.models import Avg
+from django.db.models import Avg, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -322,6 +322,170 @@ def home_hub(request):
         competition.can_finalize = is_full_competition(competition) and competition.can_manage
         competition.start_label = 'Review photos' if is_feedback_portal(competition) else 'Start judging'
     return render(request, 'judging_app/home.html', {'competitions': active_competitions})
+
+
+def progress_percentage(completed, total):
+    if not total:
+        return 0
+    return round((completed / total) * 100)
+
+
+@login_required(login_url='/accounts/login/')
+def competition_progress(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
+
+    photos = Photo.objects.filter(competition=competition)
+    status_counts = {
+        'total': photos.count(),
+        'pending': photos.filter(status=Photo.Status.PENDING).count(),
+        'rejected': photos.filter(status=Photo.Status.REJECTED).count(),
+        'round_1': photos.filter(status=Photo.Status.ROUND_1).count(),
+        'shortlisted': photos.filter(status=Photo.Status.SHORTLISTED).count(),
+    }
+
+    internal_memberships = list(
+        CompetitionMembership.objects.filter(
+            competition=competition,
+            role=CompetitionMembership.Role.INTERNAL_JUDGE,
+            is_active=True,
+            user__is_active=True,
+        )
+        .select_related('user')
+        .order_by('user__first_name', 'user__last_name', 'user__username')
+    )
+    internal_judges = {membership.user_id: membership.user for membership in internal_memberships}
+    internal_judge_ids = list(internal_judges)
+
+    triage_photo_ids = list(triage_photo_queryset(competition).values_list('id', flat=True))
+    round_1_photo_ids = list(
+        photos.filter(
+            Q(status__in=[Photo.Status.ROUND_1, Photo.Status.SHORTLISTED])
+            | Q(round_1_scores__isnull=False)
+        )
+        .values_list('id', flat=True)
+        .distinct()
+    )
+
+    internal_progress = []
+    for user in internal_judges.values():
+        triage_completed = PhotoStatusVote.objects.filter(
+            photo_id__in=triage_photo_ids,
+            voter=user,
+        ).count()
+        round_1_completed = RoundOneScore.objects.filter(
+            photo_id__in=round_1_photo_ids,
+            judge=user,
+        ).count()
+        internal_progress.append({
+            'name': user.get_full_name() or user.username,
+            'username': user.username,
+            'triage_completed': triage_completed,
+            'triage_remaining': max(len(triage_photo_ids) - triage_completed, 0),
+            'triage_percentage': progress_percentage(triage_completed, len(triage_photo_ids)),
+            'round_1_completed': round_1_completed,
+            'round_1_remaining': max(len(round_1_photo_ids) - round_1_completed, 0),
+            'round_1_percentage': progress_percentage(round_1_completed, len(round_1_photo_ids)),
+        })
+
+    final_judges = {}
+    vip_memberships = CompetitionMembership.objects.filter(
+        competition=competition,
+        role=CompetitionMembership.Role.VIP_JUDGE,
+        is_active=True,
+        user__is_active=True,
+    ).select_related('user')
+    for membership in vip_memberships:
+        final_judges[membership.user_id] = membership.user
+    for user in competition.judges.filter(is_active=True):
+        final_judges[user.id] = user
+    if is_feedback_portal(competition):
+        final_judges.update(internal_judges)
+
+    if is_feedback_portal(competition):
+        final_photo_ids = list(photos.values_list('id', flat=True))
+    else:
+        final_photo_ids = list(
+            photos.filter(status=Photo.Status.SHORTLISTED).values_list('id', flat=True)
+        )
+
+    final_progress = []
+    for user in sorted(
+        final_judges.values(),
+        key=lambda judge: ((judge.get_full_name() or judge.username).lower(), judge.id),
+    ):
+        completed = Score.objects.filter(photo_id__in=final_photo_ids, judge=user).count()
+        final_progress.append({
+            'name': user.get_full_name() or user.username,
+            'username': user.username,
+            'completed': completed,
+            'remaining': max(len(final_photo_ids) - completed, 0),
+            'percentage': progress_percentage(completed, len(final_photo_ids)),
+        })
+
+    triage_voted_photo_count = PhotoStatusVote.objects.filter(
+        photo_id__in=triage_photo_ids,
+        voter_id__in=internal_judge_ids,
+    ).values('photo_id').distinct().count()
+    round_1_scored_photo_count = RoundOneScore.objects.filter(
+        photo_id__in=round_1_photo_ids,
+        judge_id__in=internal_judge_ids,
+    ).values('photo_id').distinct().count()
+    final_judge_ids = list(final_judges)
+    final_scored_photo_count = Score.objects.filter(
+        photo_id__in=final_photo_ids,
+        judge_id__in=final_judge_ids,
+    ).values('photo_id').distinct().count()
+
+    stages = []
+    if is_full_competition(competition):
+        stages.extend([
+            {
+                'name': 'Triage review',
+                'photo_count': len(triage_photo_ids),
+                'covered_count': triage_voted_photo_count,
+                'submission_count': sum(row['triage_completed'] for row in internal_progress),
+                'assignment_count': len(triage_photo_ids) * len(internal_progress),
+                'judge_count': len(internal_progress),
+            },
+            {
+                'name': 'Round 1 scoring',
+                'photo_count': len(round_1_photo_ids),
+                'covered_count': round_1_scored_photo_count,
+                'submission_count': sum(row['round_1_completed'] for row in internal_progress),
+                'assignment_count': len(round_1_photo_ids) * len(internal_progress),
+                'judge_count': len(internal_progress),
+            },
+        ])
+    stages.append({
+        'name': 'Final judging' if is_full_competition(competition) else 'Photo scoring',
+        'photo_count': len(final_photo_ids),
+        'covered_count': final_scored_photo_count,
+        'submission_count': sum(row['completed'] for row in final_progress),
+        'assignment_count': len(final_photo_ids) * len(final_progress),
+        'judge_count': len(final_progress),
+    })
+    for stage in stages:
+        stage['coverage_percentage'] = progress_percentage(stage['covered_count'], stage['photo_count'])
+        stage['completion_percentage'] = progress_percentage(
+            stage['submission_count'],
+            stage['assignment_count'],
+        )
+
+    context = {
+        'competition': competition,
+        'status_counts': status_counts,
+        'active_judge_count': len(set(internal_judge_ids) | set(final_judge_ids)),
+        'stages': stages,
+        'internal_progress': internal_progress,
+        'final_progress': final_progress,
+        'triage_target': len(triage_photo_ids),
+        'round_1_target': len(round_1_photo_ids),
+        'final_target': len(final_photo_ids),
+        'is_full_competition': is_full_competition(competition),
+    }
+    return render(request, 'judging_app/competition_progress.html', context)
 
 def internal_review_panel_count(competition):
     return CompetitionMembership.objects.filter(
