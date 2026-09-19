@@ -192,3 +192,4 @@ else:
 
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+SITE_URL = os.environ.get('SITE_URL', 'https://simplyjudge.onrender.com').rstrip('/')

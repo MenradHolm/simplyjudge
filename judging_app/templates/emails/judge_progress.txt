@@ -1,0 +1,10 @@
+Hello,
+
+{{ judge_name }} has {{ milestone_label }} {{ stage_label }} for {{ competition.name }}.
+
+Progress: {{ completed }} of {{ total }} photos completed.
+
+Open the competition progress dashboard:
+{{ progress_url }}
+
+SimplyJudge

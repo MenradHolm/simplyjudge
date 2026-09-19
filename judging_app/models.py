@@ -164,6 +164,43 @@ class Score(models.Model):
     class Meta:
         unique_together = ('photo', 'judge')
 
+
+class JudgeProgressNotification(models.Model):
+    class Stage(models.TextChoices):
+        TRIAGE = 'TRIAGE', 'Triage review'
+        ROUND_1 = 'ROUND_1', 'Round 1 scoring'
+        FINAL = 'FINAL', 'Final judging'
+
+    class Milestone(models.TextChoices):
+        STARTED = 'STARTED', 'Started'
+        FINISHED = 'FINISHED', 'Finished'
+
+    competition = models.ForeignKey(
+        Competition,
+        on_delete=models.CASCADE,
+        related_name='judge_progress_notifications',
+    )
+    judge = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='judge_progress_notifications',
+    )
+    stage = models.CharField(max_length=20, choices=Stage.choices)
+    milestone = models.CharField(max_length=20, choices=Milestone.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['competition', 'judge', 'stage', 'milestone'],
+                name='unique_judge_progress_notification',
+            ),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.competition} - {self.judge} - {self.get_stage_display()} - {self.get_milestone_display()}'
+
 class ZipImportJob(models.Model):
     class Status(models.TextChoices):
         QUEUED = 'queued', 'Queued'

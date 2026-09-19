@@ -1,7 +1,8 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
-from .models import EntryOrder
+from .models import EntryOrder, JudgeProgressNotification, PhotoStatusVote, RoundOneScore, Score
+from .notifications import send_judge_progress_notifications
 from .utils import send_automated_email
 
 
@@ -32,4 +33,31 @@ def send_entry_order_payment_receipt(sender, instance, created, **kwargs):
         template_name='emails/payment_receipt.txt',
         context={'order': instance, 'user': instance.user},
         recipient_list=[recipient_email],
+    )
+
+
+@receiver(post_save, sender=PhotoStatusVote)
+def notify_organizers_of_triage_progress(sender, instance, **kwargs):
+    send_judge_progress_notifications(
+        instance.photo.competition,
+        instance.voter,
+        JudgeProgressNotification.Stage.TRIAGE,
+    )
+
+
+@receiver(post_save, sender=RoundOneScore)
+def notify_organizers_of_round_one_progress(sender, instance, **kwargs):
+    send_judge_progress_notifications(
+        instance.photo.competition,
+        instance.judge,
+        JudgeProgressNotification.Stage.ROUND_1,
+    )
+
+
+@receiver(post_save, sender=Score)
+def notify_organizers_of_final_judging_progress(sender, instance, **kwargs):
+    send_judge_progress_notifications(
+        instance.photo.competition,
+        instance.judge,
+        JudgeProgressNotification.Stage.FINAL,
     )

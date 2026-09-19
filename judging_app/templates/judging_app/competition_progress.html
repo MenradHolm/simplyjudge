@@ -117,6 +117,11 @@
             <p class="eyebrow">Organizer overview</p>
             <h2 class="page-title">{{ competition.name }}</h2>
             <p class="page-copy">Live judging progress across every active stage.</p>
+            {% if competition.emails_enabled %}
+                <span class="tag">Judge start and finish emails enabled</span>
+            {% else %}
+                <span class="tag tag-warning">Judge emails are off</span>
+            {% endif %}
         </div>
         <div class="actions">
             <a href="{% url 'leaderboard' competition.slug %}" class="button button-secondary">Leaderboard</a>

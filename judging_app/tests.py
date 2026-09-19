@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from .admin import CompetitionAdmin, PhotoAdmin, send_raw_file_request_email_batch
-from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
+from .models import Competition, CompetitionMembership, EntryOrder, JudgeProgressNotification, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
 from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, decode_csv_bytes, expand_participant_entry_row, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_entry_zip_job, process_photos_only_zip_job, score_report_thumbnail_url, unique_import_filename
@@ -1612,6 +1612,133 @@ class AutomatedEmailTests(TestCase):
             fail_silently=False,
             html_message=None,
         )
+
+
+class JudgeProgressEmailTests(TestCase):
+    def setUp(self):
+        self.competition = Competition.objects.create(
+            name='Progress Email Awards',
+            slug='progress-email-awards',
+            emails_enabled=True,
+        )
+        self.organizer = User.objects.create_user(
+            username='progress-organizer',
+            email='organizer@example.com',
+        )
+        self.judge = User.objects.create_user(username='progress-judge')
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=self.organizer,
+            role=CompetitionMembership.Role.ORGANIZER,
+        )
+
+    def create_photo(self, title, status):
+        return Photo.objects.create(
+            competition=self.competition,
+            title=title,
+            photographer_name='Entrant',
+            category='General',
+            image='competition_photos/placeholder.jpg',
+            status=status,
+        )
+
+    @patch('judging_app.notifications.send_automated_email', return_value=1)
+    def test_final_judge_start_and_finish_each_email_organizers_once(self, email_mock):
+        first_photo = self.create_photo('First finalist', Photo.Status.SHORTLISTED)
+        second_photo = self.create_photo('Second finalist', Photo.Status.SHORTLISTED)
+
+        first_score = Score.objects.create(
+            photo=first_photo,
+            judge=self.judge,
+            criteria_scores={},
+            total_score=7,
+        )
+        self.assertEqual(email_mock.call_count, 1)
+        self.assertIn('started Final judging', email_mock.call_args.kwargs['subject'])
+        self.assertEqual(email_mock.call_args.kwargs['recipient_list'], ['organizer@example.com'])
+        self.assertEqual(
+            email_mock.call_args.kwargs['context']['progress_url'],
+            'https://simplyjudge.onrender.com/competition/progress-email-awards/progress/',
+        )
+
+        first_score.total_score = 8
+        first_score.save(update_fields=['total_score'])
+        self.assertEqual(email_mock.call_count, 1)
+
+        second_score = Score.objects.create(
+            photo=second_photo,
+            judge=self.judge,
+            criteria_scores={},
+            total_score=9,
+        )
+        self.assertEqual(email_mock.call_count, 2)
+        self.assertIn('finished Final judging', email_mock.call_args.kwargs['subject'])
+
+        second_score.total_score = 10
+        second_score.save(update_fields=['total_score'])
+        self.assertEqual(email_mock.call_count, 2)
+        self.assertEqual(
+            set(
+                JudgeProgressNotification.objects.values_list('milestone', flat=True)
+            ),
+            {
+                JudgeProgressNotification.Milestone.STARTED,
+                JudgeProgressNotification.Milestone.FINISHED,
+            },
+        )
+
+    @patch('judging_app.notifications.send_automated_email', return_value=1)
+    def test_triage_and_round_one_start_events_are_detected(self, email_mock):
+        first_pending = self.create_photo('First pending', Photo.Status.PENDING)
+        self.create_photo('Second pending', Photo.Status.PENDING)
+        first_round = self.create_photo('First Round 1', Photo.Status.ROUND_1)
+        self.create_photo('Second Round 1', Photo.Status.ROUND_1)
+
+        PhotoStatusVote.objects.create(
+            photo=first_pending,
+            voter=self.judge,
+            decision=PhotoStatusVote.Decision.ROUND_1,
+        )
+        RoundOneScore.objects.create(photo=first_round, judge=self.judge, score=8)
+
+        self.assertEqual(email_mock.call_count, 2)
+        subjects = [call.kwargs['subject'] for call in email_mock.call_args_list]
+        self.assertTrue(any('started Triage review' in subject for subject in subjects))
+        self.assertTrue(any('started Round 1 scoring' in subject for subject in subjects))
+
+    @patch('judging_app.notifications.send_automated_email', return_value=1)
+    def test_progress_email_respects_competition_email_switch(self, email_mock):
+        self.competition.emails_enabled = False
+        self.competition.save(update_fields=['emails_enabled'])
+        first_photo = self.create_photo('Quiet finalist one', Photo.Status.SHORTLISTED)
+        self.create_photo('Quiet finalist two', Photo.Status.SHORTLISTED)
+
+        Score.objects.create(
+            photo=first_photo,
+            judge=self.judge,
+            criteria_scores={},
+            total_score=7,
+        )
+
+        email_mock.assert_not_called()
+        self.assertFalse(JudgeProgressNotification.objects.exists())
+
+    @patch('judging_app.notifications.send_automated_email', return_value=1)
+    def test_progress_email_requires_an_organizer_email_address(self, email_mock):
+        self.organizer.email = ''
+        self.organizer.save(update_fields=['email'])
+        first_photo = self.create_photo('No recipient finalist one', Photo.Status.SHORTLISTED)
+        self.create_photo('No recipient finalist two', Photo.Status.SHORTLISTED)
+
+        Score.objects.create(
+            photo=first_photo,
+            judge=self.judge,
+            criteria_scores={},
+            total_score=7,
+        )
+
+        email_mock.assert_not_called()
+        self.assertFalse(JudgeProgressNotification.objects.exists())
 
 
 class JudgeCalibrationTests(TestCase):
