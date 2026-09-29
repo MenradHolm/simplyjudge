@@ -389,27 +389,39 @@
                 <button class="zoom-button" type="button" data-zoom-action="reset" aria-label="Reset zoom">1:1</button>
             </div>
             <div class="jury-photo-stage" id="photo-zoom-stage">
-                <img id="judge-photo" src="{{ photo.image.url }}" alt="{{ photo.title }}" draggable="false">
+                <img id="judge-photo" src="{{ photo.image.url }}" alt="Submission #{{ photo.id }}" draggable="false">
             </div>
-            <div class="jury-context" aria-label="Submission details">
-                <div class="jury-meta-row">
-                    <div>
-                        <p class="eyebrow" style="margin-bottom: 0.35rem;">Submission details</p>
-                        <h3 class="competition-name" style="margin: 0;">{{ photo.title }}</h3>
-                    </div>
-                    <span class="tag tag-neutral">{{ photo.category }}</span>
+            {% if photo.title != photo.entry_code or photo.category or photo.description or photo.camera_settings %}
+                <div class="jury-context" aria-label="Submission details">
+                    {% if photo.title != photo.entry_code or photo.category %}
+                        <div class="jury-meta-row">
+                            {% if photo.title != photo.entry_code %}
+                                <div>
+                                    <p class="eyebrow" style="margin-bottom: 0.35rem;">Submission details</p>
+                                    <h3 class="competition-name" style="margin: 0;">{{ photo.title }}</h3>
+                                </div>
+                            {% endif %}
+                            {% if photo.category %}<span class="tag tag-neutral">{{ photo.category }}</span>{% endif %}
+                        </div>
+                    {% endif %}
+                    {% if photo.description or photo.camera_settings %}
+                        <div class="jury-details">
+                            {% if photo.description %}
+                                <div>
+                                    <p class="field-label">Story / context</p>
+                                    <p class="page-copy" style="margin: 0;">{{ photo.description }}</p>
+                                </div>
+                            {% endif %}
+                            {% if photo.camera_settings %}
+                                <div>
+                                    <p class="field-label">Settings</p>
+                                    <div class="metadata-block">{{ photo.camera_settings|linebreaksbr }}</div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
                 </div>
-                <div class="jury-details">
-                    <div>
-                        <p class="field-label">Story / context</p>
-                        <p class="page-copy" style="margin: 0;">{{ photo.description|default:"No story supplied." }}</p>
-                    </div>
-                    <div>
-                        <p class="field-label">Settings</p>
-                        <div class="metadata-block">{{ photo.camera_settings|default:"No settings supplied."|linebreaksbr }}</div>
-                    </div>
-                </div>
-            </div>
+            {% endif %}
         </section>
 
         <section class="panel jury-score-panel">

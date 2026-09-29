@@ -2067,7 +2067,12 @@ def process_entry_zip_job(job_id):
                             'Email Address',
                             'email_address',
                         )
-                        category = truncate_text(clean_cell(row, 'Category', 'category', default='General'), 100)
+                        category = truncate_text(clean_cell(
+                            row,
+                            'Category',
+                            'category',
+                            default='' if simple_manifest else 'General',
+                        ), 100)
                         entry_code = clean_cell(row, 'Code', 'ID', 'Number', 'Entry ID', 'Entry Code', 'id')
                         image_references = [
                             clean_cell(row, 'Image'),
@@ -2243,7 +2248,7 @@ def process_photos_only_zip_job(job_id):
                         defaults = {
                             'title': entry_code,
                             'photographer_name': 'Unknown',
-                            'category': 'General',
+                            'category': '',
                             'description': '',
                             'camera_settings': '',
                             'rule_flags': ' | '.join(flags) if flags else '',

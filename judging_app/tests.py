@@ -181,6 +181,29 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertNotContains(response, 'PRIVATE-FILE-001')
         self.assertNotContains(response, 'Hidden Entrant')
 
+    def test_guest_judge_scoring_hides_optional_fields_missing_from_upload(self):
+        photo = self.create_photo(
+            'SS001',
+            Photo.Status.SHORTLISTED,
+            entry_code='SS001',
+            category='',
+            description='',
+            camera_settings='',
+        )
+        RubricCriterion.objects.create(competition=self.competition, name='Impact', score_out_of=10)
+
+        self.client.force_login(self.guest_judge)
+        response = self.client.get(reverse('judge_photo', args=[self.competition.slug, photo.id]))
+
+        self.assertContains(response, f'SimplyJudge ID: #{photo.id}')
+        self.assertContains(response, f'alt="Submission #{photo.id}"')
+        self.assertNotContains(response, 'Submission details')
+        self.assertNotContains(response, 'Story / context')
+        self.assertNotContains(response, '>Settings<')
+        self.assertNotContains(response, 'No story supplied')
+        self.assertNotContains(response, 'No settings supplied')
+        self.assertNotContains(response, 'SS001')
+
     def test_judge_photo_arrow_navigation_hooks_are_photo_links(self):
         first_photo = self.create_photo('First shortlisted image', Photo.Status.SHORTLISTED)
         current_photo = self.create_photo('Current shortlisted image', Photo.Status.SHORTLISTED)
@@ -1026,6 +1049,35 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(edition.name, 'Shutter Society')
         self.assertEqual(edition.edition_name, 'October 2026 - Wildlife')
 
+    def test_synthetic_filename_metadata_cleanup_preserves_real_general_entries(self):
+        import importlib
+        from django.apps import apps as django_apps
+
+        filename_only = self.create_photo(
+            'SS001',
+            Photo.Status.PENDING,
+            entry_code='SS001',
+            category='General',
+            description='',
+            camera_settings='',
+        )
+        real_general_entry = self.create_photo(
+            'Elephant at Dawn',
+            Photo.Status.PENDING,
+            entry_code='SS002',
+            category='General',
+            description='',
+            camera_settings='',
+        )
+        migration = importlib.import_module('judging_app.migrations.0033_clear_synthetic_photo_metadata')
+
+        migration.clear_synthetic_photo_metadata(django_apps, None)
+
+        filename_only.refresh_from_db()
+        real_general_entry.refresh_from_db()
+        self.assertEqual(filename_only.category, '')
+        self.assertEqual(real_general_entry.category, 'General')
+
     def test_completed_zip_import_points_organizer_to_workspace_next_steps(self):
         job = ZipImportJob.objects.create(
             competition=self.competition,
@@ -1159,6 +1211,7 @@ class PhotoStatusWorkflowTests(TestCase):
         )
         for photo in Photo.objects.filter(competition=feedback_competition):
             self.assertIn('import_', photo.image.name)
+            self.assertEqual(photo.category, '')
 
         report_response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
         self.assertContains(report_response, 'Photo reference: SS001')
@@ -1210,11 +1263,11 @@ class PhotoStatusWorkflowTests(TestCase):
             list(
                 Photo.objects.filter(competition=self.competition)
                 .order_by('entry_code')
-                .values_list('entry_code', 'title', 'photographer_name')
+                .values_list('entry_code', 'title', 'photographer_name', 'category')
             ),
             [
-                ('SS001', 'SS001', 'Alice Example'),
-                ('SS003', 'SS003', 'Carol Example'),
+                ('SS001', 'SS001', 'Alice Example', ''),
+                ('SS003', 'SS003', 'Carol Example', ''),
             ],
         )
 

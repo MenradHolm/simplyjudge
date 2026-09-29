@@ -109,7 +109,7 @@
                             {% if photo.entry_code %}
                                 <p class="card-meta">Photo reference: {{ photo.entry_code }}</p>
                             {% endif %}
-                            <p class="card-meta">{{ photo.category }}</p>
+                            {% if photo.category %}<p class="card-meta">{{ photo.category }}</p>{% endif %}
                             <p class="card-meta">{{ photo.judge_scores|length }} score{{ photo.judge_scores|length|pluralize }}</p>
                             {% if photo.average_score != None %}
                                 {% if photo.max_score %}
