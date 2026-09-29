@@ -11,7 +11,10 @@ def competition_photo_upload_path(instance, filename):
     competition = getattr(instance, 'competition', None)
     folder_name = ''
     if competition is not None:
-        folder_name = slugify(competition.name or competition.slug or '')
+        if getattr(competition, 'series_id', None) and competition.slug:
+            folder_name = slugify(competition.slug)
+        else:
+            folder_name = slugify(competition.name or competition.slug or '')
     if not folder_name:
         folder_name = 'uncategorized'
     return f'competition_photos/{folder_name}/{filename}'
@@ -20,7 +23,10 @@ def competition_raw_upload_path(instance, filename):
     competition = getattr(instance, 'competition', None)
     folder_name = ''
     if competition is not None:
-        folder_name = slugify(competition.name or competition.slug or '')
+        if getattr(competition, 'series_id', None) and competition.slug:
+            folder_name = slugify(competition.slug)
+        else:
+            folder_name = slugify(competition.name or competition.slug or '')
     if not folder_name:
         folder_name = 'uncategorized'
     return f'competition_raw_files/{folder_name}/{filename}'
@@ -90,6 +96,12 @@ class Competition(models.Model):
     @property
     def display_edition_name(self):
         return self.edition_name or self.name
+
+    @property
+    def full_display_name(self):
+        if self.series_id and self.edition_name:
+            return f'{self.name} - {self.edition_name}'
+        return self.name
 
 class CompetitionMembership(models.Model):
     class Role(models.TextChoices):

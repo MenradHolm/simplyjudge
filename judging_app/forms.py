@@ -24,8 +24,6 @@ class CompetitionEditionForm(forms.Form):
         edition_name = self.cleaned_data['edition_name'].strip()
         if self.series.editions.filter(edition_name__iexact=edition_name).exists():
             raise forms.ValidationError('This series already has an edition with that name.')
-        if len(f'{self.series.name} - {edition_name}') > 200:
-            raise forms.ValidationError('The series and edition names are too long when combined.')
         return edition_name
 
     def clean_slug(self):

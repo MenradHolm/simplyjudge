@@ -905,7 +905,8 @@ class PhotoStatusWorkflowTests(TestCase):
         edition = Competition.objects.get(slug='shutter-society-october-2026')
         self.assertEqual(edition.series, series)
         self.assertEqual(edition.edition_name, 'October 2026')
-        self.assertEqual(edition.name, 'Shutter Society - October 2026')
+        self.assertEqual(edition.name, 'Shutter Society')
+        self.assertEqual(edition.full_display_name, 'Shutter Society - October 2026')
         self.assertEqual(edition.workflow, Competition.Workflow.FEEDBACK_PORTAL)
         self.assertEqual(edition.entry_fee, Decimal('125.00'))
         self.assertTrue(edition.emails_enabled)
@@ -2379,6 +2380,21 @@ class PhotoUploadPathTests(TestCase):
         self.assertEqual(
             competition_photo_upload_path(photo, 'Rising Tide.jpg'),
             'competition_photos/youth-poty-2026/Rising Tide.jpg',
+        )
+
+    def test_series_edition_upload_path_uses_unique_edition_slug(self):
+        series = CompetitionSeries.objects.create(name='Shutter Society', slug='shutter-society')
+        competition = Competition.objects.create(
+            series=series,
+            name='Shutter Society',
+            edition_name='October 2026 - Wildlife',
+            slug='shutter-society-october-2026-wildlife',
+        )
+        photo = Photo(competition=competition)
+
+        self.assertEqual(
+            competition_photo_upload_path(photo, 'Rising Tide.jpg'),
+            'competition_photos/shutter-society-october-2026-wildlife/Rising Tide.jpg',
         )
 
     def test_raw_verification_fields_are_optional_by_default(self):

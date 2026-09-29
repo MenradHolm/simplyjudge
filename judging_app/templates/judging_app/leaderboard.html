@@ -8,6 +8,7 @@
         <div>
             <p class="eyebrow">{% if leaderboard_stage == 'round_1' %}Round 1 leaderboard{% else %}Live leaderboard{% endif %}</p>
             <h2 class="page-title">{{ competition.name }}</h2>
+            {% if competition.series and competition.edition_name %}<p class="page-copy">{{ competition.edition_name }}</p>{% endif %}
             <p class="page-copy">
                 {% if leaderboard_stage == 'round_1' %}
                     Rankings are using Round 1 scores until final judging scores are available.

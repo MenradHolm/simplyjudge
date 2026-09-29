@@ -27,7 +27,7 @@
         <div>
             <p class="eyebrow">Score calibration</p>
             <h2 class="page-title">My submitted scores</h2>
-            <p class="page-copy">{{ competition.name }}</p>
+            <p class="page-copy">{{ competition.name }}{% if competition.series and competition.edition_name %} | {{ competition.edition_name }}{% endif %}</p>
         </div>
         <div class="actions">
             {% if remaining_count %}

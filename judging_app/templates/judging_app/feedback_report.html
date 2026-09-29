@@ -83,6 +83,7 @@
         <div>
             <p class="eyebrow">Feedback ledger</p>
             <h2 class="page-title">{{ competition.name }}</h2>
+            {% if competition.series and competition.edition_name %}<p class="page-copy">{{ competition.edition_name }}</p>{% endif %}
             <p class="page-copy">{{ photos|length }} submission{{ photos|length|pluralize }} in this report.</p>
         </div>
         <div class="actions">

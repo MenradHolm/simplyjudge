@@ -120,6 +120,7 @@
         <div>
             <p class="eyebrow">Round 1 review</p>
             <h2 class="page-title">{{ competition.name }}</h2>
+            {% if competition.series and competition.edition_name %}<p class="page-copy">{{ competition.edition_name }}</p>{% endif %}
             <p class="page-copy">Score Round 1 entries from 1 to 10.</p>
         </div>
         <div class="round-review-actions">

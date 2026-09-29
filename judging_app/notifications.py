@@ -104,7 +104,7 @@ def send_judge_progress_notifications(competition, judge, stage):
         try:
             result = send_automated_email(
                 competition=competition,
-                subject=f'{competition.name}: {judge_name} {milestone_label} {stage_label}',
+                subject=f'{competition.full_display_name}: {judge_name} {milestone_label} {stage_label}',
                 template_name='emails/judge_progress.txt',
                 context={
                     'judge_name': judge_name,
