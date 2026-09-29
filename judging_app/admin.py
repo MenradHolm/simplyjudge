@@ -15,7 +15,7 @@ from django.template.loader import render_to_string
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from .models import Competition, CompetitionMembership, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
+from .models import Competition, CompetitionMembership, CompetitionSeries, EntryOrder, RoundOneScore, RubricCriterion, Photo, PhotoStatusVote, Score, ZipImportJob
 from .utils import send_automated_email
 from .views import IMAGE_EXTENSIONS, normalize_match_key, prepare_image_for_cloudinary, truncate_text, unique_import_filename
 
@@ -68,11 +68,32 @@ class CompetitionMembershipInline(admin.TabularInline):
     model = CompetitionMembership
     extra = 0
 
+
+class CompetitionEditionInline(admin.TabularInline):
+    model = Competition
+    fields = ('name', 'edition_name', 'slug', 'workflow', 'is_active', 'created_at')
+    readonly_fields = ('created_at',)
+    extra = 0
+    show_change_link = True
+
+
+@admin.register(CompetitionSeries)
+class CompetitionSeriesAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'slug', 'edition_count', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'slug')
+    prepopulated_fields = {'slug': ('name',)}
+    inlines = (CompetitionEditionInline,)
+
+    @admin.display(description='Editions')
+    def edition_count(self, obj):
+        return obj.editions.count()
+
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'slug', 'workflow', 'entry_fee', 'emails_enabled', 'results_published', 'is_active', 'created_at')
-    list_filter = ('workflow', 'emails_enabled', 'results_published', 'is_active')
-    search_fields = ('name', 'slug')
+    list_display = ('id', 'name', 'series', 'edition_name', 'slug', 'workflow', 'entry_fee', 'emails_enabled', 'results_published', 'is_active', 'created_at')
+    list_filter = ('series', 'workflow', 'emails_enabled', 'results_published', 'is_active')
+    search_fields = ('name', 'edition_name', 'slug', 'series__name')
     prepopulated_fields = {'slug': ('name',)}
     exclude = ('judges',)
     readonly_fields = ('photo_corrections_link',)
@@ -81,6 +102,8 @@ class CompetitionAdmin(admin.ModelAdmin):
             'fields': (
                 'name',
                 'slug',
+                'series',
+                'edition_name',
                 'workflow',
                 'entry_fee',
                 'emails_enabled',

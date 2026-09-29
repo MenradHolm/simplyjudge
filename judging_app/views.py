@@ -29,9 +29,11 @@ from django.db import close_old_connections, transaction
 from django.db.models import Avg, Q
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Competition, CompetitionMembership, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
+from .forms import CompetitionEditionForm
+from .models import Competition, CompetitionMembership, CompetitionSeries, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
 
 try:
     import stripe
@@ -308,20 +310,159 @@ def attach_photo_average_values(photos, scores, max_score):
     return photos
 
 def home_hub(request):
-    active_competitions = Competition.objects.filter(is_active=True).order_by('-created_at')
+    active_competitions = Competition.objects.filter(is_active=True).select_related('series').order_by('-created_at')
     if request.user.is_authenticated and not request.user.is_superuser:
         active_competitions = active_competitions.filter(
             memberships__user=request.user,
             memberships__is_active=True,
         ).distinct()
+    workspace_competitions = []
+    seen_series_ids = set()
     for competition in active_competitions:
+        if competition.series_id:
+            if competition.series_id in seen_series_ids:
+                continue
+            seen_series_ids.add(competition.series_id)
         competition.user_role = competition_role_for_user(request.user, competition) if request.user.is_authenticated else ''
         competition.can_manage = is_competition_organizer(request.user, competition)
         competition.can_review = is_full_competition(competition) and is_internal_reviewer(request.user, competition)
         competition.can_judge = is_approved_judge(request.user, competition)
         competition.can_finalize = is_full_competition(competition) and competition.can_manage
         competition.start_label = 'Review photos' if is_feedback_portal(competition) else 'Start judging'
-    return render(request, 'judging_app/home.html', {'competitions': active_competitions})
+        workspace_competitions.append(competition)
+    return render(request, 'judging_app/home.html', {'competitions': workspace_competitions})
+
+
+def can_manage_series(user, series):
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return CompetitionMembership.objects.filter(
+        competition__series=series,
+        user=user,
+        role=CompetitionMembership.Role.ORGANIZER,
+        is_active=True,
+    ).exists()
+
+
+def series_editions_for_user(user, series):
+    editions = series.editions.select_related('series').order_by('-created_at', '-id')
+    if user.is_superuser or can_manage_series(user, series):
+        return editions
+    return editions.filter(
+        memberships__user=user,
+        memberships__is_active=True,
+    ).distinct()
+
+
+def next_available_competition_slug(base_slug):
+    base_slug = (base_slug or 'edition')[:190]
+    candidate = base_slug
+    suffix = 2
+    while Competition.objects.filter(slug=candidate).exists():
+        suffix_text = f'-{suffix}'
+        candidate = f'{base_slug[:200 - len(suffix_text)]}{suffix_text}'
+        suffix += 1
+    return candidate
+
+
+def copy_competition_edition(series, source, edition_name, requested_slug=''):
+    generated_slug = slugify(f'{series.slug}-{edition_name}')
+    edition_slug = requested_slug or next_available_competition_slug(generated_slug)
+
+    with transaction.atomic():
+        edition = Competition.objects.create(
+            series=series,
+            edition_name=edition_name,
+            name=f'{series.name} - {edition_name}',
+            slug=edition_slug,
+            workflow=source.workflow,
+            entry_fee=source.entry_fee,
+            emails_enabled=source.emails_enabled,
+            results_published=False,
+            is_active=True,
+        )
+
+        rubric_map = {}
+        for criterion in source.rubrics.order_by('id'):
+            copied_criterion = RubricCriterion.objects.create(
+                competition=edition,
+                name=criterion.name,
+                description=criterion.description,
+                weight=criterion.weight,
+                score_out_of=criterion.score_out_of,
+            )
+            rubric_map[criterion.id] = copied_criterion
+
+        if source.tie_breaker_criterion_id in rubric_map:
+            edition.tie_breaker_criterion = rubric_map[source.tie_breaker_criterion_id]
+            edition.save(update_fields=['tie_breaker_criterion'])
+
+        memberships = [
+            CompetitionMembership(
+                competition=edition,
+                user_id=membership.user_id,
+                role=membership.role,
+                is_active=True,
+            )
+            for membership in source.memberships.filter(
+                is_active=True,
+                user__is_active=True,
+            ).exclude(role=CompetitionMembership.Role.ENTRANT)
+        ]
+        CompetitionMembership.objects.bulk_create(memberships, ignore_conflicts=True)
+        edition.judges.set(source.judges.filter(is_active=True))
+
+    return edition
+
+
+@login_required(login_url='/accounts/login/')
+def competition_series_detail(request, series_slug):
+    series = get_object_or_404(CompetitionSeries, slug=series_slug)
+    editions = list(series_editions_for_user(request.user, series))
+    if not editions:
+        return redirect('home_hub')
+
+    user_can_manage = can_manage_series(request.user, series)
+    source_edition = series.editions.order_by('-created_at', '-id').first()
+    form = CompetitionEditionForm(series=series)
+    if request.method == 'POST':
+        if not user_can_manage:
+            return redirect('home_hub')
+        form = CompetitionEditionForm(request.POST, series=series)
+        if form.is_valid() and source_edition:
+            edition = copy_competition_edition(
+                series,
+                source_edition,
+                form.cleaned_data['edition_name'],
+                form.cleaned_data['slug'],
+            )
+            messages.success(
+                request,
+                f'{edition.display_edition_name} was created with the previous edition settings and judges.',
+            )
+            return redirect('competition_series_detail', series_slug=series.slug)
+
+    for edition in editions:
+        edition.user_role = competition_role_for_user(request.user, edition)
+        edition.can_manage = is_competition_organizer(request.user, edition)
+        edition.can_review = is_full_competition(edition) and is_internal_reviewer(request.user, edition)
+        edition.can_judge = is_approved_judge(request.user, edition)
+        edition.photo_count = Photo.objects.filter(competition=edition).count()
+        edition.score_count = Score.objects.filter(photo__competition=edition).count()
+
+    return render(
+        request,
+        'judging_app/competition_series.html',
+        {
+            'series': series,
+            'editions': editions,
+            'can_manage_series': user_can_manage,
+            'source_edition': source_edition,
+            'edition_form': form,
+        },
+    )
 
 
 def progress_percentage(completed, total):

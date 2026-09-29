@@ -1,0 +1,94 @@
+{% extends "judging_app/base.html" %}
+
+{% block title %}{{ series.name }} Editions - SimplyJudge{% endblock %}
+
+{% block content %}
+<main class="shell">
+    {% if messages %}
+        <div class="form-grid" style="margin-bottom: 1rem;">
+            {% for message in messages %}
+                <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="page-head">
+        <div>
+            <p class="eyebrow">Competition series</p>
+            <h2 class="page-title">{{ series.name }}</h2>
+            <p class="page-copy">Each edition has independent entries, scores, progress, and results.</p>
+        </div>
+        <a href="{% url 'home_hub' %}" class="button button-secondary">Home</a>
+    </div>
+
+    {% if can_manage_series %}
+        <section class="panel panel-padded" id="new-edition" style="margin-bottom: 1rem;">
+            <div class="section-head" style="margin-top: 0;">
+                <div>
+                    <p class="eyebrow">Continue the series</p>
+                    <h3>Create next edition</h3>
+                </div>
+                {% if source_edition %}<p class="section-note">Copies settings from {{ source_edition.display_edition_name }}</p>{% endif %}
+            </div>
+            <form method="post" class="form-grid">
+                {% csrf_token %}
+                {{ edition_form.non_field_errors }}
+                <div class="field">
+                    <label for="{{ edition_form.edition_name.id_for_label }}">{{ edition_form.edition_name.label }}</label>
+                    {{ edition_form.edition_name }}
+                    {{ edition_form.edition_name.errors }}
+                    <span class="helptext">{{ edition_form.edition_name.help_text }}</span>
+                </div>
+                <div class="field">
+                    <label for="{{ edition_form.slug.id_for_label }}">{{ edition_form.slug.label }}</label>
+                    {{ edition_form.slug }}
+                    {{ edition_form.slug.errors }}
+                    <span class="helptext">{{ edition_form.slug.help_text }}</span>
+                </div>
+                <div class="actions">
+                    <button type="submit" class="button button-primary">Create edition</button>
+                </div>
+            </form>
+        </section>
+    {% endif %}
+
+    <section aria-labelledby="edition-history-title">
+        <div class="section-head">
+            <div>
+                <p class="eyebrow">Archive</p>
+                <h3 id="edition-history-title">Edition history</h3>
+            </div>
+            <p class="section-note">{{ editions|length }} edition{{ editions|length|pluralize }}</p>
+        </div>
+
+        <div class="grid grid-auto">
+            {% for edition in editions %}
+                <article class="card competition-card">
+                    <div class="card-top">
+                        <div>
+                            <h4 class="competition-name">{{ edition.display_edition_name }}</h4>
+                            <p class="card-meta">{{ edition.photo_count }} photo{{ edition.photo_count|pluralize }} | {{ edition.score_count }} score{{ edition.score_count|pluralize }}</p>
+                            <p class="card-meta">{{ edition.get_workflow_display }}</p>
+                            {% if edition.user_role %}<p class="card-meta">{{ edition.user_role }}</p>{% endif %}
+                        </div>
+                        {% if edition.is_active %}<span class="tag">Active</span>{% else %}<span class="tag tag-neutral">Archived</span>{% endif %}
+                    </div>
+                    <div class="card-actions">
+                        {% if edition.can_judge %}
+                            <a class="action-link primary" href="{% url 'judge_router' edition.slug %}">Open judging <span aria-hidden="true">&gt;</span></a>
+                        {% endif %}
+                        {% if edition.can_review %}
+                            <a class="action-link" href="{% url 'round_1_review' edition.slug %}">Round 1 review <span aria-hidden="true">&gt;</span></a>
+                        {% endif %}
+                        {% if edition.can_manage %}
+                            <a class="action-link" href="{% url 'competition_progress' edition.slug %}">Competition progress <span aria-hidden="true">&gt;</span></a>
+                            <a class="action-link" href="{% url 'upload_spreadsheet' edition.slug %}">Upload data package <span aria-hidden="true">&gt;</span></a>
+                        {% endif %}
+                        <a class="action-link" href="{% url 'leaderboard' edition.slug %}">Leaderboard <span aria-hidden="true">&gt;</span></a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

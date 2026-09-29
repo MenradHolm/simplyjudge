@@ -129,7 +129,13 @@
                     <article class="card competition-card">
                         <div class="card-top">
                             <div>
-                                <h4 class="competition-name">{{ competition.name }}</h4>
+                                {% if competition.series %}
+                                    <p class="eyebrow" style="margin-bottom: 0.35rem;">Competition series</p>
+                                    <h4 class="competition-name">{{ competition.series.name }}</h4>
+                                    <p class="card-meta">Current edition: {{ competition.display_edition_name }}</p>
+                                {% else %}
+                                    <h4 class="competition-name">{{ competition.name }}</h4>
+                                {% endif %}
                                 <p class="card-meta">
                                     Created
                                     <time data-local-datetime="{{ competition.created_at|date:'c' }}" data-local-format="date">
@@ -145,6 +151,15 @@
                         </div>
                         <div class="card-actions">
                             {% if competition.slug %}
+                                {% if competition.series %}
+                                    <div class="action-group">
+                                        <p class="action-heading">Series</p>
+                                        <a class="action-link" href="{% url 'competition_series_detail' competition.series.slug %}">
+                                            Edition history
+                                            <span aria-hidden="true">&gt;</span>
+                                        </a>
+                                    </div>
+                                {% endif %}
                                 {% if competition.can_judge %}
                                     <div class="action-group">
                                         <p class="action-heading">Judging</p>

@@ -16,10 +16,10 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from .admin import CompetitionAdmin, PhotoAdmin, send_raw_file_request_email_batch
-from .models import Competition, CompetitionMembership, EntryOrder, JudgeProgressNotification, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
+from .models import Competition, CompetitionMembership, CompetitionSeries, EntryOrder, JudgeProgressNotification, Photo, PhotoStatusVote, RoundOneScore, RubricCriterion, Score, ZipImportJob, competition_photo_upload_path
 from .middleware import UserTimezoneMiddleware
 from .utils import calculate_judge_calibration, compare_exif_data, send_automated_email
-from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, decode_csv_bytes, expand_participant_entry_row, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_entry_zip_job, process_photos_only_zip_job, score_report_thumbnail_url, unique_import_filename
+from .views import anonymize_camera_settings, anonymize_photo_title, collect_photo_rule_flags, copy_competition_edition, decode_csv_bytes, expand_participant_entry_row, find_matching_image, normalize_match_key, prepare_image_for_cloudinary, process_entry_zip_job, process_photos_only_zip_job, score_report_thumbnail_url, unique_import_filename
 
 
 class PhotoStatusWorkflowTests(TestCase):
@@ -867,6 +867,141 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertContains(response, reverse('competition_progress', args=[self.competition.slug]))
         self.assertContains(response, 'Competition progress')
+
+    def test_organizer_can_create_next_series_edition_without_copying_entries(self):
+        series = CompetitionSeries.objects.create(name='Shutter Society', slug='shutter-society')
+        self.competition.series = series
+        self.competition.edition_name = 'September 2026'
+        self.competition.workflow = Competition.Workflow.FEEDBACK_PORTAL
+        self.competition.entry_fee = Decimal('125.00')
+        self.competition.emails_enabled = True
+        self.competition.results_published = True
+        self.competition.save()
+        self.competition.judges.add(self.guest_judge)
+        criterion = RubricCriterion.objects.create(
+            competition=self.competition,
+            name='Impact',
+            description='Emotional and visual impact.',
+            weight=1.5,
+            score_out_of=20,
+        )
+        self.competition.tie_breaker_criterion = criterion
+        self.competition.save(update_fields=['tie_breaker_criterion'])
+        entrant = User.objects.create_user(username='series-entrant')
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=entrant,
+            role=CompetitionMembership.Role.ENTRANT,
+        )
+        self.create_photo('Historical entry', Photo.Status.PENDING)
+
+        self.client.force_login(self.organizer)
+        response = self.client.post(
+            reverse('competition_series_detail', args=[series.slug]),
+            {'edition_name': 'October 2026', 'slug': 'shutter-society-october-2026'},
+        )
+
+        self.assertRedirects(response, reverse('competition_series_detail', args=[series.slug]))
+        edition = Competition.objects.get(slug='shutter-society-october-2026')
+        self.assertEqual(edition.series, series)
+        self.assertEqual(edition.edition_name, 'October 2026')
+        self.assertEqual(edition.name, 'Shutter Society - October 2026')
+        self.assertEqual(edition.workflow, Competition.Workflow.FEEDBACK_PORTAL)
+        self.assertEqual(edition.entry_fee, Decimal('125.00'))
+        self.assertTrue(edition.emails_enabled)
+        self.assertFalse(edition.results_published)
+        self.assertTrue(edition.is_active)
+        self.assertEqual(Photo.objects.filter(competition=edition).count(), 0)
+        self.assertEqual(Score.objects.filter(photo__competition=edition).count(), 0)
+        copied_criterion = edition.rubrics.get()
+        self.assertEqual(copied_criterion.name, 'Impact')
+        self.assertEqual(copied_criterion.score_out_of, 20)
+        self.assertEqual(edition.tie_breaker_criterion, copied_criterion)
+        self.assertTrue(edition.judges.filter(id=self.guest_judge.id).exists())
+        self.assertTrue(
+            edition.memberships.filter(
+                user=self.organizer,
+                role=CompetitionMembership.Role.ORGANIZER,
+                is_active=True,
+            ).exists()
+        )
+        self.assertFalse(edition.memberships.filter(role=CompetitionMembership.Role.ENTRANT).exists())
+
+    def test_series_home_uses_latest_active_edition_and_links_to_history(self):
+        series = CompetitionSeries.objects.create(name='Shutter Society', slug='shutter-society')
+        self.competition.series = series
+        self.competition.edition_name = 'September 2026'
+        self.competition.save(update_fields=['series', 'edition_name'])
+        latest = copy_competition_edition(series, self.competition, 'October 2026')
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('home_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        series_editions = [
+            competition
+            for competition in response.context['competitions']
+            if competition.series_id == series.id
+        ]
+        self.assertEqual([competition.id for competition in series_editions], [latest.id])
+        self.assertContains(response, 'Edition history')
+        self.assertContains(response, reverse('competition_series_detail', args=[series.slug]))
+        self.assertContains(response, 'Current edition: October 2026')
+
+    def test_series_history_is_limited_to_assigned_members(self):
+        series = CompetitionSeries.objects.create(name='Private Series', slug='private-series')
+        self.competition.series = series
+        self.competition.edition_name = 'First edition'
+        self.competition.save(update_fields=['series', 'edition_name'])
+        outsider = User.objects.create_user(username='series-outsider', password='test-pass')
+
+        self.client.force_login(outsider)
+        response = self.client.get(reverse('competition_series_detail', args=[series.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
+
+    def test_non_organizer_cannot_create_series_edition(self):
+        series = CompetitionSeries.objects.create(name='Shutter Society', slug='shutter-society')
+        self.competition.series = series
+        self.competition.edition_name = 'September 2026'
+        self.competition.save(update_fields=['series', 'edition_name'])
+
+        self.client.force_login(self.guest_judge)
+        response = self.client.post(
+            reverse('competition_series_detail', args=[series.slug]),
+            {'edition_name': 'October 2026'},
+        )
+
+        self.assertRedirects(response, reverse('home_hub'))
+        self.assertEqual(series.editions.count(), 1)
+
+    def test_series_data_migration_converts_existing_shutter_society_competitions(self):
+        import importlib
+        from django.apps import apps as django_apps
+
+        first = Competition.objects.create(
+            name='Shutter Society',
+            slug='shutter-society-legacy',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        second = Competition.objects.create(
+            name='Shutter Society - Winter 2026',
+            slug='shutter-society-winter-2026',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        migration = importlib.import_module('judging_app.migrations.0031_competition_series')
+
+        migration.create_shutter_society_series(django_apps, None)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        series = CompetitionSeries.objects.get(slug='shutter-society')
+        self.assertEqual(first.series, series)
+        self.assertEqual(first.edition_name, 'Original edition')
+        self.assertEqual(second.series, series)
+        self.assertEqual(second.edition_name, 'Winter 2026')
+        self.competition.refresh_from_db()
+        self.assertIsNone(self.competition.series)
 
     def test_completed_zip_import_points_organizer_to_workspace_next_steps(self):
         job = ZipImportJob.objects.create(

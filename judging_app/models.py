@@ -25,6 +25,22 @@ def competition_raw_upload_path(instance, filename):
         folder_name = 'uncategorized'
     return f'competition_raw_files/{folder_name}/{filename}'
 
+
+class CompetitionSeries(models.Model):
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = 'competition series'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class Competition(models.Model):
     class Workflow(models.TextChoices):
         FULL_COMPETITION = 'FULL_COMPETITION', 'Full competition funnel'
@@ -32,6 +48,18 @@ class Competition(models.Model):
 
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True, null=True, blank=True, help_text="Clean URL text (e.g., 'youth-poty' or 'shutter-society')")
+    series = models.ForeignKey(
+        CompetitionSeries,
+        on_delete=models.SET_NULL,
+        related_name='editions',
+        null=True,
+        blank=True,
+    )
+    edition_name = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Edition label within a series (for example, 'October 2026').",
+    )
     workflow = models.CharField(max_length=30, choices=Workflow.choices, default=Workflow.FULL_COMPETITION)
     entry_fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     emails_enabled = models.BooleanField(default=False)
@@ -48,8 +76,20 @@ class Competition(models.Model):
         related_name='tie_breaker_for'
     )
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['series', 'edition_name'],
+                name='unique_series_edition_name',
+            ),
+        ]
+
     def __str__(self):
         return self.name
+
+    @property
+    def display_edition_name(self):
+        return self.edition_name or self.name
 
 class CompetitionMembership(models.Model):
     class Role(models.TextChoices):

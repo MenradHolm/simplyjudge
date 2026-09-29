@@ -10,6 +10,7 @@ urlpatterns = [
     path('terms/', TemplateView.as_view(template_name='judging_app/terms.html'), name='terms'),
     path('stripe/webhook/', views.stripe_webhook, name='stripe_webhook'),
     path('judge-invite/<uuid:token>/', views.accept_judge_invite, name='accept_judge_invite'),
+    path('series/<slug:series_slug>/', views.competition_series_detail, name='competition_series_detail'),
     
     # Competition-Specific Routes (Using Slugs)
     path('competition/<slug:comp_slug>/', views.judge_router, name='judge_router'),
