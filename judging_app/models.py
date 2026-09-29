@@ -269,6 +269,7 @@ class ZipImportJob(models.Model):
     total_rows = models.PositiveIntegerField(default=0)
     processed_rows = models.PositiveIntegerField(default=0)
     matched_images = models.PositiveIntegerField(default=0)
+    skipped_rows = models.PositiveIntegerField(default=0)
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)

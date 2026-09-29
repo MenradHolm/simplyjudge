@@ -720,11 +720,11 @@ class ScoreAdmin(admin.ModelAdmin):
 
 @admin.register(ZipImportJob)
 class ZipImportJobAdmin(admin.ModelAdmin):
-    list_display = ('id', 'source_name', 'competition', 'status', 'processed_rows', 'total_rows', 'matched_images', 'created_at', 'finished_at')
+    list_display = ('id', 'source_name', 'competition', 'status', 'processed_rows', 'total_rows', 'matched_images', 'skipped_rows', 'created_at', 'finished_at')
     list_filter = ('status', 'competition')
     search_fields = ('source_name', 'error_message')
     readonly_fields = (
         'competition', 'uploaded_by', 'source_name', 'source_url', 'temp_path', 'status',
-        'total_rows', 'processed_rows', 'matched_images', 'error_message',
+        'total_rows', 'processed_rows', 'matched_images', 'skipped_rows', 'error_message',
         'created_at', 'updated_at', 'finished_at',
     )

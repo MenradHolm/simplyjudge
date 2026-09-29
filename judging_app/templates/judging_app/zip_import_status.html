@@ -54,6 +54,11 @@
                         {{ unmatched_images_count }} entr{{ unmatched_images_count|pluralize:"y,ies" }} did not match an image file. Those entries are not shown in triage until the matching photos are uploaded or attached.
                     </div>
                 {% endif %}
+                {% if job.skipped_rows %}
+                    <div class="alert" style="margin-top: 0.85rem;">
+                        {{ job.skipped_rows }} manifest row{{ job.skipped_rows|pluralize }} skipped because no matching image was included in this ZIP.
+                    </div>
+                {% endif %}
                 {% if is_feedback_portal %}
                     Assigned judges can now score every photo and leave member feedback.
                 {% else %}

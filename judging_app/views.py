@@ -1996,6 +1996,17 @@ def parse_entry_rows(csv_bytes):
         raise ValueError('The CSV has no header row.')
     return list(reader)
 
+def is_simple_filename_manifest(rows):
+    if not rows:
+        return False
+    keys = {str(key).strip().lower() for key in rows[0] if key is not None}
+    return 'file name' in keys and 'your name' in keys and 'title' not in keys
+
+def manifest_entry_code(image_reference):
+    reference = os.path.basename(str(image_reference or '').strip())
+    stem, _extension = os.path.splitext(reference)
+    return truncate_text(stem or reference, 120)
+
 def process_entry_zip_job(job_id):
     close_old_connections()
     job = None
@@ -2013,6 +2024,7 @@ def process_entry_zip_job(job_id):
             csv_info = find_entry_csv(package)
             rows = expand_entry_rows(parse_entry_rows(package.read(csv_info.filename)))
             images = collect_zip_image_index(package)
+            simple_manifest = is_simple_filename_manifest(rows)
 
             job.total_rows = len(rows)
             job.save(update_fields=['total_rows', 'updated_at'])
@@ -2020,13 +2032,32 @@ def process_entry_zip_job(job_id):
             with transaction.atomic():
                 imported = 0
                 matched = 0
+                skipped = 0
+                if simple_manifest:
+                    Photo.objects.filter(
+                        competition=job.competition,
+                        entry_code='',
+                        title='Untitled',
+                        photographer_name='Unknown',
+                        rule_flags__icontains='No matching image file found',
+                        score__isnull=True,
+                        status_votes__isnull=True,
+                        round_1_scores__isnull=True,
+                    ).delete()
                 for row_number, row in enumerate(rows, start=2):
                     image_payload = None
                     storage_image = None
                     defaults = None
                     try:
-                        title = truncate_text(clean_cell(row, 'Title', 'title', default='Untitled'), 200)
-                        photographer = truncate_text(clean_cell(row, 'Photographer', 'photographer', 'Photographer Name', 'photographer_name', default='Unknown'), 200)
+                        photographer = truncate_text(clean_cell(
+                            row,
+                            'Photographer',
+                            'photographer',
+                            'Photographer Name',
+                            'photographer_name',
+                            'Your Name',
+                            default='Unknown',
+                        ), 200)
                         photographer_email = clean_cell(
                             row,
                             'Photographer Email',
@@ -2047,12 +2078,22 @@ def process_entry_zip_job(job_id):
                             clean_cell(row, 'Photo Filename'),
                             clean_cell(row, 'Asset'),
                         ]
+                        primary_image_reference = next((reference for reference in image_references if reference), '')
+                        if simple_manifest and not entry_code:
+                            entry_code = manifest_entry_code(primary_image_reference)
+                        title = clean_cell(row, 'Title', 'title')
+                        if not title and simple_manifest:
+                            title = manifest_entry_code(primary_image_reference)
+                        title = truncate_text(title or 'Untitled', 200)
                         description = clean_cell(row, 'Description', 'description', 'Story', 'story')
                         camera_settings = clean_cell(row, 'Camera Settings', 'camera settings', 'Settings', 'settings')
 
                         image_info = find_matching_image(images, [*image_references, entry_code], photographer=photographer)
                         if not image_info:
                             image_info = find_matching_image(images, [title], allow_suffix=False)
+                        if simple_manifest and not image_info:
+                            skipped += 1
+                            continue
                         if image_info:
                             image_payload = {
                                 'filename': unique_import_filename(job.id, row_number, image_info.filename),
@@ -2103,6 +2144,18 @@ def process_entry_zip_job(job_id):
                             if existing and not image_payload:
                                 defaults.pop('image', None)
                             Photo.objects.update_or_create(id=photo_id, defaults=defaults)
+                        elif entry_code:
+                            existing = Photo.objects.filter(
+                                competition=job.competition,
+                                entry_code=truncate_text(entry_code, 120),
+                            ).first()
+                            if existing:
+                                for field, value in defaults.items():
+                                    if field != 'competition':
+                                        setattr(existing, field, value)
+                                existing.save()
+                            else:
+                                Photo.objects.create(**defaults)
                         else:
                             Photo.objects.update_or_create(
                                 competition=job.competition,
@@ -2120,9 +2173,10 @@ def process_entry_zip_job(job_id):
         job.status = ZipImportJob.Status.COMPLETED
         job.processed_rows = imported
         job.matched_images = matched
+        job.skipped_rows = skipped
         job.finished_at = timezone.now()
-        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'finished_at', 'updated_at'])
-        print(f'SimplyJudge ZIP sync completed for {job.source_name}: {imported} rows, {matched} images matched.')
+        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'skipped_rows', 'finished_at', 'updated_at'])
+        print(f'SimplyJudge ZIP sync completed for {job.source_name}: {imported} rows, {matched} images matched, {skipped} row(s) skipped.')
     except Exception as exc:
         if job is not None:
             job.status = ZipImportJob.Status.FAILED
@@ -2210,8 +2264,9 @@ def process_photos_only_zip_job(job_id):
         job.status = ZipImportJob.Status.COMPLETED
         job.processed_rows = imported
         job.matched_images = imported
+        job.skipped_rows = 0
         job.finished_at = timezone.now()
-        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'finished_at', 'updated_at'])
+        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'skipped_rows', 'finished_at', 'updated_at'])
         print(f'SimplyJudge photo-only sync completed for {job.source_name}: {imported} photos imported.')
     except Exception as exc:
         if job is not None:

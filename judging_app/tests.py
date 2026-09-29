@@ -1004,6 +1004,28 @@ class PhotoStatusWorkflowTests(TestCase):
         self.competition.refresh_from_db()
         self.assertIsNone(self.competition.series)
 
+    def test_series_name_normalization_keeps_the_edition_label_separate(self):
+        import importlib
+        from django.apps import apps as django_apps
+
+        series = CompetitionSeries.objects.create(name='Shutter Society', slug='shutter-society')
+        edition = Competition.objects.create(
+            name='Shutter Society - October 2026 - Wildlife',
+            slug='shutter-society-october-2026-wildlife',
+            series=series,
+            edition_name='October 2026 - Wildlife',
+            workflow=Competition.Workflow.FEEDBACK_PORTAL,
+        )
+        migration = importlib.import_module(
+            'judging_app.migrations.0032_zipimportjob_skipped_rows_and_normalize_series_names'
+        )
+
+        migration.normalize_series_competition_names(django_apps, None)
+
+        edition.refresh_from_db()
+        self.assertEqual(edition.name, 'Shutter Society')
+        self.assertEqual(edition.edition_name, 'October 2026 - Wildlife')
+
     def test_completed_zip_import_points_organizer_to_workspace_next_steps(self):
         job = ZipImportJob.objects.create(
             competition=self.competition,
@@ -1140,6 +1162,66 @@ class PhotoStatusWorkflowTests(TestCase):
 
         report_response = self.client.get(reverse('feedback_report', args=[feedback_competition.slug]))
         self.assertContains(report_response, 'Photo reference: SS001')
+
+    def test_two_column_manifest_imports_only_rows_with_images(self):
+        stale_photo = self.create_photo(
+            'Untitled',
+            Photo.Status.PENDING,
+            entry_code='',
+            photographer_name='Unknown',
+            rule_flags='No matching image file found in uploaded ZIP package.',
+        )
+        image = Image.new('RGB', (20, 20), color='white')
+        image_payload = io.BytesIO()
+        image.save(image_payload, format='JPEG')
+        image_bytes = image_payload.getvalue()
+        csv_payload = (
+            'YOUR NAME,FILE NAME\n'
+            'Alice Example,SS001\n'
+            'Bob Example,SS002\n'
+            'Carol Example,SS003\n'
+        )
+
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+            temp_path = temp_zip.name
+
+        with zipfile.ZipFile(temp_path, 'w') as package:
+            package.writestr('EntryForm.csv', csv_payload)
+            package.writestr('photos/SS001.jpg', image_bytes)
+            package.writestr('photos/SS003.jpg', image_bytes)
+
+        job = ZipImportJob.objects.create(
+            competition=self.competition,
+            uploaded_by=self.organizer,
+            source_name='two-column-manifest.zip',
+            temp_path=temp_path,
+        )
+
+        process_entry_zip_job(job.id)
+        job.refresh_from_db()
+
+        self.assertEqual(job.status, ZipImportJob.Status.COMPLETED)
+        self.assertEqual(job.total_rows, 3)
+        self.assertEqual(job.processed_rows, 2)
+        self.assertEqual(job.matched_images, 2)
+        self.assertEqual(job.skipped_rows, 1)
+        self.assertFalse(Photo.objects.filter(id=stale_photo.id).exists())
+        self.assertEqual(
+            list(
+                Photo.objects.filter(competition=self.competition)
+                .order_by('entry_code')
+                .values_list('entry_code', 'title', 'photographer_name')
+            ),
+            [
+                ('SS001', 'SS001', 'Alice Example'),
+                ('SS003', 'SS003', 'Carol Example'),
+            ],
+        )
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('zip_import_status', args=[self.competition.slug, job.id]))
+        self.assertContains(response, '1 manifest row skipped')
+        self.assertNotContains(response, 'did not match an image file')
 
     def test_entry_zip_does_not_suffix_match_title_without_image_reference(self):
         image = Image.new('RGB', (20, 20), color='white')
