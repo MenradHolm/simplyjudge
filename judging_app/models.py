@@ -270,6 +270,7 @@ class ZipImportJob(models.Model):
     processed_rows = models.PositiveIntegerField(default=0)
     matched_images = models.PositiveIntegerField(default=0)
     skipped_rows = models.PositiveIntegerField(default=0)
+    diagnostics = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)

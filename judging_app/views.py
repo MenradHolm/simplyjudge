@@ -1961,6 +1961,12 @@ def find_entry_csv(zip_file):
     return csv_members[0]
 
 def collect_zip_image_index(zip_file):
+    return {
+        key: image_members[-1]
+        for key, image_members in collect_zip_image_groups(zip_file).items()
+    }
+
+def collect_zip_image_groups(zip_file):
     images = {}
     for info in zip_file.infolist():
         filename = os.path.basename(info.filename)
@@ -1969,8 +1975,41 @@ def collect_zip_image_index(zip_file):
         stem, ext = os.path.splitext(filename)
         if ext.lower() not in IMAGE_EXTENSIONS:
             continue
-        images[normalize_match_key(stem)] = info
+        images.setdefault(normalize_match_key(stem), []).append(info)
     return images
+
+def duplicate_zip_image_diagnostics(image_groups, rows):
+    manifest_references = {}
+    for row in rows:
+        reference = clean_cell(
+            row,
+            'Image',
+            'Image File',
+            'Filename',
+            'File Name',
+            'Photo File',
+            'Photo Filename',
+            'Asset',
+            'Code',
+            'ID',
+            'Number',
+            'Entry ID',
+            'Entry Code',
+        )
+        if reference:
+            manifest_references.setdefault(normalize_match_key(reference), reference)
+
+    duplicate_groups = []
+    for key, image_members in image_groups.items():
+        if len(image_members) < 2:
+            continue
+        signatures = {(info.file_size, info.CRC) for info in image_members}
+        duplicate_groups.append({
+            'reference': manifest_references.get(key, os.path.splitext(os.path.basename(image_members[0].filename))[0]),
+            'files': [os.path.basename(info.filename) for info in image_members],
+            'identical_content': len(signatures) == 1,
+        })
+    return duplicate_groups
 
 def natural_sort_key(value):
     return [
@@ -2010,6 +2049,7 @@ def manifest_entry_code(image_reference):
 def process_entry_zip_job(job_id):
     close_old_connections()
     job = None
+    diagnostics = {}
     try:
         job = ZipImportJob.objects.select_related('competition').get(id=job_id)
         job.status = ZipImportJob.Status.PROCESSING
@@ -2023,8 +2063,14 @@ def process_entry_zip_job(job_id):
         with zipfile.ZipFile(job.temp_path) as package:
             csv_info = find_entry_csv(package)
             rows = expand_entry_rows(parse_entry_rows(package.read(csv_info.filename)))
-            images = collect_zip_image_index(package)
+            image_groups = collect_zip_image_groups(package)
+            images = {key: image_members[-1] for key, image_members in image_groups.items()}
             simple_manifest = is_simple_filename_manifest(rows)
+            diagnostics = {
+                'duplicate_image_groups': duplicate_zip_image_diagnostics(image_groups, rows),
+                'missing_image_references': [],
+                'unreferenced_image_files': [],
+            }
 
             job.total_rows = len(rows)
             job.save(update_fields=['total_rows', 'updated_at'])
@@ -2033,6 +2079,7 @@ def process_entry_zip_job(job_id):
                 imported = 0
                 matched = 0
                 skipped = 0
+                matched_image_keys = set()
                 if simple_manifest:
                     Photo.objects.filter(
                         competition=job.competition,
@@ -2096,10 +2143,18 @@ def process_entry_zip_job(job_id):
                         image_info = find_matching_image(images, [*image_references, entry_code], photographer=photographer)
                         if not image_info:
                             image_info = find_matching_image(images, [title], allow_suffix=False)
+                        if not image_info:
+                            diagnostics['missing_image_references'].append({
+                                'row': row_number,
+                                'reference': primary_image_reference or entry_code or title,
+                            })
                         if simple_manifest and not image_info:
                             skipped += 1
                             continue
                         if image_info:
+                            matched_image_keys.add(normalize_match_key(
+                                os.path.splitext(os.path.basename(image_info.filename))[0]
+                            ))
                             image_payload = {
                                 'filename': unique_import_filename(job.id, row_number, image_info.filename),
                                 'bytes': package.read(image_info.filename),
@@ -2175,12 +2230,20 @@ def process_entry_zip_job(job_id):
                         del defaults
                         gc.collect()
 
+                diagnostics['unreferenced_image_files'] = [
+                    os.path.basename(info.filename)
+                    for key, image_members in image_groups.items()
+                    if key not in matched_image_keys
+                    for info in image_members
+                ]
+
         job.status = ZipImportJob.Status.COMPLETED
         job.processed_rows = imported
         job.matched_images = matched
         job.skipped_rows = skipped
+        job.diagnostics = diagnostics
         job.finished_at = timezone.now()
-        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'skipped_rows', 'finished_at', 'updated_at'])
+        job.save(update_fields=['status', 'processed_rows', 'matched_images', 'skipped_rows', 'diagnostics', 'finished_at', 'updated_at'])
         print(f'SimplyJudge ZIP sync completed for {job.source_name}: {imported} rows, {matched} images matched, {skipped} row(s) skipped.')
     except Exception as exc:
         if job is not None:

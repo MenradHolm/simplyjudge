@@ -1241,6 +1241,7 @@ class PhotoStatusWorkflowTests(TestCase):
         with zipfile.ZipFile(temp_path, 'w') as package:
             package.writestr('EntryForm.csv', csv_payload)
             package.writestr('photos/SS001.jpg', image_bytes)
+            package.writestr('photos/SS 001.jpg', image_bytes)
             package.writestr('photos/SS003.jpg', image_bytes)
 
         job = ZipImportJob.objects.create(
@@ -1258,6 +1259,16 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(job.processed_rows, 2)
         self.assertEqual(job.matched_images, 2)
         self.assertEqual(job.skipped_rows, 1)
+        self.assertEqual(job.diagnostics['missing_image_references'], [{'row': 3, 'reference': 'SS002'}])
+        self.assertEqual(job.diagnostics['unreferenced_image_files'], [])
+        self.assertEqual(
+            job.diagnostics['duplicate_image_groups'],
+            [{
+                'reference': 'SS001',
+                'files': ['SS001.jpg', 'SS 001.jpg'],
+                'identical_content': True,
+            }],
+        )
         self.assertFalse(Photo.objects.filter(id=stale_photo.id).exists())
         self.assertEqual(
             list(
@@ -1274,6 +1285,11 @@ class PhotoStatusWorkflowTests(TestCase):
         self.client.force_login(self.organizer)
         response = self.client.get(reverse('zip_import_status', args=[self.competition.slug, job.id]))
         self.assertContains(response, '1 manifest row skipped')
+        self.assertContains(response, 'Duplicate image references found')
+        self.assertContains(response, 'SS001.jpg, SS 001.jpg')
+        self.assertContains(response, 'identical content and were imported once')
+        self.assertContains(response, '1 manifest reference without an image')
+        self.assertContains(response, 'SS002')
         self.assertNotContains(response, 'did not match an image file')
 
     def test_entry_zip_does_not_suffix_match_title_without_image_reference(self):

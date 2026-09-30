@@ -59,6 +59,37 @@
                         {{ job.skipped_rows }} manifest row{{ job.skipped_rows|pluralize }} skipped because no matching image was included in this ZIP.
                     </div>
                 {% endif %}
+                {% if job.diagnostics.duplicate_image_groups %}
+                    <div class="alert" style="margin-top: 0.85rem;">
+                        <strong>Duplicate image references found</strong>
+                        {% for group in job.diagnostics.duplicate_image_groups %}
+                            <p style="margin: 0.45rem 0 0;">
+                                <strong>{{ group.reference }}</strong>: {{ group.files|join:", " }}.
+                                {% if group.identical_content %}
+                                    These files have identical content and were imported once.
+                                {% else %}
+                                    These filenames resolve to the same reference, so only one can be imported. Rename one file and give it a unique manifest reference.
+                                {% endif %}
+                            </p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if job.diagnostics.missing_image_references %}
+                    <details class="alert" style="margin-top: 0.85rem;">
+                        <summary><strong>{{ job.diagnostics.missing_image_references|length }} manifest reference{{ job.diagnostics.missing_image_references|length|pluralize }} without an image</strong></summary>
+                        <p style="margin: 0.65rem 0 0;">
+                            {% for item in job.diagnostics.missing_image_references %}
+                                {{ item.reference }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </p>
+                    </details>
+                {% endif %}
+                {% if job.diagnostics.unreferenced_image_files %}
+                    <details class="alert" style="margin-top: 0.85rem;">
+                        <summary><strong>{{ job.diagnostics.unreferenced_image_files|length }} image file{{ job.diagnostics.unreferenced_image_files|length|pluralize }} not referenced by the manifest</strong></summary>
+                        <p style="margin: 0.65rem 0 0;">{{ job.diagnostics.unreferenced_image_files|join:", " }}</p>
+                    </details>
+                {% endif %}
                 {% if is_feedback_portal %}
                     Assigned judges can now score every photo and leave member feedback.
                 {% else %}
