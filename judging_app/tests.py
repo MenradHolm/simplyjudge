@@ -1,14 +1,16 @@
 import csv
 import io
 import json
+import re
 import tempfile
 import zipfile
 from decimal import Decimal
 from django.contrib import admin as django_admin
 from django.contrib.auth.models import User
+from django.core import mail
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -1778,6 +1780,12 @@ class PhotoStatusWorkflowTests(TestCase):
 
 
 class AuthNavigationTests(TestCase):
+    def test_login_page_links_to_password_reset(self):
+        response = self.client.get(reverse('login'))
+
+        self.assertContains(response, 'Forgot your password?')
+        self.assertContains(response, reverse('password_reset'))
+
     def test_logged_in_standard_user_can_log_out_from_topbar(self):
         user = User.objects.create_user(username='standard', password='test-pass')
 
@@ -1789,6 +1797,60 @@ class AuthNavigationTests(TestCase):
         logout_response = self.client.post(reverse('logout'))
 
         self.assertRedirects(logout_response, reverse('home_hub'))
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='support@simplyjudge.example',
+)
+class PasswordResetFlowTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='reset-judge',
+            email='judge@example.com',
+            password='old-secure-password-123',
+        )
+
+    def test_known_email_receives_single_use_reset_link_and_can_change_password(self):
+        response = self.client.post(reverse('password_reset'), {'email': self.user.email})
+
+        self.assertRedirects(response, reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].subject, 'Reset your SimplyJudge password')
+        self.assertEqual(mail.outbox[0].from_email, 'support@simplyjudge.example')
+        self.assertIn(self.user.username, mail.outbox[0].body)
+
+        reset_match = re.search(
+            r'http://testserver(?P<path>/accounts/reset/[^\s]+/[^\s]+/)',
+            mail.outbox[0].body,
+        )
+        self.assertIsNotNone(reset_match)
+        token_response = self.client.get(reset_match.group('path'))
+        self.assertEqual(token_response.status_code, 302)
+        self.assertIn('/set-password/', token_response['Location'])
+
+        confirm_response = self.client.post(
+            token_response['Location'],
+            {
+                'new_password1': 'new-secure-password-456',
+                'new_password2': 'new-secure-password-456',
+            },
+        )
+
+        self.assertRedirects(confirm_response, reverse('password_reset_complete'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('new-secure-password-456'))
+
+        reused_response = self.client.get(reset_match.group('path'), follow=True)
+        self.assertContains(reused_response, 'This reset link is no longer valid.')
+
+    def test_unknown_email_shows_same_confirmation_without_sending_email(self):
+        response = self.client.post(reverse('password_reset'), {'email': 'unknown@example.com'})
+
+        self.assertRedirects(response, reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox), 0)
+        done_response = self.client.get(reverse('password_reset_done'))
+        self.assertContains(done_response, 'If an active SimplyJudge account uses that email address')
 
 
 class JudgeInviteTests(TestCase):
@@ -1832,12 +1894,14 @@ class JudgeInviteTests(TestCase):
             reverse('register'),
             {
                 'username': 'new-invited-judge',
+                'email': 'new-invited-judge@example.com',
                 'password1': 'a-secure-test-pass-123',
                 'password2': 'a-secure-test-pass-123',
             },
         )
 
         user = User.objects.get(username='new-invited-judge')
+        self.assertEqual(user.email, 'new-invited-judge@example.com')
         self.assertRedirects(response, reverse('judge_router', args=[competition.slug]))
         self.assertTrue(competition.judges.filter(id=user.id).exists())
         self.assertTrue(

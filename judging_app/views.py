@@ -24,7 +24,6 @@ from django.core.files.base import ContentFile
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm
 from django.db import close_old_connections, transaction
 from django.db.models import Avg, Q
 from django.urls import reverse
@@ -32,7 +31,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 
-from .forms import CompetitionEditionForm
+from .forms import CompetitionEditionForm, JudgeRegistrationForm
 from .models import Competition, CompetitionMembership, CompetitionSeries, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
 
 try:
@@ -66,7 +65,7 @@ def apply_pending_judge_invite(request):
 
 def register_user(request):
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = JudgeRegistrationForm(request.POST)
         if form.is_valid():
             user = form.save()
             auth_login(request, user)
@@ -76,7 +75,7 @@ def register_user(request):
                 return redirect('judge_router', comp_slug=invited_competition.slug)
             return redirect('home_hub')
     else:
-        form = UserCreationForm()
+        form = JudgeRegistrationForm()
     return render(request, 'judging_app/register.html', {'form': form})
 
 def accept_judge_invite(request, token):
