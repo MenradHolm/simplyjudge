@@ -98,6 +98,10 @@
         background: #eef3f9;
     }
 
+    .score-page-shareable .summary-thumb {
+        height: 15rem;
+    }
+
     .photo-id {
         display: inline-flex;
         justify-self: start;
@@ -348,6 +352,19 @@
             height: 34mm;
         }
 
+        .score-page-shareable .photo-frame {
+            width: 80mm;
+        }
+
+        .score-page-shareable .summary-thumb {
+            width: 80mm;
+            height: 60mm;
+        }
+
+        .score-page-shareable .submission-details {
+            min-height: 60mm;
+        }
+
         .submission-details {
             min-height: 34mm;
             padding-right: 29mm;
@@ -461,7 +478,7 @@
     {% if rows %}
         <section class="score-pages">
             {% for row in rows %}
-                <article class="score-page" data-score-page>
+                <article class="score-page{% if is_shareable_report %} score-page-shareable{% endif %}" data-score-page>
                     <div class="score-page-inner" data-score-page-inner>
                         <header class="score-sheet-header">
                             <div>

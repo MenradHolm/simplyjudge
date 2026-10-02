@@ -352,6 +352,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertContains(response, 'Storm Over Valley')
         self.assertContains(response, 'summary-thumb')
         self.assertContains(response, 'score-page')
+        self.assertNotContains(response, 'score-page score-page-shareable')
         self.assertContains(response, 'judge-detail-table')
         self.assertContains(response, 'SJ #')
         self.assertContains(response, 'Amina Jacobs')
@@ -414,6 +415,10 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Shareable group report')
+        self.assertContains(response, 'score-page score-page-shareable')
+        self.assertContains(response, '.score-page-shareable .summary-thumb')
+        self.assertContains(response, 'width: 80mm;')
+        self.assertContains(response, 'height: 60mm;')
         self.assertNotContains(response, 'Judge names hidden')
         self.assertNotContains(response, 'Category/section')
         self.assertNotContains(response, 'Photo reference')
