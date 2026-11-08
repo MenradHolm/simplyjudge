@@ -96,7 +96,7 @@
                     The next step is internal triage, then Round 1, then the final shortlist.
                 {% endif %}
             {% elif job.status == 'failed' %}
-                Import failed and database changes were rolled back. Error: {{ job.error_message }}
+                Import failed and database changes were rolled back. Check the package format or contact the administrator with job #{{ job.id }}.
             {% elif job.status == 'processing' %}
                 SimplyJudge is processing the ZIP in the background. For large packages, keep this page open or come back later.
             {% else %}

@@ -168,7 +168,7 @@ class CompetitionAdmin(admin.ModelAdmin):
                     try:
                         result = self.process_original_images_zip(competition, images_zip, apply_changes, image_map_csv)
                     except Exception as exc:
-                        messages.error(request, f'Image restore failed: {exc}')
+                        messages.error(request, 'Image restore failed. Check the package format and try again.')
                     else:
                         level = messages.SUCCESS if apply_changes else messages.WARNING
                         messages.add_message(
@@ -187,7 +187,7 @@ class CompetitionAdmin(admin.ModelAdmin):
                     try:
                         result = self.process_photo_corrections_csv(competition, corrections_file, apply_changes)
                     except Exception as exc:
-                        messages.error(request, f'CSV correction failed: {exc}')
+                        messages.error(request, 'CSV correction failed. Check the file format and try again.')
                     else:
                         level = messages.SUCCESS if apply_changes else messages.WARNING
                         messages.add_message(
@@ -722,9 +722,11 @@ class ScoreAdmin(admin.ModelAdmin):
 class ZipImportJobAdmin(admin.ModelAdmin):
     list_display = ('id', 'source_name', 'competition', 'status', 'processed_rows', 'total_rows', 'matched_images', 'skipped_rows', 'created_at', 'finished_at')
     list_filter = ('status', 'competition')
-    search_fields = ('source_name', 'error_message')
+    search_fields = ('source_name',)
+    # Signed import URLs and historical service exceptions are server-only.
+    exclude = ('source_url', 'temp_path', 'error_message')
     readonly_fields = (
-        'competition', 'uploaded_by', 'source_name', 'source_url', 'temp_path', 'status',
-        'total_rows', 'processed_rows', 'matched_images', 'skipped_rows', 'diagnostics', 'error_message',
+        'competition', 'uploaded_by', 'source_name', 'status',
+        'total_rows', 'processed_rows', 'matched_images', 'skipped_rows', 'diagnostics',
         'created_at', 'updated_at', 'finished_at',
     )

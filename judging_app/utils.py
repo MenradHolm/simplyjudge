@@ -1,6 +1,5 @@
 from io import BytesIO
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -10,6 +9,7 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 
 from .models import Score
+from .remote_files import open_remote_file
 
 EXIF_FIELDS = {
     'camera_model': ('Model',),
@@ -142,8 +142,7 @@ def read_file_field_bytes(file_field):
     file_url = getattr(file_field, 'url', '')
     parsed_url = urlparse(file_url)
     if parsed_url.scheme in {'http', 'https'}:
-        request = Request(file_url, headers={'User-Agent': 'SimplyJudge RAW verifier'})
-        with urlopen(request, timeout=20) as response:
+        with open_remote_file(file_url, settings.MEDIA_DOWNLOAD_ALLOWED_HOSTS, timeout=20) as response:
             return response.read()
 
     file_field.open('rb')
@@ -183,8 +182,8 @@ def extract_exif_metadata(file_bytes):
             if missing_fields:
                 return metadata, f"Missing EXIF field(s): {', '.join(missing_fields)}."
             return metadata, ''
-    except Exception as exc:
-        return {}, f'Could not read EXIF metadata: {exc}'
+    except Exception:
+        return {}, 'Could not read EXIF metadata.'
 
 
 def compare_exif_data(photo_instance):

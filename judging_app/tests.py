@@ -115,15 +115,18 @@ class PhotoStatusWorkflowTests(TestCase):
             'data': {
                 'object': {
                     'id': 'cs_test_paid',
+                    'payment_status': 'paid',
                 },
             },
         }
 
-        with self.settings(STRIPE_WEBHOOK_SECRET=''):
+        fake_stripe = SimpleNamespace(Webhook=SimpleNamespace(construct_event=Mock(return_value=payload)))
+        with self.settings(STRIPE_WEBHOOK_SECRET='test-webhook'), patch('judging_app.views.stripe', fake_stripe):
             response = self.client.post(
                 reverse('stripe_webhook'),
                 data=json.dumps(payload),
                 content_type='application/json',
+                HTTP_STRIPE_SIGNATURE='verified-in-mock',
             )
 
         self.assertEqual(response.status_code, 200)
@@ -1604,7 +1607,7 @@ class PhotoStatusWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Image restore failed')
-        self.assertContains(response, 'not a readable ZIP archive')
+        self.assertContains(response, 'Image restore failed. Check the package format and try again.')
 
     def test_competition_admin_change_page_links_to_photo_corrections(self):
         admin_user = User.objects.create_superuser(username='admin-link-user', password='test-pass')
@@ -1739,7 +1742,7 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Strong composition and clear intent.')
         self.assertContains(response, 'Judge feedback')
-        self.assertContains(response, 'Private organizer context')
+        self.assertNotContains(response, 'Private organizer context')
         self.assertNotContains(response, private_judge.username)
         self.assertNotContains(response, '/admin/judging_app/photo/')
         self.assertNotContains(response, '>Edit<')
@@ -1784,6 +1787,81 @@ class PhotoStatusWorkflowTests(TestCase):
         self.assertRedirects(response, reverse('home_hub'))
 
 
+class JudgeWorkspaceAccessTests(TestCase):
+    def setUp(self):
+        self.judge = User.objects.create_user(username='legacy-judge')
+        self.competition = Competition.objects.create(name='Assigned Cup', slug='assigned-cup')
+        self.competition.judges.add(self.judge)
+        self.client.force_login(self.judge)
+
+    def test_directly_assigned_judge_sees_event_and_can_open_photo(self):
+        photo = Photo.objects.create(
+            competition=self.competition,
+            title='Finalist',
+            photographer_name='Entrant',
+            category='Open',
+            image='competition_photos/finalist.jpg',
+            status=Photo.Status.SHORTLISTED,
+        )
+
+        response = self.client.get(reverse('home_hub'))
+
+        self.assertContains(response, self.competition.name)
+        self.assertContains(response, reverse('judge_router', args=[self.competition.slug]))
+        self.assertNotContains(response, 'No events assigned yet.')
+        self.assertFalse(self.competition.memberships.exists())
+        self.assertRedirects(
+            self.client.get(reverse('judge_router', args=[self.competition.slug])),
+            reverse('judge_photo', args=[self.competition.slug, photo.id]),
+        )
+
+    def test_direct_assignment_does_not_expose_other_or_inactive_events(self):
+        Competition.objects.create(name='Private Cup', slug='private-cup')
+        inactive = Competition.objects.create(name='Closed Cup', slug='closed-cup', is_active=False)
+        inactive.judges.add(self.judge)
+        membership_only = Competition.objects.create(name='Disabled Cup', slug='disabled-cup')
+        CompetitionMembership.objects.create(
+            competition=membership_only,
+            user=self.judge,
+            role=CompetitionMembership.Role.VIP_JUDGE,
+            is_active=False,
+        )
+
+        response = self.client.get(reverse('home_hub'))
+
+        self.assertEqual([event.id for event in response.context['competitions']], [self.competition.id])
+        self.assertRedirects(
+            self.client.get(reverse('competition_progress', args=[self.competition.slug])),
+            reverse('home_hub'),
+        )
+
+    def test_judge_with_both_assignment_types_sees_event_once(self):
+        CompetitionMembership.objects.create(
+            competition=self.competition,
+            user=self.judge,
+            role=CompetitionMembership.Role.VIP_JUDGE,
+        )
+
+        response = self.client.get(reverse('home_hub'))
+
+        self.assertEqual([event.id for event in response.context['competitions']], [self.competition.id])
+
+    def test_series_history_includes_only_directly_assigned_editions(self):
+        series = CompetitionSeries.objects.create(name='Judge Series', slug='judge-series')
+        self.competition.series = series
+        self.competition.edition_name = 'First'
+        self.competition.save(update_fields=['series', 'edition_name'])
+        Competition.objects.create(
+            name='Private Edition', slug='private-edition', series=series, edition_name='Second',
+        )
+
+        response = self.client.get(reverse('competition_series_detail', args=[series.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([event.id for event in response.context['editions']], [self.competition.id])
+        self.assertContains(response, reverse('judge_router', args=[self.competition.slug]))
+
+
 class AuthNavigationTests(TestCase):
     def test_login_page_links_to_password_reset(self):
         response = self.client.get(reverse('login'))
@@ -1813,7 +1891,7 @@ class PasswordResetFlowTests(TestCase):
         self.user = User.objects.create_user(
             username='reset-judge',
             email='judge@example.com',
-            password='old-secure-password-123',
+            password='old-secure-' + 'password-123',
         )
 
     def test_known_email_receives_single_use_reset_link_and_can_change_password(self):

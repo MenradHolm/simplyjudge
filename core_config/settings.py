@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 import sys
+from django.core.exceptions import ImproperlyConfigured
+from django.core.management.utils import get_random_secret_key
 import dj_database_url
 from pathlib import Path
 
@@ -37,27 +39,37 @@ def env_list(name, default):
     return [item.strip() for item in value.split(',') if item.strip()]
 
 # In production, we pull these from the server's environment variables
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vpsob8!!#9=bt3dt3o%es@q+7^(y6s257!szokecb#q15iwiu1')
 DEBUG = env_bool('DEBUG', False)
+SECRET_KEY = os.environ.get('SECRET_KEY', '')
+if not SECRET_KEY and (DEBUG or IS_TESTING):
+    SECRET_KEY = get_random_secret_key()
+if not SECRET_KEY or (not DEBUG and not IS_TESTING and (
+    len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5 or SECRET_KEY.startswith('django-insecure-')
+)):
+    raise ImproperlyConfigured('Set a strong, unique SECRET_KEY in the server environment.')
 ALLOWED_HOSTS = env_list(
     'ALLOWED_HOSTS',
-    ['simplyjudge.onrender.com', '.onrender.com', 'localhost', '127.0.0.1', 'testserver'],
+    ['simplyjudge.onrender.com', 'localhost', '127.0.0.1', 'testserver'],
 )
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', False)
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG and not IS_TESTING)
 SESSION_COOKIE_SECURE = not DEBUG and not IS_TESTING
 CSRF_COOKIE_SECURE = not DEBUG and not IS_TESTING
 CSRF_TRUSTED_ORIGINS = env_list(
     'CSRF_TRUSTED_ORIGINS',
-    ['https://simplyjudge.onrender.com', 'https://*.onrender.com'],
+    ['https://simplyjudge.onrender.com'],
 )
-SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
+SECURE_HSTS_SECONDS = env_int('SECURE_HSTS_SECONDS', 3600 if not DEBUG else 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
 SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
+SECURE_REFERRER_POLICY = 'no-referrer'
+# Do not cache authenticated HTML or token-bearing invitation/reset responses.
 
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 STRIPE_CURRENCY = os.environ.get('STRIPE_CURRENCY', 'usd')
+ZIP_IMPORT_ALLOWED_HOSTS = env_list('ZIP_IMPORT_ALLOWED_HOSTS', [])
+MEDIA_DOWNLOAD_ALLOWED_HOSTS = env_list('MEDIA_DOWNLOAD_ALLOWED_HOSTS', ['res.cloudinary.com'])
 
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
@@ -98,6 +110,7 @@ MIDDLEWARE = [
     'judging_app.middleware.UserTimezoneMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'judging_app.middleware.PrivateResponseMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -124,6 +137,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'core_config.wsgi.application'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Database
@@ -176,15 +190,17 @@ STATIC_URL = '/static/'
 
 STATIC_ROOT = BASE_DIR / 'staticfiles' 
 
-# Render should run collectstatic, but WhiteNoise finders keep admin usable if
-# the staticfiles directory is absent during an urgent production deploy.
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-WHITENOISE_USE_FINDERS = env_bool('WHITENOISE_USE_FINDERS', True)
+# Serve only the generated and scanned production static directory.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
+WHITENOISE_USE_FINDERS = False
 
 # Media files (Cloudinary Setup)
-if 'CLOUDINARY_URL' in os.environ:
+if os.environ.get('CLOUDINARY_URL'):
     # Use Cloudinary in production
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    STORAGES['default'] = {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'}
 else:
     # Keep using local folders when testing on your laptop
     MEDIA_URL = '/media/'

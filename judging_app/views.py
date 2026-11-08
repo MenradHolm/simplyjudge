@@ -11,7 +11,6 @@ import io
 import threading
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 from PIL import Image
 from PIL.ExifTags import TAGS
 from PIL import ImageOps
@@ -32,6 +31,7 @@ from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 
 from .forms import CompetitionEditionForm, JudgeRegistrationForm
+from .remote_files import open_remote_file, validate_zip_url
 from .models import Competition, CompetitionMembership, CompetitionSeries, EntryOrder, Photo, PhotoStatusVote, RoundOneScore, Score, RubricCriterion, ZipImportJob
 
 try:
@@ -311,9 +311,10 @@ def attach_photo_average_values(photos, scores, max_score):
 def home_hub(request):
     active_competitions = Competition.objects.filter(is_active=True).select_related('series').order_by('-created_at')
     if request.user.is_authenticated and not request.user.is_superuser:
+        # Direct judge assignments also authorize judging without a membership.
         active_competitions = active_competitions.filter(
-            memberships__user=request.user,
-            memberships__is_active=True,
+            Q(memberships__user=request.user, memberships__is_active=True)
+            | Q(judges=request.user)
         ).distinct()
     workspace_competitions = []
     seen_series_ids = set()
@@ -350,8 +351,8 @@ def series_editions_for_user(user, series):
     if user.is_superuser or can_manage_series(user, series):
         return editions
     return editions.filter(
-        memberships__user=user,
-        memberships__is_active=True,
+        Q(memberships__user=user, memberships__is_active=True)
+        | Q(judges=user)
     ).distinct()
 
 
@@ -1175,25 +1176,24 @@ def stripe_webhook(request):
 
     payload = request.body
     webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', '')
+    if not webhook_secret or stripe is None:
+        return HttpResponse(status=503)
 
     try:
-        if webhook_secret:
-            if stripe is None:
-                return HttpResponse(status=503)
-            signature = request.META.get('HTTP_STRIPE_SIGNATURE', '')
-            event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
-        else:
-            event = json.loads(payload.decode('utf-8'))
+        signature = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+        if not signature:
+            return HttpResponse(status=400)
+        event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
     except ValueError:
         return HttpResponse(status=400)
-    except Exception as exc:
-        signature_error = getattr(getattr(stripe, 'error', None), 'SignatureVerificationError', None) if stripe else None
-        if signature_error and isinstance(exc, signature_error):
-            return HttpResponse(status=400)
-        raise
+    except Exception:
+        # Invalid events must never produce debug details or mutate orders.
+        return HttpResponse(status=400)
 
-    if event.get('type') == 'checkout.session.completed':
+    if event.get('type') in {'checkout.session.completed', 'checkout.session.async_payment_succeeded'}:
         session = event.get('data', {}).get('object', {})
+        if session.get('payment_status') != 'paid':
+            return HttpResponse(status=200)
         session_id = session.get('id')
         if not session_id:
             return HttpResponse(status=400)
@@ -1483,8 +1483,8 @@ def upload_spreadsheet(request, comp_slug):
                 messages.success(request, f'Successfully imported {import_count} entries into the judging queue!')
                 return redirect('feedback_report', comp_slug=competition.slug)
 
-        except Exception as e:
-            messages.error(request, f'Error parsing spreadsheet data: {str(e)}')
+        except Exception:
+            messages.error(request, 'Could not import the spreadsheet. Check its format and try again.')
             return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
     recent_jobs = ZipImportJob.objects.filter(competition=competition)[:5]
@@ -1502,9 +1502,10 @@ def upload_photos_zip(request, comp_slug):
 
     if request.method == 'POST' and request.POST.get('zip_url'):
         zip_url = request.POST.get('zip_url', '').strip()
-        parsed_url = urlparse(zip_url)
-        if parsed_url.scheme not in {'http', 'https'}:
-            messages.error(request, 'Please provide a direct http(s) download link to the ZIP package.')
+        try:
+            parsed_url = validate_zip_url(zip_url)
+        except (ValueError, OSError):
+            messages.error(request, 'Use an approved HTTPS download host or upload the ZIP directly.')
             return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
         job = ZipImportJob.objects.create(
@@ -1569,9 +1570,10 @@ def upload_photos_only_zip(request, comp_slug):
         return redirect('upload_spreadsheet', comp_slug=competition.slug)
 
     if zip_url:
-        parsed_url = urlparse(zip_url)
-        if parsed_url.scheme not in {'http', 'https'}:
-            messages.error(request, 'Please provide a direct http(s) download link to the photos ZIP.')
+        try:
+            parsed_url = validate_zip_url(zip_url)
+        except (ValueError, OSError):
+            messages.error(request, 'Use an approved HTTPS download host or upload the ZIP directly.')
             return redirect('upload_spreadsheet', comp_slug=competition.slug)
         job = ZipImportJob.objects.create(
             competition=competition,
@@ -1685,7 +1687,7 @@ def zip_import_status(request, comp_slug, job_id):
     return render(request, 'judging_app/zip_import_status.html', context)
 
 def public_results(request, comp_slug):
-    competition = get_object_or_404(Competition, slug=comp_slug)
+    competition = get_object_or_404(Competition, slug=comp_slug, results_published=True)
     return render(request, 'judging_app/feedback_report.html', feedback_report_context(competition))
 
 def save_uploaded_zip_to_temp_file(uploaded_file, job_id):
@@ -1704,8 +1706,7 @@ def download_zip_url_to_temp_file(source_url, job_id):
     parsed_url = urlparse(source_url)
     safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', os.path.basename(parsed_url.path) or 'remote-package.zip')
     target_path = os.path.join(temp_dir, f'{job_id}_{uuid.uuid4().hex}_{safe_name}')
-    request = Request(source_url, headers={'User-Agent': 'SimplyJudge ZIP Importer'})
-    with urlopen(request, timeout=60) as response, open(target_path, 'wb') as target:
+    with open_remote_file(source_url, settings.ZIP_IMPORT_ALLOWED_HOSTS) as response, open(target_path, 'wb') as target:
         while True:
             chunk = response.read(1024 * 1024)
             if not chunk:
@@ -2247,10 +2248,10 @@ def process_entry_zip_job(job_id):
     except Exception as exc:
         if job is not None:
             job.status = ZipImportJob.Status.FAILED
-            job.error_message = str(exc)
+            job.error_message = 'Import failed. Check the package format or contact the administrator with the job ID.'
             job.finished_at = timezone.now()
             job.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
-        print(f'SimplyJudge ZIP sync failed for job {job_id}: {exc}')
+        print(f'SimplyJudge ZIP sync failed for job {job_id} ({type(exc).__name__}).')
     finally:
         if job is not None and job.temp_path and os.path.exists(job.temp_path):
             try:
@@ -2338,10 +2339,10 @@ def process_photos_only_zip_job(job_id):
     except Exception as exc:
         if job is not None:
             job.status = ZipImportJob.Status.FAILED
-            job.error_message = str(exc)
+            job.error_message = 'Import failed. Check the package format or contact the administrator with the job ID.'
             job.finished_at = timezone.now()
             job.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
-        print(f'SimplyJudge photo-only sync failed for job {job_id}: {exc}')
+        print(f'SimplyJudge photo-only sync failed for job {job_id} ({type(exc).__name__}).')
     finally:
         if job is not None and job.temp_path and os.path.exists(job.temp_path):
             try:

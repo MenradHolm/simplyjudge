@@ -118,7 +118,7 @@
                                     <p class="card-meta">Average {{ photo.average_score|floatformat:1 }}</p>
                                 {% endif %}
                             {% endif %}
-                            {% if photo.rule_flags %}
+                            {% if can_edit_notes and photo.rule_flags %}
                                 <div class="alert alert-error no-print" style="margin-top: 0.75rem;">{{ photo.rule_flags }}</div>
                             {% endif %}
                         </div>
@@ -153,6 +153,7 @@
                         {% endif %}
                     </div>
 
+                    {% if can_edit_notes %}
                     <div>
                         <div class="card" style="box-shadow: none;">
                             <div class="card-top" style="margin-bottom: 0.75rem;">
@@ -168,6 +169,7 @@
                             {% endif %}
                         </div>
                     </div>
+                    {% endif %}
                 </article>
             {% endfor %}
         {% else %}
