@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SimplyJudge Offline Panel</title>
+<style>
+    :root {
+        --bg: #f4f6fa; --panel: #ffffff; --ink: #1b2433; --muted: #5d6b82; --line: #d6deea;
+        --accent: #0f766e; --accent-ink: #ffffff; --warn: #b45309; --dark: #0c111b;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root { --bg: #0e131c; --panel: #161d2a; --ink: #e8edf5; --muted: #98a6bb; --line: #2a3446; --accent: #2dd4bf; --accent-ink: #04201c; --warn: #fbbf24; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+    header { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; padding: .75rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+    header h1 { font-size: 1.05rem; margin: 0; }
+    header .sub { color: var(--muted); font-size: .85rem; }
+    button { font: inherit; font-weight: 650; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: .5rem; padding: .55rem .9rem; cursor: pointer; min-height: 2.5rem; }
+    button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    button:disabled { opacity: .45; cursor: default; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(20rem, .6fr); gap: 1rem; padding: 1rem; max-width: 1600px; margin: 0 auto; }
+    .stage { background: var(--dark); border-radius: .6rem; overflow: auto; height: min(78vh, 60rem); display: grid; place-items: center; }
+    .stage img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; display: block; }
+    .stage.native { place-items: start; }
+    .stage.native img { max-width: none; max-height: none; cursor: zoom-out; }
+    .meta { margin-top: .75rem; background: var(--panel); border: 1px solid var(--line); border-radius: .6rem; padding: .9rem 1rem; }
+    .meta h2 { margin: 0 0 .25rem; font-size: 1.05rem; }
+    .meta .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: .6rem 0 .15rem; }
+    .meta pre { margin: 0; white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
+    .score-panel { background: var(--panel); border: 1px solid var(--line); border-radius: .6rem; padding: 1rem; align-self: start; position: sticky; top: 4.5rem; }
+    .criterion { border: 1px solid var(--line); border-radius: .5rem; padding: .7rem; margin-bottom: .7rem; }
+    .criterion .head { display: flex; justify-content: space-between; gap: .5rem; font-weight: 650; }
+    .criterion .head span { color: var(--muted); font-weight: 500; font-size: .8rem; white-space: nowrap; }
+    .criterion p { margin: .25rem 0 .5rem; color: var(--muted); font-size: .85rem; }
+    .criterion input { width: 100%; font: inherit; font-size: 1.3rem; font-weight: 800; text-align: center; padding: .55rem; border-radius: .5rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+    textarea { width: 100%; min-height: 7rem; font: inherit; padding: .6rem; border-radius: .5rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+    .row { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .row > * { flex: 1; }
+    .status { font-size: .8rem; color: var(--muted); text-align: center; min-height: 1.2rem; margin-top: .4rem; }
+    .banner { background: #fef3c7; color: #78350f; border-bottom: 1px solid #f59e0b; padding: .6rem 1rem; font-size: .9rem; }
+    .banner[hidden] { display: none; }
+    .done-dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; background: var(--accent); margin-left: .4rem; }
+    dialog { border: 1px solid var(--line); border-radius: .7rem; background: var(--panel); color: var(--ink); max-width: min(34rem, 92vw); }
+    dialog::backdrop { background: rgba(0,0,0,.5); }
+    .list { max-height: 50vh; overflow: auto; margin: .5rem 0; }
+    .list button { width: 100%; text-align: left; margin-bottom: .3rem; }
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .score-panel { position: static; } .stage { height: 55vh; } }
+</style>
+</head>
+<body>
+<div class="banner" id="backup-banner" hidden></div>
+<header>
+    <div>
+        <h1 id="comp-name"></h1>
+        <div class="sub" id="judge-line"></div>
+    </div>
+    <div class="row" style="flex:0 0 auto">
+        <button id="btn-list" type="button">All photos</button>
+        <button id="btn-export" type="button" class="primary">Export scores</button>
+    </div>
+</header>
+
+<main class="layout">
+    <section>
+        <div class="stage" id="stage"><img id="photo" alt="Submission" draggable="false"></div>
+        <div class="meta" id="meta"></div>
+    </section>
+    <aside class="score-panel">
+        <div class="row" style="margin-bottom:.75rem">
+            <button id="btn-prev" type="button">&larr; Previous</button>
+            <button id="btn-next" type="button">Next &rarr;</button>
+        </div>
+        <div id="progress" style="font-weight:700;margin-bottom:.6rem"></div>
+        <div id="criteria"></div>
+        <label for="comment" style="font-weight:650">Critique notes (optional)</label>
+        <textarea id="comment" placeholder="Optional feedback..."></textarea>
+        <div class="status" id="status">Saved on this device</div>
+    </aside>
+</main>
+
+<dialog id="list-dialog">
+    <h3 style="margin-top:0">All photos</h3>
+    <div class="list" id="list"></div>
+    <button type="button" id="list-close">Close</button>
+</dialog>
+
+<dialog id="export-dialog">
+    <h3 style="margin-top:0">Export scores</h3>
+    <p id="export-summary"></p>
+    <p style="font-size:.9rem;color:var(--muted)">Save the file and send it back once you have signal (email or WhatsApp is fine). If the download does not work, use Copy and paste the text into a message.</p>
+    <div class="row">
+        <button type="button" class="primary" id="export-download">Download file</button>
+        <button type="button" id="export-copy">Copy text</button>
+        <button type="button" id="export-close">Close</button>
+    </div>
+</dialog>
+
+<script id="pack-data" type="application/json">__PACK_JSON__</script>
+<script>
+(function () {
+    const pack = JSON.parse(document.getElementById('pack-data').textContent);
+    const storeKey = 'simplyjudge-offline:' + pack.pack_id;
+    const memoryFallback = {};
+    let scores = {};
+    let storageOk = true;
+
+    function load() {
+        try {
+            const raw = localStorage.getItem(storeKey);
+            scores = raw ? JSON.parse(raw) : {};
+        } catch (e) { storageOk = false; scores = memoryFallback; }
+    }
+    function persist() {
+        try { localStorage.setItem(storeKey, JSON.stringify(scores)); setStatus('Saved on this device'); }
+        catch (e) { storageOk = false; setStatus('Could not save on this device. Export your scores often.', true); }
+        updateBanner();
+    }
+    load();
+
+    const $ = (id) => document.getElementById(id);
+    let index = 0;
+    try { index = Math.min(parseInt(localStorage.getItem(storeKey + ':pos') || '0', 10) || 0, pack.photos.length - 1); } catch (e) {}
+
+    function setStatus(text, bad) { const s = $('status'); s.textContent = text; s.style.color = bad ? 'var(--warn)' : ''; }
+    function entry(photo) { return scores[photo.id] || { criteria: {}, comment: '' }; }
+    function isComplete(photo) {
+        const e = entry(photo);
+        return pack.rubric.every((c) => e.criteria[c.id] !== undefined && e.criteria[c.id] !== '');
+    }
+    function scoredCount() { return pack.photos.filter((p) => isComplete(p)).length; }
+
+    function updateBanner() {
+        const b = $('backup-banner');
+        const n = scoredCount();
+        if (!storageOk) { b.hidden = false; b.textContent = 'This browser cannot store scores between sessions. Do not close this page, and export often.'; }
+        else if (n > 0) { b.hidden = false; b.textContent = n + ' of ' + pack.photos.length + ' photos scored. Scores are kept on this device only. Use Export scores to make a backup copy.'; }
+        else { b.hidden = true; }
+    }
+
+    function render() {
+        const photo = pack.photos[index];
+        const e = entry(photo);
+        $('photo').src = 'data:image/jpeg;base64,' + photo.image;
+        $('stage').classList.remove('native');
+        $('progress').textContent = 'Photo ' + (index + 1) + ' / ' + pack.photos.length + '  ·  ' + scoredCount() + ' scored';
+        $('btn-prev').disabled = index === 0;
+        $('btn-next').disabled = index === pack.photos.length - 1;
+
+        const meta = $('meta');
+        meta.innerHTML = '';
+        meta.innerHTML = (photo.title ? '<h2></h2>' : '') + (photo.category ? '<div class="label">Category</div><div class="cat"></div>' : '')
+            + (photo.description ? '<div class="label">Story / context</div><div class="desc"></div>' : '')
+            + (photo.settings ? '<div class="label">Settings</div><pre></pre>' : '')
+            + '<div class="label">Reference</div><div>#' + photo.id + '</div>';
+        if (photo.title) meta.querySelector('h2').textContent = photo.title;
+        if (photo.category) meta.querySelector('.cat').textContent = photo.category;
+        if (photo.description) meta.querySelector('.desc').textContent = photo.description;
+        if (photo.settings) meta.querySelector('pre').textContent = photo.settings;
+
+        const box = $('criteria');
+        box.innerHTML = '';
+        pack.rubric.forEach(function (c) {
+            const div = document.createElement('div');
+            div.className = 'criterion';
+            const head = document.createElement('div');
+            head.className = 'head';
+            const name = document.createElement('label');
+            name.textContent = c.name;
+            name.htmlFor = 'c' + c.id;
+            const tag = document.createElement('span');
+            tag.textContent = 'Out of ' + c.out_of + ' · Weight ' + c.weight;
+            head.appendChild(name); head.appendChild(tag); div.appendChild(head);
+            if (c.description) { const p = document.createElement('p'); p.textContent = c.description; div.appendChild(p); }
+            const input = document.createElement('input');
+            input.type = 'number'; input.step = '0.5'; input.min = '0'; input.max = String(c.out_of);
+            input.id = 'c' + c.id; input.inputMode = 'decimal'; input.placeholder = '0.0';
+            input.value = e.criteria[c.id] === undefined ? '' : e.criteria[c.id];
+            input.addEventListener('input', function () { onScoreInput(photo, c, input); });
+            div.appendChild(input);
+            box.appendChild(div);
+        });
+        $('comment').value = e.comment || '';
+        try { localStorage.setItem(storeKey + ':pos', String(index)); } catch (err) {}
+        updateBanner();
+    }
+
+    function onScoreInput(photo, c, input) {
+        const e = scores[photo.id] || (scores[photo.id] = { criteria: {}, comment: '' });
+        if (input.value === '') { delete e.criteria[c.id]; }
+        else {
+            let v = parseFloat(input.value);
+            if (isNaN(v)) return;
+            v = Math.max(0, Math.min(v, c.out_of));
+            if (String(v) !== input.value && v !== parseFloat(input.value)) input.value = v;
+            e.criteria[c.id] = v;
+        }
+        e.updated = new Date().toISOString();
+        persist();
+        $('progress').textContent = 'Photo ' + (index + 1) + ' / ' + pack.photos.length + '  ·  ' + scoredCount() + ' scored';
+    }
+
+    $('comment').addEventListener('input', function () {
+        const photo = pack.photos[index];
+        const e = scores[photo.id] || (scores[photo.id] = { criteria: {}, comment: '' });
+        e.comment = $('comment').value;
+        e.updated = new Date().toISOString();
+        persist();
+    });
+
+    function go(i) { if (i >= 0 && i < pack.photos.length) { index = i; render(); window.scrollTo(0, 0); } }
+    $('btn-prev').addEventListener('click', function () { go(index - 1); });
+    $('btn-next').addEventListener('click', function () { go(index + 1); });
+    $('photo').addEventListener('click', function () { $('stage').classList.toggle('native'); });
+    document.addEventListener('keydown', function (ev) {
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        if (ev.key === 'ArrowLeft') go(index - 1);
+        if (ev.key === 'ArrowRight') go(index + 1);
+    });
+
+    // Photo list
+    $('btn-list').addEventListener('click', function () {
+        const list = $('list'); list.innerHTML = '';
+        pack.photos.forEach(function (p, i) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = (i + 1) + '. ' + (p.title || ('#' + p.id)) + (isComplete(p) ? '  ✓' : '');
+            b.addEventListener('click', function () { $('list-dialog').close(); go(i); });
+            list.appendChild(b);
+        });
+        $('list-dialog').showModal();
+    });
+    $('list-close').addEventListener('click', function () { $('list-dialog').close(); });
+
+    // Export
+    function buildExport() {
+        const out = {
+            format: 'simplyjudge-offline-scores',
+            version: 1,
+            pack_id: pack.pack_id,
+            competition_slug: pack.competition_slug,
+            judge_username: pack.judge_username,
+            exported_at: new Date().toISOString(),
+            scores: []
+        };
+        pack.photos.forEach(function (p) {
+            const e = scores[p.id];
+            if (!e) return;
+            const hasCriteria = Object.keys(e.criteria).length > 0;
+            if (!hasCriteria && !(e.comment || '').trim()) return;
+            out.scores.push({ photo_id: p.id, criteria_scores: e.criteria, comment: e.comment || '', updated: e.updated || '' });
+        });
+        return out;
+    }
+    $('btn-export').addEventListener('click', function () {
+        const data = buildExport();
+        const complete = pack.photos.filter(isComplete).length;
+        $('export-summary').textContent = data.scores.length + ' photos with scores (' + complete + ' fully scored out of ' + pack.photos.length + ').';
+        $('export-dialog').showModal();
+    });
+    $('export-close').addEventListener('click', function () { $('export-dialog').close(); });
+    $('export-download').addEventListener('click', function () {
+        const text = JSON.stringify(buildExport(), null, 2);
+        const blob = new Blob([text], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'scores-' + pack.competition_slug + '-' + pack.judge_username + '.json';
+        document.body.appendChild(a); a.click(); a.remove();
+    });
+    $('export-copy').addEventListener('click', function () {
+        const text = JSON.stringify(buildExport());
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { $('export-summary').textContent = 'Copied. Paste it into a message.'; },
+                function () { fallbackCopy(text); });
+        } else { fallbackCopy(text); }
+    });
+    function fallbackCopy(text) {
+        const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); $('export-summary').textContent = 'Copied. Paste it into a message.'; }
+        catch (e) { $('export-summary').textContent = 'Copy failed. Use Download file instead.'; }
+        ta.remove();
+    }
+
+    $('comp-name').textContent = pack.competition_name + (pack.edition_name ? ' – ' + pack.edition_name : '');
+    $('judge-line').textContent = 'Offline panel for ' + pack.judge_label + '  ·  no internet needed';
+    if (!pack.photos.length) { $('progress').textContent = 'No photos in this pack.'; return; }
+    render();
+}());
+</script>
+</body>
+</html>
