@@ -312,6 +312,48 @@ class PhotoStatusWorkflowTests(TestCase):
             ],
         )
 
+    def test_organizer_can_export_winners_csv_top_five_and_category_bests(self):
+        specs = [
+            ('A1', 'Landscape', 90), ('A2', 'Landscape', 80), ('A3', 'Portrait', 85),
+            ('A4', 'Portrait', 70), ('A5', 'Macro', 60), ('A6', 'Macro', 50),
+            ('A7', 'Macro', 40),
+        ]
+        for title, category, value in specs:
+            photo = self.create_photo(title, Photo.Status.SHORTLISTED, category=category)
+            Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=value)
+        unscored = self.create_photo('Unscored', Photo.Status.SHORTLISTED, category='Street')
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('export_competition_winners_csv', args=[self.competition.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Disposition'], 'attachment; filename="competition_winners.csv"')
+        rows = list(csv.reader(io.StringIO(response.content.decode('utf-8'))))[1:]
+        top = [(r[1], r[3]) for r in rows if r[0] == 'Top 5 overall']
+        self.assertEqual(top, [('1', 'A1'), ('2', 'A3'), ('3', 'A2'), ('4', 'A4'), ('5', 'A5')])
+        best = [(r[2], r[3]) for r in rows if r[0] == 'Category best']
+        self.assertEqual(best, [('Landscape', 'A1'), ('Macro', 'A5'), ('Portrait', 'A3')])
+        self.assertNotIn(unscored.title, [r[3] for r in rows])
+
+    def test_winners_csv_includes_entries_tied_for_fifth(self):
+        for index, value in enumerate([90, 80, 70, 60, 50, 50], start=1):
+            photo = self.create_photo(f'T{index}', Photo.Status.SHORTLISTED, category='Landscape')
+            Score.objects.create(photo=photo, judge=self.guest_judge, criteria_scores={}, total_score=value)
+
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse('export_competition_winners_csv', args=[self.competition.slug]))
+
+        rows = list(csv.reader(io.StringIO(response.content.decode('utf-8'))))[1:]
+        top = [(r[1], r[3]) for r in rows if r[0] == 'Top 5 overall']
+        self.assertEqual(top[-2:], [('5', 'T5'), ('5', 'T6')])
+
+    def test_non_organizer_cannot_export_winners_csv(self):
+        self.client.force_login(self.guest_judge)
+
+        response = self.client.get(reverse('export_competition_winners_csv', args=[self.competition.slug]))
+
+        self.assertRedirects(response, reverse('home_hub'))
+
     def test_non_organizer_cannot_export_competition_results_csv(self):
         self.client.force_login(self.guest_judge)
 

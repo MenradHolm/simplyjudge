@@ -996,8 +996,8 @@ def autosave_judge_score(request, comp_slug, photo_id):
         }
     )
 
-def leaderboard(request, comp_slug):
-    competition = get_object_or_404(Competition, slug=comp_slug)
+def rank_final_photos(competition):
+    """Photos with final judge scores, best first (tie-breaker criterion applied if set)."""
     tie_criterion = competition.tie_breaker_criterion
     rubric = list(RubricCriterion.objects.filter(competition=competition))
     max_score = rubric_max_score(rubric)
@@ -1006,6 +1006,23 @@ def leaderboard(request, comp_slug):
     photos = list(Photo.objects.filter(competition=competition))
     attach_photo_average_values(photos, scores, max_score)
     ranked_photos = [photo for photo in photos if photo.average_score is not None]
+    if tie_criterion:
+        for photo in ranked_photos:
+            tie_scores = []
+            for score in photo.judge_scores:
+                try:
+                    tie_scores.append(float(score.criteria_scores.get(str(tie_criterion.id), 0)))
+                except (TypeError, ValueError):
+                    tie_scores.append(0.0)
+            photo.tie_breaker_score = sum(tie_scores) / len(tie_scores) if tie_scores else 0.0
+        ranked_photos.sort(key=lambda photo: (photo.average_score, photo.tie_breaker_score), reverse=True)
+    else:
+        ranked_photos.sort(key=lambda photo: photo.average_score, reverse=True)
+    return ranked_photos, max_score, tie_criterion
+
+def leaderboard(request, comp_slug):
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    ranked_photos, max_score, tie_criterion = rank_final_photos(competition)
     leaderboard_stage = 'final'
     if not ranked_photos and is_full_competition(competition):
         round_1_photos = list(
@@ -1023,18 +1040,6 @@ def leaderboard(request, comp_slug):
             photo.max_score = 10
         ranked_photos = round_1_photos
         leaderboard_stage = 'round_1'
-    elif tie_criterion:
-        for photo in ranked_photos:
-            tie_scores = []
-            for score in photo.judge_scores:
-                try:
-                    tie_scores.append(float(score.criteria_scores.get(str(tie_criterion.id), 0)))
-                except (TypeError, ValueError):
-                    tie_scores.append(0.0)
-            photo.tie_breaker_score = sum(tie_scores) / len(tie_scores) if tie_scores else 0.0
-        ranked_photos.sort(key=lambda photo: (photo.average_score, photo.tie_breaker_score), reverse=True)
-    else:
-        ranked_photos.sort(key=lambda photo: photo.average_score, reverse=True)
     return render(
         request,
         'judging_app/leaderboard.html',
@@ -1364,6 +1369,73 @@ def export_competition_results_csv(request, comp_slug):
                 score.comment if score and score.comment else '',
             ])
         writer.writerow(csv_row)
+
+    return response
+
+@login_required(login_url='/accounts/login/')
+def export_competition_winners_csv(request, comp_slug):
+    """Organizer-only sheet: top 5 overall plus the best image in each category."""
+    competition = get_object_or_404(Competition, slug=comp_slug)
+    if not is_competition_organizer(request.user, competition):
+        return redirect('home_hub')
+
+    ranked_photos, _max_score, _tie_criterion = rank_final_photos(competition)
+
+    def rank_key(photo):
+        return (photo.average_score, getattr(photo, 'tie_breaker_score', None))
+
+    def write_row(writer, section, rank, photo):
+        first_name, last_name = split_entrant_name(photo.photographer_name)
+        writer.writerow([
+            section,
+            rank,
+            photo.category or 'Uncategorised',
+            photo.title,
+            first_name,
+            last_name,
+            photo.photographer_email,
+            f'{photo.average_score:.2f}',
+            len(photo.judge_scores),
+        ])
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="competition_winners.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'Section',
+        'Rank',
+        'Category/Section',
+        'Image Title',
+        'Entrant First Name',
+        'Entrant Last Name',
+        'Email',
+        'Average Score',
+        'Judges Scored',
+    ])
+
+    # Top 5 overall. Entries tied with 5th place (same score and tie-break) are included
+    # and share a rank, so nobody is dropped by arbitrary ordering.
+    rank = 0
+    previous_key = None
+    for position, photo in enumerate(ranked_photos, start=1):
+        key = rank_key(photo)
+        if key != previous_key:
+            rank = position
+            previous_key = key
+        if rank > 5:
+            break
+        write_row(writer, 'Top 5 overall', rank, photo)
+
+    # Best image per category (ties for best are all listed).
+    best_by_category = {}
+    for photo in ranked_photos:
+        category = photo.category or 'Uncategorised'
+        best_key = best_by_category.setdefault(category, [rank_key(photo), []])
+        if rank_key(photo) == best_key[0]:
+            best_key[1].append(photo)
+    for category in sorted(best_by_category, key=str.lower):
+        for photo in best_by_category[category][1]:
+            write_row(writer, 'Category best', 1, photo)
 
     return response
 

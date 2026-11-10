@@ -220,6 +220,10 @@
                                                 Private scores CSV
                                                 <span aria-hidden="true">&gt;</span>
                                             </a>
+                                            <a class="action-link" href="{% url 'export_competition_winners_csv' competition.slug %}">
+                                                Winners CSV (top 5 + category bests)
+                                                <span aria-hidden="true">&gt;</span>
+                                            </a>
                                             <a class="action-link" href="{% url 'competition_score_summary_pdf' competition.slug %}">
                                                 Internal judge audit sheet
                                                 <span aria-hidden="true">&gt;</span>

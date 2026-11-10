@@ -27,6 +27,7 @@ urlpatterns = [
     path('competition/<slug:comp_slug>/checkout/', views.create_checkout_session, name='create_checkout_session'),
     path('competition/<slug:comp_slug>/ledger-report/', views.feedback_report, name='feedback_report'),
     path('competition/<slug:comp_slug>/results-csv/', views.export_competition_results_csv, name='export_competition_results_csv'),
+    path('competition/<slug:comp_slug>/winners-csv/', views.export_competition_winners_csv, name='export_competition_winners_csv'),
     path('competition/<slug:comp_slug>/score-summary/', views.competition_score_summary_pdf, name='competition_score_summary_pdf'),
     path('competition/<slug:comp_slug>/shareable-score-summary/', views.shareable_score_summary_pdf, name='shareable_score_summary_pdf'),
     
