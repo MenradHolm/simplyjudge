@@ -62,7 +62,10 @@ CSRF_TRUSTED_ORIGINS = env_list(
 SECURE_HSTS_SECONDS = env_int('SECURE_HSTS_SECONDS', 3600 if not DEBUG else 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
 SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
-SECURE_REFERRER_POLICY = 'no-referrer'
+# 'same-origin', not 'no-referrer': under no-referrer browsers send "Origin: null" on
+# same-site form posts, which Django's CSRF check rejects (login 403). same-origin still
+# withholds token-bearing URLs (invites, password resets) from other sites.
+SECURE_REFERRER_POLICY = 'same-origin'
 # Do not cache authenticated HTML or token-bearing invitation/reset responses.
 
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')

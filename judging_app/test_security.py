@@ -61,6 +61,37 @@ class ProductionConfigurationTests(SimpleTestCase):
         self.assertIsNone(NoRedirects().redirect_request(None, None, 302, '', {}, 'https://evil.example'))
 
 
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=['simplyjudge.onrender.com'])
+class LoginCsrfOriginTests(TestCase):
+    """Regression: a no-referrer policy made browsers send Origin: null, so production login 403'd."""
+
+    HOST = 'simplyjudge.onrender.com'
+
+    def post_login(self, origin):
+        client = self.client_class(enforce_csrf_checks=True)
+        page = client.get('/accounts/login/', secure=True, HTTP_HOST=self.HOST)
+        token = page.context['csrf_token']
+        response = client.post(
+            '/accounts/login/',
+            {'csrfmiddlewaretoken': str(token), 'username': 'nobody', 'password': 'wrong'},
+            secure=True, HTTP_HOST=self.HOST, HTTP_ORIGIN=origin,
+        )
+        return page, response
+
+    def test_referrer_policy_keeps_same_origin_form_posts_verifiable(self):
+        page, _ = self.post_login(f'https://{self.HOST}')
+        self.assertNotEqual(page['Referrer-Policy'], 'no-referrer')
+        self.assertIn(page['Referrer-Policy'], {'same-origin', 'strict-origin', 'strict-origin-when-cross-origin'})
+
+    def test_same_origin_login_post_passes_csrf(self):
+        _, response = self.post_login(f'https://{self.HOST}')
+        self.assertEqual(response.status_code, 200)
+
+    def test_null_origin_is_still_rejected(self):
+        _, response = self.post_login('null')
+        self.assertEqual(response.status_code, 403)
+
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class ClientExposureTests(TestCase):
     def setUp(self):
